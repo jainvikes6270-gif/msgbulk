@@ -1,11 +1,18 @@
-# Latha Bulk v2
+# Latha Bulk v2.2
 
-Android app with:
-- Phone contact search
-- Multi-select contacts
-- Saved contact groups
-- Large fixed bottom send button
-- Compact in-app and status-bar progress
-- Text and PDF sharing
+GitHub Actions ready Android project.
 
-WhatsApp requires the user to tap Send. The app opens chats one by one and cannot silently send in the background.
+## Included
+- Phone contact search and multi-select
+- Saved groups
+- Add/remove contacts from saved groups
+- Long press group: edit, rename, duplicate, delete
+- Compact screen with fixed bottom Send button
+- Compact progress notification
+- PDF selection/share
+- Accessibility settings shortcut
+
+## Build APK
+Push to GitHub, open **Actions**, run **Build Android APK**, then download the `LathaBulk-APK` artifact.
+
+Note: WhatsApp itself controls final message sending. This app opens selected chats one by one; it does not silently press WhatsApp's Send button.
