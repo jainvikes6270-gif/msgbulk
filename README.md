@@ -1,18 +1,11 @@
-# Latha Bulk v2.2
+# Latha Bulk v3.0
 
-GitHub Actions ready Android project.
+GitHub-ready Android project.
 
-## Included
-- Phone contact search and multi-select
-- Saved groups
-- Add/remove contacts from saved groups
-- Long press group: edit, rename, duplicate, delete
-- Compact screen with fixed bottom Send button
-- Compact progress notification
-- PDF selection/share
-- Accessibility settings shortcut
+Features: Accessibility auto-send, Send button at top, personalized `{Name}` messages, CSV import (`Name,Phone`), random delay, pause/resume, schedule while app remains open, history, failed queue retry, groups, PDF share, and dark mode.
 
-## Build APK
-Push to GitHub, open **Actions**, run **Build Android APK**, then download the `LathaBulk-APK` artifact.
+## GitHub build
+Upload extracted files to repository, open Actions, run/build workflow, and download the APK artifact.
 
-Note: WhatsApp itself controls final message sending. This app opens selected chats one by one; it does not silently press WhatsApp's Send button.
+## Important
+WhatsApp must open in foreground. Keep phone unlocked and Accessibility enabled. Delivery/read confirmation is not available; failed list only records automation/opening errors. Use responsibly and only message people who consented.

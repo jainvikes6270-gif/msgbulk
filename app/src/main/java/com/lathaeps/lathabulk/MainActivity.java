@@ -9,6 +9,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.ComponentName;
+import android.text.TextUtils;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -17,6 +19,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.provider.Settings;
+import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.Random;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
@@ -51,10 +59,23 @@ public class MainActivity extends Activity {
     private static final int CONTACT_PERMISSION = 101;
     private static final int PICK_PDF = 102;
     private static final int NOTIFICATION_PERMISSION = 103;
+    private static final int PICK_CSV = 104;
     private static final String CHANNEL_ID = "latha_bulk_progress";
     private static final int NOTIFICATION_ID = 511;
     private static final String PREFS = "latha_bulk_prefs";
     private static final String GROUPS_KEY = "saved_groups";
+    static final String AUTO_PREFS = "latha_auto_send";
+    static final String AUTO_NUMBERS = "numbers";
+    static final String AUTO_MESSAGE = "message";
+    static final String AUTO_INDEX = "index";
+    static final String AUTO_RUNNING = "running";
+    static final String AUTO_NAMES = "names";
+    static final String AUTO_MIN_DELAY = "min_delay";
+    static final String AUTO_MAX_DELAY = "max_delay";
+    static final String AUTO_HISTORY = "history";
+    static final String AUTO_FAILED = "failed";
+    private static final String DARK_KEY = "dark_mode";
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     private final List<ContactItem> allContacts = new ArrayList<>();
     private final List<ContactItem> visibleContacts = new ArrayList<>();
@@ -80,19 +101,25 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         refreshAccessibilityButton();
+        boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
+        if(sendButton!=null)sendButton.setText(running?"STOP AUTO SENDING":"AUTO SEND TO SELECTED CONTACTS");
+        if(miniProgress!=null&&running){
+            int i=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getInt(AUTO_INDEX,0);
+            miniProgress.setText("Sending contact "+(i+1));
+        }
     }
 
     private View buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(10), dp(6), dp(10), dp(8));
-        root.setBackgroundColor(Color.rgb(248, 246, 240));
+        root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v2.2");
+        title.setText("LATHA BULK v3.0");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextColor(Color.rgb(25,25,25));
+        title.setTextColor(isDark()?Color.WHITE:Color.rgb(25,25,25));
         title.setGravity(Gravity.CENTER);
         root.addView(title, new LinearLayout.LayoutParams(-1, dp(34)));
 
@@ -107,6 +134,21 @@ public class MainActivity extends Activity {
         load.setOnClickListener(v -> requestContacts());
         selectAll.setOnClickListener(v -> selectAllVisible());
         clear.setOnClickListener(v -> clearSelection());
+
+        LinearLayout featureRow = row();
+        Button csv = button("Import CSV");
+        Button delay = button("Delay");
+        Button schedule = button("Schedule");
+        Button theme = button(isDark()?"Light":"Dark");
+        featureRow.addView(csv, weighted(1f, 38));
+        featureRow.addView(delay, weighted(.8f, 38));
+        featureRow.addView(schedule, weighted(1f, 38));
+        featureRow.addView(theme, weighted(.8f, 38));
+        root.addView(featureRow);
+        csv.setOnClickListener(v -> chooseCsv());
+        delay.setOnClickListener(v -> showDelayDialog());
+        schedule.setOnClickListener(v -> showScheduleDialog());
+        theme.setOnClickListener(v -> { getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply(); recreate(); });
 
         searchBox = new EditText(this);
         searchBox.setHint("Search name or mobile number");
@@ -142,6 +184,43 @@ public class MainActivity extends Activity {
         alp.setMargins(dp(2), dp(1), dp(2), dp(1));
         root.addView(accessibilityButton, alp);
 
+        messageBox = new EditText(this);
+        messageBox.setHint("Message • use {Name} for personal name");
+        messageBox.setMinLines(1);
+        messageBox.setMaxLines(2);
+        messageBox.setTextSize(14);
+        messageBox.setGravity(Gravity.TOP);
+        root.addView(messageBox, new LinearLayout.LayoutParams(-1, dp(57)));
+
+        sendButton = button("AUTO SEND TO SELECTED CONTACTS");
+        sendButton.setTextSize(15);
+        sendButton.setTypeface(Typeface.DEFAULT_BOLD);
+        sendButton.setTextColor(Color.WHITE);
+        sendButton.setBackgroundColor(Color.rgb(25,110,60));
+        sendButton.setOnClickListener(v -> startOrStopAutoSend());
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, dp(52));
+        slp.setMargins(0, dp(3), 0, dp(3));
+        root.addView(sendButton, slp);
+
+        miniProgress = new TextView(this);
+        miniProgress.setText("Ready");
+        miniProgress.setTextSize(11);
+        miniProgress.setGravity(Gravity.CENTER);
+        miniProgress.setBackgroundColor(Color.rgb(235,232,222));
+        root.addView(miniProgress, new LinearLayout.LayoutParams(-1, dp(24)));
+
+        LinearLayout reportRow=row();
+        Button history=button("History");
+        Button retry=button("Retry failed");
+        Button resume=button("Resume");
+        reportRow.addView(history,weighted(1f,36));
+        reportRow.addView(retry,weighted(1f,36));
+        reportRow.addView(resume,weighted(1f,36));
+        root.addView(reportRow);
+        history.setOnClickListener(v->showHistory());
+        retry.setOnClickListener(v->retryFailed());
+        resume.setOnClickListener(v->resumeQueue());
+
         statusText = new TextView(this);
         statusText.setText("Selected: 0 | Contacts: 0");
         statusText.setTypeface(Typeface.DEFAULT_BOLD);
@@ -162,14 +241,6 @@ public class MainActivity extends Activity {
         });
         root.addView(listView, new LinearLayout.LayoutParams(-1, 0, 1f));
 
-        messageBox = new EditText(this);
-        messageBox.setHint("WhatsApp message");
-        messageBox.setMinLines(1);
-        messageBox.setMaxLines(2);
-        messageBox.setTextSize(14);
-        messageBox.setGravity(Gravity.TOP);
-        root.addView(messageBox, new LinearLayout.LayoutParams(-1, dp(57)));
-
         LinearLayout fileRow = row();
         Button pdf = button("Choose PDF");
         Button share = button("Share PDF");
@@ -185,22 +256,6 @@ public class MainActivity extends Activity {
         pdfText.setSingleLine(true);
         root.addView(pdfText, new LinearLayout.LayoutParams(-1, dp(20)));
 
-        miniProgress = new TextView(this);
-        miniProgress.setText("Ready");
-        miniProgress.setTextSize(11);
-        miniProgress.setGravity(Gravity.CENTER);
-        miniProgress.setBackgroundColor(Color.rgb(235,232,222));
-        root.addView(miniProgress, new LinearLayout.LayoutParams(-1, dp(24)));
-
-        sendButton = button("SEND TO SELECTED CONTACTS");
-        sendButton.setTextSize(16);
-        sendButton.setTypeface(Typeface.DEFAULT_BOLD);
-        sendButton.setTextColor(Color.WHITE);
-        sendButton.setBackgroundColor(Color.rgb(25,110,60));
-        sendButton.setOnClickListener(v -> startOrNext());
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, dp(54));
-        slp.setMargins(0, dp(3), 0, 0);
-        root.addView(sendButton, slp);
         return root;
     }
 
@@ -211,7 +266,7 @@ public class MainActivity extends Activity {
 
     private void refreshAccessibilityButton(){
         if(accessibilityButton==null)return;
-        boolean enabled=Settings.Secure.getInt(getContentResolver(),Settings.Secure.ACCESSIBILITY_ENABLED,0)==1;
+        boolean enabled=isAccessibilityServiceEnabled();
         accessibilityButton.setText(enabled?"Accessibility: ON":"Accessibility: OFF");
         accessibilityButton.setTextColor(enabled?Color.rgb(0,95,35):Color.rgb(150,35,35));
     }
@@ -269,7 +324,7 @@ public class MainActivity extends Activity {
         editGroupButton.setEnabled(!activeGroup.isEmpty());
     }
     private void selectAllVisible(){for(ContactItem i:visibleContacts)selectedNumbers.add(i.number);refreshChecks();}
-    private void clearSelection(){selectedNumbers.clear();queue.clear();queueIndex=0;activeGroup="";sendButton.setText("SEND TO SELECTED CONTACTS");miniProgress.setText("Ready");cancelProgressNotification();refreshChecks();}
+    private void clearSelection(){selectedNumbers.clear();queue.clear();queueIndex=0;activeGroup="";sendButton.setText("AUTO SEND TO SELECTED CONTACTS");miniProgress.setText("Ready");cancelProgressNotification();refreshChecks();}
 
     private Map<String,List<String>> readGroups(){
         Map<String,List<String>> groups=new LinkedHashMap<>();
@@ -345,32 +400,65 @@ public class MainActivity extends Activity {
                 }).setNegativeButton("Cancel",null).show();
     }
 
-    private void startOrNext(){
-        hideKeyboard();
-        if(queue.isEmpty()){
-            if(selectedNumbers.isEmpty()){toast("Select contacts or open group");return;}
-            if(messageBox.getText().toString().trim().isEmpty()){toast("Type a message first");return;}
-            for(ContactItem i:allContacts)if(selectedNumbers.contains(i.number))queue.add(i);
-            if(queue.isEmpty()){toast("Load contacts, then open group again");return;} queueIndex=0;
-        } openNext();
-    }
-    private void openNext(){
-        if(queueIndex>=queue.size()){
-            int total=queue.size();miniProgress.setText("Completed: "+total+" / "+total);showProgressNotification(total,total,"Completed");toast("Completed "+total+" chats");
-            queue.clear();queueIndex=0;sendButton.setText("SEND TO SELECTED CONTACTS");return;
+    private boolean isAccessibilityServiceEnabled(){
+        ComponentName expected=new ComponentName(this,WhatsAppAccessibilityService.class);
+        String enabled=Settings.Secure.getString(getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if(enabled==null)return false;
+        TextUtils.SimpleStringSplitter splitter=new TextUtils.SimpleStringSplitter(':');
+        splitter.setString(enabled);
+        while(splitter.hasNext()){
+            ComponentName c=ComponentName.unflattenFromString(splitter.next());
+            if(expected.equals(c))return true;
         }
-        ContactItem item=queue.get(queueIndex);int current=queueIndex+1;
-        miniProgress.setText("Opening "+current+"/"+queue.size()+" • "+item.name);showProgressNotification(current,queue.size(),item.name);queueIndex++;
-        String encoded=URLEncoder.encode(messageBox.getText().toString().trim(),StandardCharsets.UTF_8);
-        Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/"+item.number+"?text="+encoded));
-        try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e1){try{i.setPackage("com.whatsapp.w4b");startActivity(i);}catch(Exception e2){i.setPackage(null);try{startActivity(i);}catch(Exception e3){toast("WhatsApp not found");}}}
-        sendButton.setText(queueIndex<queue.size()?"OPEN NEXT ("+(queueIndex+1)+"/"+queue.size()+")":"FINISH");
+        return false;
     }
+
+    private void startOrStopAutoSend(){
+        hideKeyboard();
+        boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
+        if(running){
+            stopAutoSend("Stopped");
+            return;
+        }
+        if(!isAccessibilityServiceEnabled()){
+            toast("Pehle Accessibility ON karein");
+            try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}
+            return;
+        }
+        String message=messageBox.getText().toString().trim();
+        if(selectedNumbers.isEmpty()){toast("Select contacts or open group");return;}
+        if(message.isEmpty()){toast("Type a message first");return;}
+        JSONArray nums=new JSONArray();
+        JSONArray names=new JSONArray();
+        for(String n:selectedNumbers){
+            nums.put(n);
+            names.put(findName(n));
+        }
+        SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);
+        getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit()
+                .putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message)
+                .putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7))
+                .putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putBoolean(AUTO_RUNNING,true).apply();
+        sendButton.setText("STOP AUTO SENDING");
+        miniProgress.setText("Starting 1 / "+selectedNumbers.size());
+        showProgressNotification(0,selectedNumbers.size(),"Starting");
+        WhatsAppAccessibilityService.openCurrentChat(this);
+    }
+
+    private void stopAutoSend(String label){
+        getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(AUTO_RUNNING,false).apply();
+        sendButton.setText("AUTO SEND TO SELECTED CONTACTS");
+        miniProgress.setText(label);
+        cancelProgressNotification();
+        toast(label);
+    }
+
     private void hideKeyboard(){View v=getCurrentFocus();if(v!=null)((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(v.getWindowToken(),0);}
 
     private void choosePdf(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/pdf");startActivityForResult(i,PICK_PDF);}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);
-        if(requestCode==PICK_PDF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pdfUri=data.getData();try{getContentResolver().takePersistableUriPermission(pdfUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}pdfText.setText("PDF: "+pdfUri.getLastPathSegment());}}
+        if(requestCode==PICK_PDF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pdfUri=data.getData();try{getContentResolver().takePersistableUriPermission(pdfUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}pdfText.setText("PDF: "+pdfUri.getLastPathSegment());}
+        if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());}
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,messageBox.getText().toString().trim());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
     private void createNotificationChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Sending progress",NotificationManager.IMPORTANCE_LOW);c.setDescription("Compact queue progress");c.setSound(null,null);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
@@ -378,6 +466,23 @@ public class MainActivity extends Activity {
         NotificationCompat.Builder b=new NotificationCompat.Builder(this,CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_upload).setContentTitle(current>=total?"Latha Bulk completed":"Sending "+current+"/"+total).setContentText(contact).setOnlyAlertOnce(true).setOngoing(current<total).setPriority(NotificationCompat.PRIORITY_LOW).setProgress(total,Math.min(current,total),false).setContentIntent(p);
         ((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID,b.build());}
     private void cancelProgressNotification(){((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);}
+
+    private boolean isDark(){return getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(DARK_KEY,false);}
+    private String findName(String number){for(ContactItem c:allContacts)if(c.number.equals(number))return c.name;return number;}
+    private void chooseCsv(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("text/*");startActivityForResult(i,PICK_CSV);}
+    private void importCsv(Uri uri){
+        int added=0;try(BufferedReader br=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri)))){
+            String line;while((line=br.readLine())!=null){String[] a=line.split(",");if(a.length==0)continue;String raw=a.length>1?a[1]:a[0];String num=normalize(raw);if(num.isEmpty())continue;String name=a.length>1?a[0].trim():"CSV Contact";boolean exists=false;for(ContactItem c:allContacts)if(c.number.equals(num)){exists=true;break;}if(!exists){allContacts.add(new ContactItem(name.isEmpty()?"CSV Contact":name,num));added++;}selectedNumbers.add(num);}Collections.sort(allContacts,Comparator.comparing(x->x.name.toLowerCase(Locale.ROOT)));filterContacts("");toast(added+" CSV contacts imported");}
+        catch(Exception e){toast("CSV import failed. Format: Name,Phone");}
+    }
+    private void showDelayDialog(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);EditText min=new EditText(this);EditText max=new EditText(this);min.setHint("Minimum seconds");max.setHint("Maximum seconds");min.setInputType(2);max.setInputType(2);SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);min.setText(String.valueOf(p.getInt(AUTO_MIN_DELAY,3)));max.setText(String.valueOf(p.getInt(AUTO_MAX_DELAY,7)));box.addView(min);box.addView(max);
+        new AlertDialog.Builder(this).setTitle("Random delay").setMessage("Recommended 3–8 seconds").setView(box).setPositiveButton("Save",(d,w)->{try{int a=Integer.parseInt(min.getText().toString());int b=Integer.parseInt(max.getText().toString());if(a<2)a=2;if(b<a)b=a;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putInt(AUTO_MIN_DELAY,a).putInt(AUTO_MAX_DELAY,b).apply();toast("Delay saved: "+a+"–"+b+" sec");}catch(Exception e){toast("Enter valid seconds");}}).setNegativeButton("Cancel",null).show();
+    }
+    private void showScheduleDialog(){EditText mins=new EditText(this);mins.setHint("Start after minutes");mins.setInputType(2);new AlertDialog.Builder(this).setTitle("Schedule auto send").setMessage("App open rakhein. Phone unlocked aur Accessibility ON honi chahiye.").setView(mins).setPositiveButton("Schedule",(d,w)->{try{int m=Integer.parseInt(mins.getText().toString());if(m<1)m=1;miniProgress.setText("Scheduled after "+m+" min");uiHandler.postDelayed(this::startOrStopAutoSend,m*60_000L);toast("Scheduled");}catch(Exception e){toast("Enter minutes");}}).setNegativeButton("Cancel",null).show();}
+    private void showHistory(){String h=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_HISTORY,"No sending history yet");new AlertDialog.Builder(this).setTitle("Sending history").setMessage(h).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().remove(AUTO_HISTORY).apply()).show();}
+    private void retryFailed(){try{JSONArray f=new JSONArray(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_FAILED,"[]"));if(f.length()==0){toast("No failed contacts");return;}selectedNumbers.clear();for(int i=0;i<f.length();i++)selectedNumbers.add(f.getString(i));refreshChecks();toast(f.length()+" failed contacts selected");}catch(Exception e){toast("No failed contacts");}}
+    private void resumeQueue(){SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);try{JSONArray a=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int i=p.getInt(AUTO_INDEX,0);if(a.length()==0||i>=a.length()){toast("No paused queue");return;}p.edit().putBoolean(AUTO_RUNNING,true).apply();sendButton.setText("STOP AUTO SENDING");miniProgress.setText("Resuming "+(i+1)+" / "+a.length());WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("No paused queue");}}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
     private static class ContactItem{final String name,number;ContactItem(String n,String p){name=n;number=p;}@Override public String toString(){return name+"  •  +"+number;}}
 }
