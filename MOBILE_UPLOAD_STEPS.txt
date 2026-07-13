@@ -1,0 +1,15 @@
+MOBILE GITHUB METHOD
+
+IMPORTANT: GitHub mobile browser cannot upload a whole folder directly.
+Use this ZIP with a Git client app that supports ZIP import, or extract it and upload files while preserving folders.
+
+Best easy method from phone:
+1. Install GitHub-compatible app such as GitJournal/Termux method, or use github.dev in desktop mode.
+2. Repository root must show:
+   app/
+   .github/
+   build.gradle
+   settings.gradle
+   gradle.properties
+3. After upload, open GitHub > Actions > Build Android APK > Run workflow.
+4. Download artifact LathaBulk-debug-apk.
