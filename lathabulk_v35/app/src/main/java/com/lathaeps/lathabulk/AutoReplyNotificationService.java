@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.app.Person;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 
@@ -35,13 +36,15 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String pkg=sbn.getPackageName();
         if(!"com.whatsapp".equals(pkg) && !"com.whatsapp.w4b".equals(pkg)) return;
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
-        if(!p.getBoolean(ENABLED,false)) return;
+        boolean businessReady=!p.getString(LEDGER_KEY,"").trim().isEmpty()
+                ||!p.getString(CATALOG_URI,"").isEmpty()||!p.getString(PRICE_URI,"").isEmpty();
+        if(!p.getBoolean(ENABLED,false) && !businessReady) return;
         Notification n=sbn.getNotification();
         Bundle e=n.extras;
         String title=String.valueOf(e.getCharSequence(Notification.EXTRA_TITLE,""));
         String text=extractMessageText(e);
         String lower=text.toLowerCase(Locale.ROOT);
-        String senderPhone=resolvePhoneFromTitle(title);
+        String senderPhone=resolvePhone(e,title);
         if(title.toLowerCase(Locale.ROOT).contains("messages") || title.toLowerCase(Locale.ROOT).contains("whatsapp")) return;
         long now=System.currentTimeMillis();
         long wait=p.getInt(COOLDOWN,5)*60_000L;
@@ -51,7 +54,15 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         String pk=p.getString(PRICE_KEY,"price").trim().toLowerCase(Locale.ROOT);
-        if(!lk.isEmpty() && lower.contains(lk)){boolean customerOk=isLedgerCustomerAllowed(p,title,senderPhone);if(!customerOk)return;file=p.getString(LEDGER_URI,"");type=p.getString(LEDGER_URI+"_type","application/pdf");caption="LATHA EPS Ledger";}
+        if(!lk.isEmpty() && lower.contains(lk)){
+            JSONObject customer=findLedgerCustomer(p,title,senderPhone);
+            if(customer==null)return;
+            file=customer.optString("ledger_uri","");
+            type=customer.optString("ledger_type","application/pdf");
+            caption="LATHA EPS Ledger";
+            // Never send a combined/master ledger to a customer by mistake.
+            if(file.isEmpty())return;
+        }
         else if(!ck.isEmpty() && lower.contains(ck)){file=p.getString(CATALOG_URI,"");type=p.getString(CATALOG_URI+"_type","application/pdf");caption="LATHA EPS Catalog";}
         else if(!pk.isEmpty() && lower.contains(pk)){file=p.getString(PRICE_URI,"");type=p.getString(PRICE_URI+"_type","application/pdf");caption="LATHA EPS Price List";}
         else {
@@ -69,7 +80,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }
         lastReply.put(title,now);
         if(!file.isEmpty()){
-            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,now).apply();
             if(n.contentIntent!=null){ try{n.contentIntent.send();}catch(Exception ignored){} }
             final String f=file,t=type,c=caption;
             final String phone=senderPhone;
@@ -79,7 +89,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }
     }
 
-    private boolean isLedgerCustomerAllowed(SharedPreferences p,String title,String senderPhone){
+    private JSONObject findLedgerCustomer(SharedPreferences p,String title,String senderPhone){
         String td=last10(title), sp=last10(senderPhone), lowTitle=title==null?"":title.toLowerCase(Locale.ROOT);
         try{
             JSONArray a=new JSONArray(p.getString(LEDGER_CUSTOMERS,"[]"));
@@ -88,14 +98,12 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                     JSONObject o=a.optJSONObject(i);if(o==null)continue;
                     String ph=last10(o.optString("phone",""));
                     String nm=o.optString("name","").trim().toLowerCase(Locale.ROOT);
-                    if((!ph.isEmpty()&&(ph.equals(td)||ph.equals(sp)))||(!nm.isEmpty()&&lowTitle.contains(nm)))return true;
+                    if((!ph.isEmpty()&&(ph.equals(td)||ph.equals(sp)))||(!nm.isEmpty()&&lowTitle.equals(nm)))return o;
                 }
-                return false;
+                return null;
             }
         }catch(Exception ignored){}
-        String lp=last10(p.getString("ledger_phone",""));
-        String ln=p.getString("ledger_name","").trim().toLowerCase(Locale.ROOT);
-        return (!lp.isEmpty()&&(lp.equals(td)||lp.equals(sp)))||(!ln.isEmpty()&&lowTitle.contains(ln));
+        return null;
     }
 
     private void sendRemoteReply(Notification n,String message){
@@ -120,6 +128,21 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return "";
     }
 
+    private String resolvePhone(Bundle extras,String title){
+        try{
+            android.os.Parcelable[] msgs=extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+            if(msgs!=null&&msgs.length>0){
+                Bundle b=(Bundle)msgs[msgs.length-1];
+                android.os.Parcelable raw=b.getParcelable("sender_person");
+                if(raw instanceof Person){
+                    String uri=((Person)raw).getUri();String d=last10(uri);
+                    if(d.length()==10)return "91"+d;
+                }
+            }
+        }catch(Exception ignored){}
+        return resolvePhoneFromTitle(title);
+    }
+
     private String resolvePhoneFromTitle(String title){
         String direct=last10(title);if(direct.length()==10)return "91"+direct;
         if(checkSelfPermission(android.Manifest.permission.READ_CONTACTS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return "";
@@ -141,6 +164,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             i.setPackage(pkg);
             if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
             grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();
             startActivity(i);
         }catch(Exception ignored){
             getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PENDING_SHARE,false).apply();
