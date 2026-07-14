@@ -9,3 +9,13 @@ Upload extracted files to repository, open Actions, run/build workflow, and down
 
 ## Important
 WhatsApp must open in foreground. Keep phone unlocked and Accessibility enabled. Delivery/read confirmation is not available; failed list only records automation/opening errors. Use responsibly and only message people who consented.
+
+
+## v3.2 Business Files
+- In-app Ledger PDF/Image selector
+- In-app Catalog PDF/Image selector
+- In-app Price List PDF/Image selector
+- Editable contains-word keywords for each file
+- WhatsApp/WhatsApp Business notification auto-reply integration
+
+Note: Accessibility and Notification Access must be enabled. File sharing may open WhatsApp and requires the phone to be unlocked.

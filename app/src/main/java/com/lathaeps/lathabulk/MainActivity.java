@@ -60,6 +60,10 @@ public class MainActivity extends Activity {
     private static final int PICK_PDF = 102;
     private static final int NOTIFICATION_PERMISSION = 103;
     private static final int PICK_CSV = 104;
+    private static final int PICK_REPLY_IMAGE = 105;
+    private static final int PICK_LEDGER_FILE = 106;
+    private static final int PICK_CATALOG_FILE = 107;
+    private static final int PICK_PRICE_FILE = 108;
     private static final String CHANNEL_ID = "latha_bulk_progress";
     private static final int NOTIFICATION_ID = 511;
     private static final String PREFS = "latha_bulk_prefs";
@@ -116,7 +120,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.0");
+        title.setText("LATHA BULK v3.2 BUSINESS");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(isDark()?Color.WHITE:Color.rgb(25,25,25));
@@ -183,6 +187,17 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(-1, dp(39));
         alp.setMargins(dp(2), dp(1), dp(2), dp(1));
         root.addView(accessibilityButton, alp);
+
+        LinearLayout businessRow=row();
+        Button businessFiles=button("BUSINESS FILES");
+        Button autoReplyButton=button("AUTO REPLY");
+        businessFiles.setTypeface(Typeface.DEFAULT_BOLD);
+        autoReplyButton.setTypeface(Typeface.DEFAULT_BOLD);
+        businessRow.addView(businessFiles,weighted(1f,42));
+        businessRow.addView(autoReplyButton,weighted(1f,42));
+        root.addView(businessRow);
+        businessFiles.setOnClickListener(v->showBusinessFilesDialog());
+        autoReplyButton.setOnClickListener(v->showAutoReplyDialog());
 
         messageBox = new EditText(this);
         messageBox.setHint("Message • use {Name} for personal name");
@@ -458,7 +473,12 @@ public class MainActivity extends Activity {
     private void choosePdf(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/pdf");startActivityForResult(i,PICK_PDF);}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);
         if(requestCode==PICK_PDF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pdfUri=data.getData();try{getContentResolver().takePersistableUriPermission(pdfUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}pdfText.setText("PDF: "+pdfUri.getLastPathSegment());}
-        if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());}
+        if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());
+        if(requestCode==PICK_REPLY_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.IMAGE,data.getData(),"Auto-reply image selected");}
+        if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.LEDGER_URI,data.getData(),"Ledger file saved");}
+        if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.CATALOG_URI,data.getData(),"Catalog file saved");}
+        if(requestCode==PICK_PRICE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.PRICE_URI,data.getData(),"Price List file saved");}
+    }
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,messageBox.getText().toString().trim());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
     private void createNotificationChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Sending progress",NotificationManager.IMPORTANCE_LOW);c.setDescription("Compact queue progress");c.setSound(null,null);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
@@ -483,6 +503,52 @@ public class MainActivity extends Activity {
     private void showHistory(){String h=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_HISTORY,"No sending history yet");new AlertDialog.Builder(this).setTitle("Sending history").setMessage(h).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().remove(AUTO_HISTORY).apply()).show();}
     private void retryFailed(){try{JSONArray f=new JSONArray(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_FAILED,"[]"));if(f.length()==0){toast("No failed contacts");return;}selectedNumbers.clear();for(int i=0;i<f.length();i++)selectedNumbers.add(f.getString(i));refreshChecks();toast(f.length()+" failed contacts selected");}catch(Exception e){toast("No failed contacts");}}
     private void resumeQueue(){SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);try{JSONArray a=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int i=p.getInt(AUTO_INDEX,0);if(a.length()==0||i>=a.length()){toast("No paused queue");return;}p.edit().putBoolean(AUTO_RUNNING,true).apply();sendButton.setText("STOP AUTO SENDING");miniProgress.setText("Resuming "+(i+1)+" / "+a.length());WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("No paused queue");}}
+
+
+    private void saveBusinessUri(String key, Uri uri, String message){
+        try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
+        String type=getContentResolver().getType(uri);
+        getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putString(key,uri.toString()).putString(key+"_type",type==null?"application/octet-stream":type).apply();
+        toast(message);
+    }
+
+    private void pickBusinessFile(int code){
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/*"});startActivityForResult(i,code);
+    }
+
+    private void showBusinessFilesDialog(){
+        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
+        Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"Add Ledger PDF / Image":"Change Ledger ✓");
+        Button catalog=button(p.getString(AutoReplyNotificationService.CATALOG_URI,"").isEmpty()?"Add Catalog PDF / Image":"Change Catalog ✓");
+        Button price=button(p.getString(AutoReplyNotificationService.PRICE_URI,"").isEmpty()?"Add Price List PDF / Image":"Change Price List ✓");
+        EditText ledgerKey=new EditText(this);ledgerKey.setHint("Ledger keyword");ledgerKey.setText(p.getString(AutoReplyNotificationService.LEDGER_KEY,"ledger"));
+        EditText catalogKey=new EditText(this);catalogKey.setHint("Catalog keyword");catalogKey.setText(p.getString(AutoReplyNotificationService.CATALOG_KEY,"catalog"));
+        EditText priceKey=new EditText(this);priceKey.setHint("Price keyword");priceKey.setText(p.getString(AutoReplyNotificationService.PRICE_KEY,"price"));
+        box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);
+        box.addView(catalog,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(catalogKey);
+        box.addView(price,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(priceKey);
+        ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));catalog.setOnClickListener(v->pickBusinessFile(PICK_CATALOG_FILE));price.setOnClickListener(v->pickBusinessFile(PICK_PRICE_FILE));
+        new AlertDialog.Builder(this).setTitle("Business Files").setMessage("App ke andar Ledger, Catalog aur Price List select karo. Customer keyword bheje to matching file share hogi.").setView(box)
+            .setPositiveButton("Save keywords",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putString(AutoReplyNotificationService.CATALOG_KEY,catalogKey.getText().toString().trim()).putString(AutoReplyNotificationService.PRICE_KEY,priceKey.getText().toString().trim()).apply();toast("Business keywords saved");})
+            .setNegativeButton("Close",null).show();
+    }
+    private void showAutoReplyDialog(){
+        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
+        EditText keyword=new EditText(this);keyword.setHint("Contains word, example: price");keyword.setText(p.getString(AutoReplyNotificationService.KEYWORD,""));
+        EditText reply=new EditText(this);reply.setHint("Caption / text reply");reply.setText(p.getString(AutoReplyNotificationService.REPLY,""));reply.setMinLines(2);
+        EditText cool=new EditText(this);cool.setHint("Cooldown minutes");cool.setInputType(2);cool.setText(String.valueOf(p.getInt(AutoReplyNotificationService.COOLDOWN,5)));
+        Button image=button(p.getString(AutoReplyNotificationService.IMAGE,"").isEmpty()?"Choose reply image":"Change reply image ✓");
+        Button access=button("Open Notification Access");
+        box.addView(keyword);box.addView(reply);box.addView(cool);box.addView(image,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(access,new LinearLayout.LayoutParams(-1,dp(42)));
+        image.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("image/*");startActivityForResult(i,PICK_REPLY_IMAGE);});
+        access.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}});
+        new AlertDialog.Builder(this).setTitle("WhatsApp Auto Reply").setMessage("Message contains word → text + selected image. Group notifications are ignored where detectable.").setView(box)
+            .setPositiveButton(p.getBoolean(AutoReplyNotificationService.ENABLED,false)?"Update & keep ON":"Save & turn ON",(d,w)->{String k=keyword.getText().toString().trim();if(k.isEmpty()){toast("Contains word required");return;}int c=5;try{c=Math.max(1,Integer.parseInt(cool.getText().toString()));}catch(Exception ignored){}p.edit().putString(AutoReplyNotificationService.KEYWORD,k).putString(AutoReplyNotificationService.REPLY,reply.getText().toString().trim()).putInt(AutoReplyNotificationService.COOLDOWN,c).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast("Auto reply ON");})
+            .setNeutralButton("Turn OFF",(d,w)->{p.edit().putBoolean(AutoReplyNotificationService.ENABLED,false).apply();toast("Auto reply OFF");}).setNegativeButton("Close",null).show();
+    }
+
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
     private static class ContactItem{final String name,number;ContactItem(String n,String p){name=n;number=p;}@Override public String toString(){return name+"  •  +"+number;}}
 }
