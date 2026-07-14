@@ -1,19 +1,16 @@
-# LathaBulk v3.14 – Recipient Lists + WhatsApp Image Composer
+# LathaBulk v3.14 – Premium Auto Reply + Settings + Smart Master Ledger
 
 ## New in v3.14
-1. Full-screen **Recipient Lists** page with dark cards, contact count, 3-dot management menu and blue `+` button.
-2. Tap a recipient list to select the whole group for sending.
-3. WhatsApp-style image composer: Gallery image preview, Change/Remove controls and caption/message in the same compose card.
-4. Bulk queue supports image + caption or image-only messages.
-5. Selected bulk image is included in Drive Backup/Restore.
+1. Screenshot-style premium **AutoReply to Messages** screen.
+2. Global Auto Reply ON/OFF switch and scrollable rule cards.
+3. Add, edit, delete and reorder keyword rules with the floating **+** button.
+4. Contains, Exact, Starts With, Ends With and Case Sensitive matching preserved.
+5. New user-friendly **Settings** screen with Dark/Light Theme.
+6. Separate Local Backup and Google Drive Backup options, plus Restore.
+7. Secure Forgot PIN flow using a saved recovery word.
+8. Clear All removes app data but keeps the login PIN and recovery word safe.
 
-## Included from v3.13
-1. Rounded two-line message box with emoji button inside.
-2. Header and footer can be saved and automatically added to every bulk message.
-3. Save and reuse message templates, including their header and footer.
-4. Message draft is remembered automatically.
-5. **Drive Backup** includes saved templates, headers/footers, keyword rules, selected auto-reply images, business files, groups and settings.
-6. **Restore Backup** restores all of the above.
+All v3.13 message templates, header/footer, image auto reply and backup features are preserved.
 
 ## Update flow
 1. Open **BUSINESS FILES**.

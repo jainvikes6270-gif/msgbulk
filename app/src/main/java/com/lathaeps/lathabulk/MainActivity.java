@@ -3,6 +3,7 @@ package com.lathaeps.lathabulk;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -43,16 +44,15 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.Spinner;
 import android.widget.CheckBox;
 import android.widget.ScrollView;
+import android.widget.Switch;
+import android.widget.PopupMenu;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.FileProvider;
@@ -92,7 +92,6 @@ public class MainActivity extends Activity {
     private static final int PICK_LEDGER_CUSTOMERS_XLSX = 111;
     private static final int PICK_MASTER_PDF_FOR_EXCEL = 112;
     private static final int CREATE_MASTER_LEDGER_XLSX = 113;
-    private static final int PICK_BULK_IMAGE = 114;
     private static final String CHANNEL_ID = "latha_bulk_progress";
     private static final int NOTIFICATION_ID = 511;
     private static final String PREFS = "latha_bulk_prefs";
@@ -107,18 +106,15 @@ public class MainActivity extends Activity {
     static final String AUTO_MAX_DELAY = "max_delay";
     static final String AUTO_HISTORY = "history";
     static final String AUTO_FAILED = "failed";
-    static final String AUTO_IMAGE = "bulk_image";
-    static final String AUTO_IMAGE_TYPE = "bulk_image_type";
     private static final String DARK_KEY = "dark_mode";
     private static final String SAVED_CONTACTS_KEY = "saved_contacts";
     private static final String PIN_KEY = "login_pin";
+    private static final String RECOVERY_KEY = "pin_recovery_word";
     private static final String LOGIN_ENABLED_KEY = "login_enabled";
     private static final String MESSAGE_HEADER_KEY = "message_header";
     private static final String MESSAGE_FOOTER_KEY = "message_footer";
     private static final String MESSAGE_TEMPLATES_KEY = "message_templates";
     private static final String MESSAGE_DRAFT_KEY = "message_draft";
-    private static final String BULK_IMAGE_URI_KEY = "selected_bulk_image";
-    private static final String BULK_IMAGE_TYPE_KEY = "selected_bulk_image_type";
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     private final List<ContactItem> allContacts = new ArrayList<>();
@@ -130,16 +126,11 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView statusText, pdfText, miniProgress;
     private EditText messageBox, searchBox;
-    private ImageView bulkImagePreview;
-    private LinearLayout bulkImageActions;
     private Button sendButton, accessibilityButton, editGroupButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
-    private Uri selectedBulkImageUri;
-    private String selectedBulkImageType="image/*";
     private int queueIndex = 0;
     private String activeGroup = "";
-    private boolean recipientListsVisible=false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -161,17 +152,19 @@ public class MainActivity extends Activity {
     }
 
     private void showCreatePinDialog(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
         EditText input=new EditText(this); input.setHint("Create 4-digit PIN"); input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD); input.setMaxLines(1);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Set app login PIN").setMessage("LathaBulk open karne ke liye 4-digit PIN banaye.").setView(input)
+        EditText recovery=new EditText(this);recovery.setHint("Recovery word • easy to remember");recovery.setSingleLine(true);box.addView(input);box.addView(recovery);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Set app login PIN").setMessage("Forgot PIN ke liye recovery word bhi save kare.").setView(box)
             .setPositiveButton("Save",null).setNegativeButton("Not now",null).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String pin=input.getText().toString().trim();if(pin.length()!=4){input.setError("Enter exactly 4 digits");return;}getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(PIN_KEY,pin).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("Login PIN saved");d.dismiss();}));
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String pin=input.getText().toString().trim();String word=recovery.getText().toString().trim();if(pin.length()!=4){input.setError("Enter exactly 4 digits");return;}if(word.length()<3){recovery.setError("Enter at least 3 letters");return;}getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(PIN_KEY,pin).putString(RECOVERY_KEY,word.toLowerCase(Locale.ROOT)).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("Login PIN & recovery saved");d.dismiss();}));
         d.show();
     }
 
     private void showUnlockDialog(String savedPin){
         EditText input=new EditText(this); input.setHint("Enter PIN"); input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         AlertDialog d=new AlertDialog.Builder(this).setTitle("LathaBulk Login").setMessage("4-digit PIN enter kare").setView(input).setCancelable(false)
-            .setPositiveButton("Login",null).setNegativeButton("Exit",(a,b)->finish()).create();
+            .setPositiveButton("Login",null).setNeutralButton("Forgot PIN",(a,b)->showForgotPinDialog()).setNegativeButton("Exit",(a,b)->finish()).create();
         d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(savedPin.equals(input.getText().toString().trim())){d.dismiss();setContentView(buildUi());}else input.setError("Wrong PIN");}));
         d.show();
     }
@@ -234,12 +227,12 @@ public class MainActivity extends Activity {
         theme.setOnClickListener(v -> { getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply(); recreate(); });
 
         LinearLayout accountRow=row();
-        Button login=button("Login / PIN");
-        Button backup=button("Drive Backup");
+        Button login=button("SETTINGS");
+        Button backup=button("Local Backup");
         Button restore=button("Restore Backup");
         accountRow.addView(login,weighted(1f,38)); accountRow.addView(backup,weighted(1f,38)); accountRow.addView(restore,weighted(1f,38));
         root.addView(accountRow);
-        login.setOnClickListener(v->showLoginSettings());
+        login.setOnClickListener(v->showSettingsScreen());
         backup.setOnClickListener(v->createBackupFile());
         restore.setOnClickListener(v->chooseRestoreFile());
 
@@ -264,7 +257,7 @@ public class MainActivity extends Activity {
         groups.addView(editGroupButton, weighted(1.15f, 41));
         root.addView(groups);
         saveGroup.setOnClickListener(v -> showSaveGroupDialog());
-        myGroups.setOnClickListener(v -> showRecipientListsScreen());
+        myGroups.setOnClickListener(v -> showGroupsDialog());
         editGroupButton.setOnClickListener(v -> editActiveGroupContacts());
 
         accessibilityButton = button("Accessibility: OFF");
@@ -286,7 +279,7 @@ public class MainActivity extends Activity {
         businessRow.addView(autoReplyButton,weighted(1f,42));
         root.addView(businessRow);
         businessFiles.setOnClickListener(v->showBusinessFilesDialog());
-        autoReplyButton.setOnClickListener(v->showAutoReplyDialog());
+        autoReplyButton.setOnClickListener(v->showAutoReplyScreen());
 
         Button ledgerExcel=button("MASTER LEDGER → PHONE + BALANCE EXCEL");
         ledgerExcel.setTypeface(Typeface.DEFAULT_BOLD);
@@ -298,43 +291,20 @@ public class MainActivity extends Activity {
         root.addView(ledgerExcel,xlp);
         ledgerExcel.setOnClickListener(v->chooseMasterPdfForExcel());
 
-        LinearLayout composeCard=new LinearLayout(this);
-        composeCard.setOrientation(LinearLayout.VERTICAL);
-        composeCard.setPadding(dp(5),dp(4),dp(5),dp(4));
+        LinearLayout messageShell=row();
+        messageShell.setGravity(Gravity.CENTER_VERTICAL);
+        messageShell.setPadding(dp(3),dp(2),dp(5),dp(2));
         GradientDrawable messageBg=new GradientDrawable();
         messageBg.setColor(isDark()?Color.rgb(48,48,48):Color.WHITE);
         messageBg.setStroke(dp(1),Color.rgb(95,125,185));
-        messageBg.setCornerRadius(dp(20));
-        composeCard.setBackground(messageBg);
-
-        bulkImagePreview=new ImageView(this);
-        bulkImagePreview.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        bulkImagePreview.setAdjustViewBounds(true);
-        bulkImagePreview.setVisibility(View.GONE);
-        composeCard.addView(bulkImagePreview,new LinearLayout.LayoutParams(-1,dp(145)));
-
-        bulkImageActions=row();
-        bulkImageActions.setGravity(Gravity.CENTER_VERTICAL);
-        TextView imageLabel=new TextView(this);imageLabel.setText("Image selected • caption below");imageLabel.setTextSize(12);imageLabel.setPadding(dp(8),0,0,0);
-        Button changeImage=button("Change");Button removeImage=button("Remove");
-        bulkImageActions.addView(imageLabel,new LinearLayout.LayoutParams(0,dp(36),1f));
-        bulkImageActions.addView(changeImage,new LinearLayout.LayoutParams(dp(76),dp(36)));
-        bulkImageActions.addView(removeImage,new LinearLayout.LayoutParams(dp(76),dp(36)));
-        bulkImageActions.setVisibility(View.GONE);
-        composeCard.addView(bulkImageActions);
-
-        LinearLayout messageShell=row();
-        messageShell.setGravity(Gravity.CENTER_VERTICAL);
+        messageBg.setCornerRadius(dp(24));
+        messageShell.setBackground(messageBg);
         Button emoji=button("🙂");
         emoji.setTextSize(20);
         emoji.setContentDescription("Add emoji");
         messageShell.addView(emoji,new LinearLayout.LayoutParams(dp(46),dp(54)));
-        Button addImage=button("📷");
-        addImage.setTextSize(19);
-        addImage.setContentDescription("Add image");
-        messageShell.addView(addImage,new LinearLayout.LayoutParams(dp(46),dp(54)));
         messageBox = new EditText(this);
-        messageBox.setHint("Add caption or message • {Name}");
+        messageBox.setHint("Type message • {Name} for customer name");
         messageBox.setMinLines(2);
         messageBox.setMaxLines(3);
         messageBox.setTextSize(14);
@@ -343,16 +313,11 @@ public class MainActivity extends Activity {
         messageBox.setPadding(dp(4),0,dp(5),0);
         messageBox.setText(getSharedPreferences(PREFS,MODE_PRIVATE).getString(MESSAGE_DRAFT_KEY,""));
         messageShell.addView(messageBox,new LinearLayout.LayoutParams(0,dp(66),1f));
-        composeCard.addView(messageShell,new LinearLayout.LayoutParams(-1,dp(66)));
-        LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(-1,-2);
+        LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(-1,dp(70));
         mlp.setMargins(dp(1),dp(2),dp(1),dp(2));
-        root.addView(composeCard,mlp);
+        root.addView(messageShell,mlp);
         emoji.setOnClickListener(v->showEmojiPicker());
-        addImage.setOnClickListener(v->openBulkImageGallery());
-        changeImage.setOnClickListener(v->openBulkImageGallery());
-        removeImage.setOnClickListener(v->removeBulkImage());
         messageBox.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(MESSAGE_DRAFT_KEY,s.toString()).apply();}public void afterTextChanged(Editable e){}});
-        loadBulkImageSelection();
 
         LinearLayout messageTools=row();
         Button headerFooter=button("Header / Footer");
@@ -519,47 +484,6 @@ public class MainActivity extends Activity {
             lv.setOnItemLongClickListener((p,v,pos,id)->{showGroupLongPressMenu(names[pos]);dialog.dismiss();return true;});
         }); dialog.show();
     }
-    private void showRecipientListsScreen(){
-        recipientListsVisible=true;
-        FrameLayout page=new FrameLayout(this);page.setBackgroundColor(Color.BLACK);
-        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
-        page.addView(body,new FrameLayout.LayoutParams(-1,-1));
-
-        LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(10),0,dp(14),0);header.setBackgroundColor(Color.rgb(29,27,27));
-        Button back=button("‹");back.setTextSize(36);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
-        TextView title=new TextView(this);title.setText("Recipient Lists");title.setTextSize(27);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(back,new LinearLayout.LayoutParams(dp(62),dp(72)));header.addView(title,new LinearLayout.LayoutParams(0,dp(72),1f));body.addView(header);
-        back.setOnClickListener(v->returnToMainScreen());
-
-        ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(dp(16),dp(14),dp(16),dp(100));scroll.addView(cards,new ScrollView.LayoutParams(-1,-2));body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
-        Map<String,List<String>> groups=readGroups();
-        if(groups.isEmpty()){
-            TextView empty=new TextView(this);empty.setText("No recipient lists yet\nTap + to create your first list");empty.setTextColor(Color.LTGRAY);empty.setTextSize(17);empty.setGravity(Gravity.CENTER);cards.addView(empty,new LinearLayout.LayoutParams(-1,dp(190)));
-        }else for(Map.Entry<String,List<String>> entry:groups.entrySet()){
-            String name=entry.getKey();int count=entry.getValue().size();
-            LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(14),dp(9),dp(7),dp(9));GradientDrawable bg=new GradientDrawable();bg.setColor(Color.rgb(42,42,42));bg.setCornerRadius(dp(14));card.setBackground(bg);
-            LinearLayout info=new LinearLayout(this);info.setOrientation(LinearLayout.VERTICAL);
-            TextView groupName=new TextView(this);groupName.setText(name);groupName.setTextSize(25);groupName.setTextColor(Color.WHITE);groupName.setTypeface(Typeface.DEFAULT_BOLD);
-            TextView groupCount=new TextView(this);groupCount.setText(count+" contacts   🟢");groupCount.setTextSize(17);groupCount.setTextColor(Color.rgb(175,175,175));
-            info.addView(groupName,new LinearLayout.LayoutParams(-1,dp(43)));info.addView(groupCount,new LinearLayout.LayoutParams(-1,dp(34)));
-            Button more=button("⋮");more.setTextSize(30);more.setTextColor(Color.rgb(20,115,220));more.setBackgroundColor(Color.TRANSPARENT);
-            card.addView(info,new LinearLayout.LayoutParams(0,dp(84),1f));card.addView(more,new LinearLayout.LayoutParams(dp(52),dp(70)));
-            LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(106));cp.setMargins(0,dp(7),0,dp(7));cards.addView(card,cp);
-            card.setOnClickListener(v->openRecipientList(name));more.setOnClickListener(v->showRecipientListMenu(more,name));
-        }
-
-        Button add=button("+");add.setTextSize(34);add.setTextColor(Color.WHITE);GradientDrawable fab=new GradientDrawable();fab.setColor(Color.rgb(20,105,205));fab.setShape(GradientDrawable.OVAL);add.setBackground(fab);
-        FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(70),dp(70),Gravity.RIGHT|Gravity.BOTTOM);fp.setMargins(0,0,dp(26),dp(28));page.addView(add,fp);
-        add.setOnClickListener(v->{returnToMainScreen();uiHandler.postDelayed(()->{if(selectedNumbers.isEmpty())toast("Contacts select karke Save group dabaye");else showSaveGroupDialog();},250);});
-        setContentView(page);
-    }
-    private void showRecipientListMenu(View anchor,String name){
-        PopupMenu menu=new PopupMenu(this,anchor);menu.getMenu().add("Open list");menu.getMenu().add("Edit contacts");menu.getMenu().add("Rename");menu.getMenu().add("Duplicate");menu.getMenu().add("Delete");
-        menu.setOnMenuItemClickListener(item->{String a=item.getTitle().toString();if(a.equals("Open list"))openRecipientList(name);else if(a.equals("Edit contacts")){openGroup(name);returnToMainScreen();uiHandler.postDelayed(this::editActiveGroupContacts,250);}else if(a.equals("Rename"))renameGroup(name);else if(a.equals("Duplicate")){duplicateGroup(name);showRecipientListsScreen();}else confirmDeleteGroup(name);return true;});menu.show();
-    }
-    private void openRecipientList(String name){openGroup(name);returnToMainScreen();toast(name+" • "+selectedNumbers.size()+" recipients selected");}
-    private void returnToMainScreen(){recipientListsVisible=false;setContentView(buildUi());uiHandler.postDelayed(this::refreshChecks,80);}
-    @Override public void onBackPressed(){if(recipientListsVisible)returnToMainScreen();else super.onBackPressed();}
     private void openGroup(String name){
         List<String> nums=readGroups().get(name); if(nums==null)return;
         selectedNumbers.clear();selectedNumbers.addAll(nums);activeGroup=name;searchBox.setText("");refreshChecks();toast(name+" opened");
@@ -577,7 +501,7 @@ public class MainActivity extends Activity {
         EditText input=new EditText(this);input.setText(oldName);input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this).setTitle("Rename group").setView(input).setPositiveButton("Rename",(d,w)->{
             String n=input.getText().toString().trim();if(n.isEmpty()||n.equals(oldName))return;
-            Map<String,List<String>>g=readGroups();List<String>nums=g.remove(oldName);g.put(n,nums);writeGroups(g);if(activeGroup.equals(oldName))activeGroup=n;refreshChecks();toast("Renamed to "+n);if(recipientListsVisible)showRecipientListsScreen();
+            Map<String,List<String>>g=readGroups();List<String>nums=g.remove(oldName);g.put(n,nums);writeGroups(g);if(activeGroup.equals(oldName))activeGroup=n;refreshChecks();toast("Renamed to "+n);
         }).setNegativeButton("Cancel",null).show();
     }
     private void duplicateGroup(String name){
@@ -586,7 +510,7 @@ public class MainActivity extends Activity {
     }
     private void confirmDeleteGroup(String name){
         new AlertDialog.Builder(this).setTitle("Delete group?").setMessage(name+" will be removed. Phone contacts will not be deleted.")
-                .setPositiveButton("Delete",(d,w)->{Map<String,List<String>>g=readGroups();g.remove(name);writeGroups(g);if(activeGroup.equals(name)){activeGroup="";selectedNumbers.clear();}refreshChecks();toast("Deleted: "+name);if(recipientListsVisible)showRecipientListsScreen();})
+                .setPositiveButton("Delete",(d,w)->{Map<String,List<String>>g=readGroups();g.remove(name);writeGroups(g);if(activeGroup.equals(name)){activeGroup="";selectedNumbers.clear();}refreshChecks();toast("Deleted: "+name);})
                 .setNegativeButton("Cancel",null).show();
     }
     private void editActiveGroupContacts(){
@@ -629,7 +553,7 @@ public class MainActivity extends Activity {
         String body=messageBox.getText().toString().trim();
         String message=buildFinalMessage();
         if(selectedNumbers.isEmpty()){toast("Select contacts or open group");return;}
-        if(body.isEmpty()&&selectedBulkImageUri==null){toast("Type message or add an image first");return;}
+        if(body.isEmpty()){toast("Type a message first");return;}
         JSONArray nums=new JSONArray();
         JSONArray names=new JSONArray();
         for(String n:selectedNumbers){
@@ -639,7 +563,6 @@ public class MainActivity extends Activity {
         SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);
         getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit()
                 .putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message)
-                .putString(AUTO_IMAGE,selectedBulkImageUri==null?"":selectedBulkImageUri.toString()).putString(AUTO_IMAGE_TYPE,selectedBulkImageType)
                 .putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7))
                 .putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putBoolean(AUTO_RUNNING,true).apply();
         sendButton.setText("STOP AUTO SENDING");
@@ -663,7 +586,6 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_PDF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pdfUri=data.getData();try{getContentResolver().takePersistableUriPermission(pdfUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}if(pdfText!=null)pdfText.setText("PDF: "+pdfUri.getLastPathSegment());}
         if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());
         if(requestCode==PICK_REPLY_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveReplyImagePermanently(data.getData());}
-        if(requestCode==PICK_BULK_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBulkImagePermanently(data.getData());}
         if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){importMasterLedgerPdf(data.getData());}
         if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.CATALOG_URI,data.getData(),"Catalog file saved");}
         if(requestCode==PICK_PRICE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.PRICE_URI,data.getData(),"Price List file saved");}
@@ -736,14 +658,41 @@ public class MainActivity extends Activity {
 
     private void showLoginSettings(){
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
-        String[] items={"Change PIN","Turn login "+(p.getBoolean(LOGIN_ENABLED_KEY,true)?"OFF":"ON"),"Test login now","Reset PIN"};
+        String[] items={"Change PIN","Change recovery word","Turn login "+(p.getBoolean(LOGIN_ENABLED_KEY,true)?"OFF":"ON"),"Forgot PIN / Recover"};
         new AlertDialog.Builder(this).setTitle("Login settings").setItems(items,(d,which)->{
             if(which==0){EditText in=new EditText(this);in.setHint("New 4-digit PIN");in.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);new AlertDialog.Builder(this).setTitle("Change PIN").setView(in).setPositiveButton("Save",(a,b)->{String x=in.getText().toString().trim();if(x.length()==4){p.edit().putString(PIN_KEY,x).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("PIN changed");}else toast("PIN must be 4 digits");}).setNegativeButton("Cancel",null).show();}
-            else if(which==1){boolean n=!p.getBoolean(LOGIN_ENABLED_KEY,true);p.edit().putBoolean(LOGIN_ENABLED_KEY,n).apply();toast("Login "+(n?"ON":"OFF"));}
-            else if(which==2){String pin=p.getString(PIN_KEY,"");if(pin.isEmpty())showCreatePinDialog();else showUnlockDialog(pin);}
-            else {p.edit().remove(PIN_KEY).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("PIN reset • create new PIN");showCreatePinDialog();}
+            else if(which==1){EditText in=new EditText(this);in.setHint("New recovery word");new AlertDialog.Builder(this).setTitle("Recovery word").setView(in).setPositiveButton("Save",(a,b)->{String x=in.getText().toString().trim();if(x.length()>=3){p.edit().putString(RECOVERY_KEY,x.toLowerCase(Locale.ROOT)).apply();toast("Recovery word saved");}else toast("Minimum 3 letters required");}).setNegativeButton("Cancel",null).show();}
+            else if(which==2){boolean n=!p.getBoolean(LOGIN_ENABLED_KEY,true);p.edit().putBoolean(LOGIN_ENABLED_KEY,n).apply();toast("Login "+(n?"ON":"OFF"));}
+            else showForgotPinDialog();
         }).setNegativeButton("Close",null).show();
     }
+
+    private void showForgotPinDialog(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);String saved=p.getString(RECOVERY_KEY,"");
+        if(saved.isEmpty()){new AlertDialog.Builder(this).setTitle("Recovery not set").setMessage("Recovery word pehle set nahi hua. App data safe rakhne ke liye PIN reset nahi kiya gaya.").setPositiveButton("OK",null).show();return;}
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);EditText word=new EditText(this);word.setHint("Recovery word");EditText pin=new EditText(this);pin.setHint("New 4-digit PIN");pin.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);box.addView(word);box.addView(pin);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Recover PIN").setView(box).setPositiveButton("Reset PIN",null).setNegativeButton("Cancel",null).create();d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(!saved.equals(word.getText().toString().trim().toLowerCase(Locale.ROOT))){word.setError("Recovery word does not match");return;}String n=pin.getText().toString().trim();if(n.length()!=4){pin.setError("Enter exactly 4 digits");return;}p.edit().putString(PIN_KEY,n).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("PIN reset successful");d.dismiss();setContentView(buildUi());}));d.show();
+    }
+
+    private void showSettingsScreen(){
+        Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(16),dp(12),dp(16),dp(16));page.setBackgroundColor(isDark()?Color.rgb(25,28,31):Color.rgb(241,248,247));
+        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Settings");title.setTextColor(Color.WHITE);title.setTextSize(24);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(6),0,dp(8),0);head.setBackground(rounded(Color.rgb(0,91,78),18));head.addView(back,new LinearLayout.LayoutParams(dp(48),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);back.setOnClickListener(v->d.dismiss());
+        ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
+        addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
+        addSettingsButton(list,"🔒  Login & Forgot PIN","Change PIN, recovery word, login ON/OFF",v->showLoginSettings());
+        addSettingsButton(list,"▣  Local Backup","Save contacts, rules, images, templates & ledger to phone",v->createBackupFile());
+        addSettingsButton(list,"☁  Drive Backup","Choose Google Drive in the save window",v->createDriveBackupFile());
+        addSettingsButton(list,"↻  Restore Backup","Restore backup from phone or Google Drive",v->chooseRestoreFile());
+        addSettingsButton(list,"⚙  Notification Access","Required for WhatsApp Auto Reply",v->{try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}});
+        addSettingsButton(list,"🗑  Clear All Data","Remove contacts, groups, rules, templates and files",v->confirmClearAllData(d));
+        d.setContentView(page);d.show();
+    }
+
+    private void addSettingsButton(LinearLayout parent,String title,String subtitle,View.OnClickListener click){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(18),dp(13),dp(14),dp(12));card.setBackground(rounded(isDark()?Color.rgb(45,50,54):Color.WHITE,18));TextView a=new TextView(this);a.setText(title);a.setTextSize(18);a.setTypeface(Typeface.DEFAULT_BOLD);a.setTextColor(isDark()?Color.WHITE:Color.rgb(10,65,59));TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(isDark()?Color.LTGRAY:Color.DKGRAY);b.setPadding(0,dp(4),0,0);card.addView(a);card.addView(b);card.setOnClickListener(click);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}
+    private void createDriveBackupFile(){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Drive_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(Intent.createChooser(i,"Choose Google Drive and save backup"),CREATE_BACKUP);}
+    private void confirmClearAllData(Dialog settings){new AlertDialog.Builder(this).setTitle("Clear all app data?").setMessage("Contacts, groups, auto-reply rules, images, templates, ledgers and history delete honge. Login PIN aur recovery word safe rahenge.").setPositiveButton("Clear All",(d,w)->{clearAllUserData();settings.dismiss();recreate();}).setNegativeButton("Cancel",null).show();}
+    private void clearAllUserData(){SharedPreferences main=getSharedPreferences(PREFS,MODE_PRIVATE);String pin=main.getString(PIN_KEY,"");String recovery=main.getString(RECOVERY_KEY,"");boolean login=main.getBoolean(LOGIN_ENABLED_KEY,true);boolean dark=main.getBoolean(DARK_KEY,false);main.edit().clear().putString(PIN_KEY,pin).putString(RECOVERY_KEY,recovery).putBoolean(LOGIN_ENABLED_KEY,login).putBoolean(DARK_KEY,dark).apply();getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();deleteAppFiles(getFilesDir());selectedNumbers.clear();allContacts.clear();visibleContacts.clear();toast("All data cleared • PIN kept safe");}
+    private void deleteAppFiles(File dir){File[] files=dir.listFiles();if(files==null)return;for(File f:files){if(f.isDirectory())deleteAppFiles(f);f.delete();}}
 
     private void createBackupFile(){
         Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(i,CREATE_BACKUP);
@@ -783,33 +732,6 @@ public class MainActivity extends Activity {
     private void retryFailed(){try{JSONArray f=new JSONArray(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_FAILED,"[]"));if(f.length()==0){toast("No failed contacts");return;}selectedNumbers.clear();for(int i=0;i<f.length();i++)selectedNumbers.add(f.getString(i));refreshChecks();toast(f.length()+" failed contacts selected");}catch(Exception e){toast("No failed contacts");}}
     private void resumeQueue(){SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);try{JSONArray a=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int i=p.getInt(AUTO_INDEX,0);if(a.length()==0||i>=a.length()){toast("No paused queue");return;}p.edit().putBoolean(AUTO_RUNNING,true).apply();sendButton.setText("STOP AUTO SENDING");miniProgress.setText("Resuming "+(i+1)+" / "+a.length());WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("No paused queue");}}
 
-    private void openBulkImageGallery(){
-        try{
-            Intent i=Build.VERSION.SDK_INT>=33?new Intent(MediaStore.ACTION_PICK_IMAGES):new Intent(Intent.ACTION_GET_CONTENT);
-            i.setType("image/*");if(Build.VERSION.SDK_INT<33)i.addCategory(Intent.CATEGORY_OPENABLE);
-            startActivityForResult(Intent.createChooser(i,"Choose image for WhatsApp message"),PICK_BULK_IMAGE);
-        }catch(Exception first){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("image/*");startActivityForResult(i,PICK_BULK_IMAGE);}
-    }
-    private void saveBulkImagePermanently(Uri source){
-        try{
-            String mime=getContentResolver().getType(source);String ext=(mime!=null&&mime.contains("png"))?"png":(mime!=null&&mime.contains("webp"))?"webp":(mime!=null&&mime.contains("gif"))?"gif":"jpg";
-            File dir=new File(getFilesDir(),"bulk_images");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");
-            File target=new File(dir,"selected_"+System.currentTimeMillis()+"."+ext);
-            try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){if(in==null)throw new Exception("Image read failed");byte[] buf=new byte[16*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}
-            selectedBulkImageUri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);selectedBulkImageType=mime==null?"image/*":mime;
-            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(BULK_IMAGE_URI_KEY,selectedBulkImageUri.toString()).putString(BULK_IMAGE_TYPE_KEY,selectedBulkImageType).apply();
-            showBulkImagePreview();toast("Image added • caption niche type karein");
-        }catch(Exception e){toast("Image add failed • Gallery se dobara select karein");}
-    }
-    private void loadBulkImageSelection(){
-        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);String raw=p.getString(BULK_IMAGE_URI_KEY,"");selectedBulkImageType=p.getString(BULK_IMAGE_TYPE_KEY,"image/*");selectedBulkImageUri=raw.isEmpty()?null:Uri.parse(raw);showBulkImagePreview();
-    }
-    private void showBulkImagePreview(){
-        if(bulkImagePreview==null||bulkImageActions==null)return;boolean has=selectedBulkImageUri!=null;bulkImagePreview.setVisibility(has?View.VISIBLE:View.GONE);bulkImageActions.setVisibility(has?View.VISIBLE:View.GONE);if(has)bulkImagePreview.setImageURI(selectedBulkImageUri);
-    }
-    private void removeBulkImage(){
-        selectedBulkImageUri=null;selectedBulkImageType="image/*";getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(BULK_IMAGE_URI_KEY).remove(BULK_IMAGE_TYPE_KEY).apply();showBulkImagePreview();toast("Image removed");
-    }
 
     private void openPhoneGalleryFirst(){
         try{
@@ -1125,52 +1047,76 @@ public class MainActivity extends Activity {
         AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(existing==null?"Add customer":"Edit customer").setView(box).setPositiveButton("Save",(d,w)->{String ph=normalize(phone.getText().toString());if(ph.length()<10){toast("Valid phone number required");return;}try{JSONArray a=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));JSONArray out=new JSONArray();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null&&!normalize(o.optString("phone","")).equals(original)&&!normalize(o.optString("phone","")).equals(ph))out.put(o);}JSONObject n=new JSONObject();n.put("phone",ph);n.put("name",name.getText().toString().trim());out.put(n);p.edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,out.toString()).apply();toast("Customer saved");after.run();}catch(Exception e){toast("Save failed");}}).setNegativeButton("Cancel",null);
         if(existing!=null)b.setNeutralButton("Delete",(d,w)->{try{JSONArray a=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));JSONArray out=new JSONArray();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null&&!normalize(o.optString("phone","")).equals(original))out.put(o);}p.edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,out.toString()).apply();toast("Customer deleted");after.run();}catch(Exception ignored){}});b.show();
     }
-    private void showAutoReplyDialog(){
-        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
-        EditText keyword=new EditText(this);keyword.setHint("Keyword");
-        Spinner match=new Spinner(this);String[] modes={"Contains","Exact match","Starts with","Ends with"};match.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,modes));
-        EditText reply=new EditText(this);reply.setHint("Text / image caption");reply.setMinLines(2);
-        CheckBox caseSensitive=new CheckBox(this);caseSensitive.setText("Case sensitive");
-        EditText cool=new EditText(this);cool.setHint("Cooldown minutes");cool.setInputType(2);cool.setText(String.valueOf(p.getInt(AutoReplyNotificationService.COOLDOWN,5)));
-        Button image=button("Choose image from phone albums"); Button rules=button("View saved keywords & images"); Button access=button("Open Notification Access");
-        box.addView(keyword);box.addView(match);box.addView(reply);box.addView(caseSensitive);box.addView(cool);box.addView(image,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(rules,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(access,new LinearLayout.LayoutParams(-1,dp(42)));
-        image.setOnClickListener(v->openPhoneGalleryFirst());
-        rules.setOnClickListener(v->showRulesDialog());
-        access.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}});
-        new AlertDialog.Builder(this).setTitle("WhatsApp Auto Reply Rules").setMessage("Keyword match type choose karo, text/image save karo.").setView(box)
-            .setPositiveButton("Save rule & turn ON",(d,w)->{String k=keyword.getText().toString().trim();if(k.isEmpty()){toast("Keyword required");return;}int c=5;try{c=Math.max(1,Integer.parseInt(cool.getText().toString()));}catch(Exception ignored){}try{JSONArray arr=new JSONArray(p.getString("rules","[]"));JSONObject o=new JSONObject();o.put("keyword",k);o.put("match",match.getSelectedItemPosition());o.put("case",caseSensitive.isChecked());o.put("reply",reply.getText().toString().trim());o.put("image",p.getString(AutoReplyNotificationService.IMAGE,""));o.put("type",p.getString(AutoReplyNotificationService.IMAGE+"_type","image/*"));arr.put(o);p.edit().putString("rules",arr.toString()).putInt(AutoReplyNotificationService.COOLDOWN,c).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast("Rule saved • Auto reply ON");}catch(Exception e){toast("Rule save failed");}})
-            .setNeutralButton("Turn OFF",(d,w)->{p.edit().putBoolean(AutoReplyNotificationService.ENABLED,false).apply();toast("Auto reply OFF");}).setNegativeButton("Close",null).show();
+    private void showAutoReplyScreen(){
+        final SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+        final Dialog dialog=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);
+        LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(Color.rgb(239,249,248));
+
+        LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(12),dp(8),dp(10),dp(8));header.setBackgroundColor(Color.rgb(0,91,78));
+        Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
+        TextView title=new TextView(this);title.setText("AutoReply to Messages");title.setTextColor(Color.WHITE);title.setTextSize(23);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);
+        Button settings=button("⚙");settings.setTextSize(23);settings.setTextColor(Color.WHITE);settings.setBackgroundColor(Color.TRANSPARENT);
+        header.addView(back,new LinearLayout.LayoutParams(dp(48),dp(54)));header.addView(title,new LinearLayout.LayoutParams(0,dp(54),1f));header.addView(settings,new LinearLayout.LayoutParams(dp(52),dp(54)));page.addView(header);
+        back.setOnClickListener(v->dialog.dismiss());settings.setOnClickListener(v->showSettingsScreen());
+
+        LinearLayout enable=row();enable.setGravity(Gravity.CENTER_VERTICAL);enable.setPadding(dp(18),dp(8),dp(12),dp(8));enable.setBackground(rounded(Color.rgb(190,232,226),22));
+        TextView enableTitle=new TextView(this);enableTitle.setText("☘  Enable Auto Reply");enableTitle.setTextColor(Color.rgb(12,52,49));enableTitle.setTextSize(20);enableTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        Switch toggle=new Switch(this);toggle.setChecked(p.getBoolean(AutoReplyNotificationService.ENABLED,false));
+        enable.addView(enableTitle,new LinearLayout.LayoutParams(0,dp(68),1f));enable.addView(toggle,new LinearLayout.LayoutParams(dp(64),dp(58)));
+        LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(-1,dp(84));elp.setMargins(dp(16),dp(16),dp(16),dp(9));page.addView(enable,elp);
+        toggle.setOnCheckedChangeListener((b,on)->{p.edit().putBoolean(AutoReplyNotificationService.ENABLED,on).apply();toast(on?"Auto reply ON":"Auto reply OFF");});
+
+        TextView rulesTitle=new TextView(this);rulesTitle.setText("Rules");rulesTitle.setTextSize(22);rulesTitle.setTypeface(Typeface.DEFAULT_BOLD);rulesTitle.setTextColor(Color.rgb(12,52,49));rulesTitle.setPadding(dp(22),dp(8),0,dp(6));page.addView(rulesTitle,new LinearLayout.LayoutParams(-1,dp(50)));
+        ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(dp(16),0,dp(16),dp(92));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
+
+        Button plus=button("+");plus.setTextSize(38);plus.setTextColor(Color.WHITE);plus.setBackground(rounded(Color.rgb(0,91,78),50));
+        LinearLayout bottom=new LinearLayout(this);bottom.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);bottom.setPadding(0,0,dp(20),dp(10));bottom.addView(plus,new LinearLayout.LayoutParams(dp(72),dp(72)));page.addView(bottom,new LinearLayout.LayoutParams(-1,dp(82)));
+        Runnable refresh=()->renderAutoReplyRules(cards,dialog);
+        plus.setOnClickListener(v->showRuleEditor(-1,refresh));refresh.run();dialog.setContentView(page);dialog.show();
     }
 
-    private void showRulesDialog(){
-        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
-        StringBuilder out=new StringBuilder();
+    private void renderAutoReplyRules(LinearLayout cards,Dialog parent){
+        cards.removeAllViews();SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
         try{
-            JSONArray a=new JSONArray(p.getString("rules","[]"));
-            for(int i=0;i<a.length();i++){
-                JSONObject o=a.getJSONObject(i);
-                String[] m={"Contains","Exact","Starts","Ends"};
-                int mi=o.optInt("match",0);
-                out.append(i+1).append(". ")
-                   .append(o.optString("keyword"))
-                   .append(" • ")
-                   .append(m[Math.max(0,Math.min(3,mi))])
-                   .append("\n   Reply: ")
-                   .append(o.optString("reply").isEmpty()?"(image only)":o.optString("reply"))
-                   .append("\n   Image: ")
-                   .append(o.optString("image").isEmpty()?"No":"Yes")
-                   .append("\n\n");
+            JSONArray rules=new JSONArray(p.getString("rules","[]"));
+            if(rules.length()==0){TextView empty=new TextView(this);empty.setText("No rules saved\nTap + to create your first auto reply");empty.setGravity(Gravity.CENTER);empty.setTextSize(16);empty.setTextColor(Color.DKGRAY);empty.setPadding(0,dp(70),0,0);cards.addView(empty,new LinearLayout.LayoutParams(-1,dp(190)));return;}
+            for(int i=0;i<rules.length();i++){
+                final int index=i;JSONObject rule=rules.getJSONObject(i);LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(10),dp(12),dp(10));card.setBackground(rounded(Color.WHITE,20));
+                TextView name=new TextView(this);name.setText("Rule "+(i+1));name.setTextSize(19);name.setTypeface(Typeface.DEFAULT_BOLD);name.setTextColor(Color.rgb(0,91,78));card.addView(name);
+                LinearLayout content=row();content.setGravity(Gravity.CENTER_VERTICAL);
+                TextView dot=new TextView(this);dot.setText("●");dot.setTextSize(25);dot.setTextColor(Color.rgb(0,166,125));dot.setGravity(Gravity.CENTER);
+                String key=rule.optString("keyword","");String reply=rule.optString("reply","");String mode=new String[]{"Contains","Exact","Starts with","Ends with"}[Math.max(0,Math.min(3,rule.optInt("match",0)))];
+                TextView summary=new TextView(this);summary.setText("Received Msg : "+key+"\nSend Msg : "+(reply.isEmpty()?(rule.optString("image","").isEmpty()?"—":"🖼 Image"):reply)+"\n"+mode+(rule.optBoolean("case",false)?" • Case sensitive":""));summary.setTextSize(15);summary.setTextColor(Color.rgb(28,28,28));summary.setMaxLines(4);summary.setEllipsize(TextUtils.TruncateAt.END);summary.setPadding(dp(5),0,dp(4),0);
+                Button edit=button("✎");edit.setTextSize(20);edit.setTextColor(Color.rgb(0,91,78));edit.setBackground(rounded(Color.rgb(220,245,241),40));
+                Button move=button("↕");move.setTextSize(21);move.setTextColor(Color.rgb(0,91,78));move.setBackground(rounded(Color.rgb(220,245,241),40));
+                Button more=button("⋮");more.setTextSize(23);more.setTextColor(Color.rgb(0,91,78));more.setBackground(Color.TRANSPARENT);
+                content.addView(dot,new LinearLayout.LayoutParams(dp(38),dp(72)));content.addView(summary,new LinearLayout.LayoutParams(0,dp(86),1f));content.addView(edit,new LinearLayout.LayoutParams(dp(44),dp(44)));content.addView(move,new LinearLayout.LayoutParams(dp(44),dp(44)));content.addView(more,new LinearLayout.LayoutParams(dp(38),dp(48)));card.addView(content);
+                LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(132));cp.setMargins(0,dp(5),0,dp(7));cards.addView(card,cp);
+                edit.setOnClickListener(v->showRuleEditor(index,()->renderAutoReplyRules(cards,parent)));
+                move.setOnClickListener(v->showRuleMoveMenu(move,index,cards,parent));
+                more.setOnClickListener(v->showRuleMoreMenu(more,index,cards,parent));
             }
-            if(a.length()==0)out.append("No saved rules");
-        }catch(Exception e){out.append("No saved rules");}
-        new AlertDialog.Builder(this)
-            .setTitle("Saved keywords & reply images")
-            .setMessage(out.toString())
-            .setPositiveButton("Close",null)
-            .setNeutralButton("Clear all",(d,w)->p.edit().remove("rules").apply())
-            .show();
+        }catch(Exception e){toast("Rules open failed");}
     }
+
+    private void showRuleEditor(int editIndex,Runnable refresh){
+        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);JSONObject old=null;
+        try{JSONArray a=new JSONArray(p.getString("rules","[]"));if(editIndex>=0&&editIndex<a.length())old=a.getJSONObject(editIndex);}catch(Exception ignored){}
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
+        EditText keyword=new EditText(this);keyword.setHint("Received message / keyword");Spinner match=new Spinner(this);String[] modes={"Contains","Exact match","Starts with","Ends with"};match.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,modes));
+        EditText reply=new EditText(this);reply.setHint("Reply text / image caption");reply.setMinLines(2);CheckBox caseSensitive=new CheckBox(this);caseSensitive.setText("Case sensitive");
+        EditText cool=new EditText(this);cool.setHint("Cooldown minutes");cool.setInputType(InputType.TYPE_CLASS_NUMBER);cool.setText(String.valueOf(p.getInt(AutoReplyNotificationService.COOLDOWN,5)));
+        if(old!=null){keyword.setText(old.optString("keyword"));match.setSelection(old.optInt("match",0));reply.setText(old.optString("reply"));caseSensitive.setChecked(old.optBoolean("case",false));}
+        Button image=button(p.getString(AutoReplyNotificationService.IMAGE,"").isEmpty()?"Choose reply image from phone albums":"Change reply image ✓");box.addView(keyword);box.addView(match);box.addView(reply);box.addView(caseSensitive);box.addView(cool);box.addView(image,new LinearLayout.LayoutParams(-1,dp(46)));image.setOnClickListener(v->openPhoneGalleryFirst());
+        final JSONObject original=old;AlertDialog d=new AlertDialog.Builder(this).setTitle(editIndex<0?"Add Auto Reply Rule":"Edit Rule "+(editIndex+1)).setView(box).setPositiveButton("Save",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String k=keyword.getText().toString().trim();if(k.isEmpty()){keyword.setError("Keyword required");return;}try{int cooldown=Math.max(1,Integer.parseInt(cool.getText().toString().trim()));JSONArray arr=new JSONArray(p.getString("rules","[]"));JSONObject o=new JSONObject();o.put("keyword",k);o.put("match",match.getSelectedItemPosition());o.put("case",caseSensitive.isChecked());o.put("reply",reply.getText().toString().trim());String img=p.getString(AutoReplyNotificationService.IMAGE,"");String typ=p.getString(AutoReplyNotificationService.IMAGE+"_type","image/*");if(editIndex>=0&&original!=null&&img.isEmpty()){img=original.optString("image","");typ=original.optString("type","image/*");}o.put("image",img);o.put("type",typ);if(editIndex>=0){JSONArray out=new JSONArray();for(int i=0;i<arr.length();i++)out.put(i==editIndex?o:arr.get(i));arr=out;}else arr.put(o);p.edit().putString("rules",arr.toString()).putInt(AutoReplyNotificationService.COOLDOWN,cooldown).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast(editIndex<0?"Rule added • Auto reply ON":"Rule updated");d.dismiss();refresh.run();}catch(Exception e){toast("Rule save failed");}}));d.show();
+    }
+
+    private void showRuleMoveMenu(View anchor,int index,LinearLayout cards,Dialog parent){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("Move up");m.getMenu().add("Move down");m.setOnMenuItemClickListener(item->{moveRule(index,item.getTitle().toString().contains("up")?-1:1);renderAutoReplyRules(cards,parent);return true;});m.show();}
+    private void showRuleMoreMenu(View anchor,int index,LinearLayout cards,Dialog parent){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("Edit rule");m.getMenu().add("Delete rule");m.setOnMenuItemClickListener(item->{if(item.getTitle().toString().startsWith("Edit"))showRuleEditor(index,()->renderAutoReplyRules(cards,parent));else new AlertDialog.Builder(this).setTitle("Delete this rule?").setPositiveButton("Delete",(d,w)->{deleteRule(index);renderAutoReplyRules(cards,parent);}).setNegativeButton("Cancel",null).show();return true;});m.show();}
+    private void moveRule(int index,int direction){try{SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);JSONArray a=new JSONArray(p.getString("rules","[]"));int to=index+direction;if(to<0||to>=a.length())return;ArrayList<JSONObject> list=new ArrayList<>();for(int i=0;i<a.length();i++)list.add(a.getJSONObject(i));Collections.swap(list,index,to);JSONArray out=new JSONArray();for(JSONObject o:list)out.put(o);p.edit().putString("rules",out.toString()).apply();}catch(Exception ignored){}}
+    private void deleteRule(int index){try{SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);JSONArray a=new JSONArray(p.getString("rules","[]"));JSONArray out=new JSONArray();for(int i=0;i<a.length();i++)if(i!=index)out.put(a.get(i));p.edit().putString("rules",out.toString()).apply();toast("Rule deleted");}catch(Exception ignored){}}
+    private GradientDrawable rounded(int color,int radiusDp){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radiusDp));return g;}
 
     private void saveSelectedContacts(){
         JSONArray a=new JSONArray();JSONArray detailed=new JSONArray();
