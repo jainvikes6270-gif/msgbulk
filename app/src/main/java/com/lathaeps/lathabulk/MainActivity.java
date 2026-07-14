@@ -27,10 +27,14 @@ import android.os.Looper;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.InputStreamReader;
 import java.util.Random;
+import android.util.Base64;
+import android.text.InputType;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
@@ -73,6 +77,8 @@ public class MainActivity extends Activity {
     private static final int PICK_LEDGER_FILE = 106;
     private static final int PICK_CATALOG_FILE = 107;
     private static final int PICK_PRICE_FILE = 108;
+    private static final int CREATE_BACKUP = 109;
+    private static final int PICK_RESTORE = 110;
     private static final String CHANNEL_ID = "latha_bulk_progress";
     private static final int NOTIFICATION_ID = 511;
     private static final String PREFS = "latha_bulk_prefs";
@@ -89,6 +95,8 @@ public class MainActivity extends Activity {
     static final String AUTO_FAILED = "failed";
     private static final String DARK_KEY = "dark_mode";
     private static final String SAVED_CONTACTS_KEY = "saved_contacts";
+    private static final String PIN_KEY = "login_pin";
+    private static final String LOGIN_ENABLED_KEY = "login_enabled";
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     private final List<ContactItem> allContacts = new ArrayList<>();
@@ -109,7 +117,34 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         createNotificationChannel();
         requestNotificationPermissionIfNeeded();
-        setContentView(buildUi());
+        showLoginOrApp();
+    }
+
+    private void showLoginOrApp(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        String pin=p.getString(PIN_KEY,"");
+        if(pin.isEmpty()){
+            setContentView(buildUi());
+            uiHandler.postDelayed(this::showCreatePinDialog,300);
+        }else if(p.getBoolean(LOGIN_ENABLED_KEY,true)){
+            showUnlockDialog(pin);
+        }else setContentView(buildUi());
+    }
+
+    private void showCreatePinDialog(){
+        EditText input=new EditText(this); input.setHint("Create 4-digit PIN"); input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD); input.setMaxLines(1);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Set app login PIN").setMessage("LathaBulk open karne ke liye 4-digit PIN banaye.").setView(input)
+            .setPositiveButton("Save",null).setNegativeButton("Not now",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String pin=input.getText().toString().trim();if(pin.length()!=4){input.setError("Enter exactly 4 digits");return;}getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(PIN_KEY,pin).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("Login PIN saved");d.dismiss();}));
+        d.show();
+    }
+
+    private void showUnlockDialog(String savedPin){
+        EditText input=new EditText(this); input.setHint("Enter PIN"); input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("LathaBulk Login").setMessage("4-digit PIN enter kare").setView(input).setCancelable(false)
+            .setPositiveButton("Login",null).setNegativeButton("Exit",(a,b)->finish()).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(savedPin.equals(input.getText().toString().trim())){d.dismiss();setContentView(buildUi());}else input.setError("Wrong PIN");}));
+        d.show();
     }
 
     @Override protected void onResume() {
@@ -130,7 +165,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.4 GALLERY FIX");
+        title.setText("LATHA BULK v3.5 LOGIN • BACKUP");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -168,6 +203,16 @@ public class MainActivity extends Activity {
         delay.setOnClickListener(v -> showDelayDialog());
         schedule.setOnClickListener(v -> showScheduleDialog());
         theme.setOnClickListener(v -> { getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply(); recreate(); });
+
+        LinearLayout accountRow=row();
+        Button login=button("Login / PIN");
+        Button backup=button("Backup");
+        Button restore=button("Restore");
+        accountRow.addView(login,weighted(1f,38)); accountRow.addView(backup,weighted(1f,38)); accountRow.addView(restore,weighted(1f,38));
+        root.addView(accountRow);
+        login.setOnClickListener(v->showLoginSettings());
+        backup.setOnClickListener(v->createBackupFile());
+        restore.setOnClickListener(v->chooseRestoreFile());
 
         searchBox = new EditText(this);
         searchBox.setHint("Search name or mobile number");
@@ -479,6 +524,8 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.LEDGER_URI,data.getData(),"Ledger file saved");}
         if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.CATALOG_URI,data.getData(),"Catalog file saved");}
         if(requestCode==PICK_PRICE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.PRICE_URI,data.getData(),"Price List file saved");}
+        if(requestCode==CREATE_BACKUP&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) writeBackup(data.getData());
+        if(requestCode==PICK_RESTORE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) restoreBackup(data.getData());
     }
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,messageBox.getText().toString().trim());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
@@ -490,6 +537,38 @@ public class MainActivity extends Activity {
 
     private boolean isDark(){return getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(DARK_KEY,false);}
     private String findName(String number){for(ContactItem c:allContacts)if(c.number.equals(number))return c.name;return number;}
+    private void showLoginSettings(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        String[] items={"Change PIN","Turn login "+(p.getBoolean(LOGIN_ENABLED_KEY,true)?"OFF":"ON")};
+        new AlertDialog.Builder(this).setTitle("Login settings").setItems(items,(d,which)->{
+            if(which==0){EditText in=new EditText(this);in.setHint("New 4-digit PIN");in.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);new AlertDialog.Builder(this).setTitle("Change PIN").setView(in).setPositiveButton("Save",(a,b)->{String x=in.getText().toString().trim();if(x.length()==4){p.edit().putString(PIN_KEY,x).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("PIN changed");}else toast("PIN must be 4 digits");}).setNegativeButton("Cancel",null).show();}
+            else {boolean n=!p.getBoolean(LOGIN_ENABLED_KEY,true);p.edit().putBoolean(LOGIN_ENABLED_KEY,n).apply();toast("Login "+(n?"ON":"OFF"));}
+        }).setNegativeButton("Close",null).show();
+    }
+
+    private void createBackupFile(){
+        Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(i,CREATE_BACKUP);
+    }
+    private void chooseRestoreFile(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");startActivityForResult(Intent.createChooser(i,"Select LathaBulk backup from phone or Drive"),PICK_RESTORE);}
+
+    private JSONObject prefsToJson(String name)throws Exception{
+        JSONObject o=new JSONObject(); Map<String,?> all=getSharedPreferences(name,MODE_PRIVATE).getAll();
+        for(Map.Entry<String,?> e:all.entrySet()){Object v=e.getValue();if(v instanceof Set)o.put(e.getKey(),new JSONArray((Set<?>)v));else o.put(e.getKey(),v);}
+        return o;
+    }
+    private void jsonToPrefs(String name,JSONObject o)throws Exception{
+        SharedPreferences.Editor ed=getSharedPreferences(name,MODE_PRIVATE).edit().clear();java.util.Iterator<String> it=o.keys();
+        while(it.hasNext()){String k=it.next();Object v=o.get(k);if(v instanceof Boolean)ed.putBoolean(k,(Boolean)v);else if(v instanceof Integer)ed.putInt(k,(Integer)v);else if(v instanceof Long)ed.putLong(k,(Long)v);else if(v instanceof Double)ed.putFloat(k,((Double)v).floatValue());else if(v instanceof JSONArray){Set<String> set=new LinkedHashSet<>();JSONArray a=(JSONArray)v;for(int i=0;i<a.length();i++)set.add(a.getString(i));ed.putStringSet(k,set);}else ed.putString(k,String.valueOf(v));}ed.apply();
+    }
+    private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
+    private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
+    private void writeBackup(Uri uri){
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.5.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+    }
+    private void restoreBackup(Uri uri){
+        try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
+    }
+
     private void chooseCsv(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("text/*");startActivityForResult(i,PICK_CSV);}
     private void importCsv(Uri uri){
         int added=0;try(BufferedReader br=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri)))){

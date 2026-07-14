@@ -34,3 +34,10 @@ Note: Accessibility and Notification Access must be enabled. File sharing may op
 - Selected image is copied into private app storage so background auto reply can access it later.
 - FileProvider grants WhatsApp temporary read access while sharing.
 - Android 13+ Photo Picker supported, with Documents fallback for older devices.
+
+
+## v3.5 additions
+- 4-digit PIN login with enable/disable and change PIN
+- Full JSON backup through Android Files picker (phone storage or Google Drive)
+- Restore backup from phone storage or Google Drive
+- Backup includes app preferences, groups, saved contacts, rules, history and internal reply images
