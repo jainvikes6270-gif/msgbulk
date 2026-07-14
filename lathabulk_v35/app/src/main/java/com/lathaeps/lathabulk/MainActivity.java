@@ -413,7 +413,19 @@ public class MainActivity extends Activity {
     private void showGroupsDialog(){
         Map<String,List<String>> groups=readGroups(); if(groups.isEmpty()){toast("No saved groups");return;}
         String[] names=groups.keySet().toArray(new String[0]);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Tap to open • Long press to manage").setItems(names,null).setNegativeButton("Close",null).create();
+        String[] labels=new String[names.length];
+        for(int i=0;i<names.length;i++){
+            List<String> nums=groups.get(names[i]);
+            StringBuilder preview=new StringBuilder();
+            if(nums!=null){
+                for(int j=0;j<Math.min(3,nums.size());j++){
+                    if(j>0)preview.append(", ");
+                    preview.append(findName(nums.get(j)));
+                }
+            }
+            labels[i]=names[i]+"  ("+(nums==null?0:nums.size())+")"+(preview.length()>0?"\n"+preview:"");
+        }
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Saved groups • name + contacts").setItems(labels,null).setNegativeButton("Close",null).create();
         dialog.setOnShowListener(x->{
             ListView lv=dialog.getListView();
             lv.setOnItemClickListener((p,v,pos,id)->{openGroup(names[pos]);dialog.dismiss();});
@@ -565,7 +577,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.6.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.6.1");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -637,12 +649,38 @@ public class MainActivity extends Activity {
     }
 
     private void saveBusinessUri(String key, Uri uri, String message){
-        try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
-        String type=getContentResolver().getType(uri);
-        SharedPreferences bp=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
-        SharedPreferences.Editor ed=bp.edit().putString(key,uri.toString()).putString(key+"_type",type==null?"application/octet-stream":type).putString(key+"_name",uri.getLastPathSegment()==null?uri.toString():uri.getLastPathSegment()).putLong(key+"_updated",System.currentTimeMillis());
-        String history=bp.getString("file_history",""); String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • "+message+" • "+(uri.getLastPathSegment()==null?"file":uri.getLastPathSegment()); ed.putString("file_history",line+(history.isEmpty()?"":"\n"+history)).apply();
-        toast(message);
+        try{
+            String type=getContentResolver().getType(uri);
+            String ext="bin";
+            if(type!=null){
+                if(type.contains("pdf"))ext="pdf";
+                else if(type.contains("png"))ext="png";
+                else if(type.contains("webp"))ext="webp";
+                else if(type.contains("gif"))ext="gif";
+                else if(type.startsWith("image/"))ext="jpg";
+            }
+            File dir=new File(getFilesDir(),"business_files");
+            if(!dir.exists()&&!dir.mkdirs())throw new Exception("Business folder create failed");
+            File target=new File(dir,key+"_"+System.currentTimeMillis()+"."+ext);
+            try(InputStream in=getContentResolver().openInputStream(uri);OutputStream out=new FileOutputStream(target)){
+                if(in==null)throw new Exception("Selected file read failed");
+                byte[] buf=new byte[16*1024];int n;
+                while((n=in.read(buf))>0)out.write(buf,0,n);
+            }
+            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);
+            SharedPreferences bp=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+            String original=uri.getLastPathSegment()==null?target.getName():uri.getLastPathSegment();
+            String history=bp.getString("file_history","");
+            String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • "+message+" • "+original;
+            bp.edit().putString(key,safe.toString())
+                    .putString(key+"_type",type==null?"application/octet-stream":type)
+                    .putString(key+"_name",original)
+                    .putLong(key+"_updated",System.currentTimeMillis())
+                    .putString("file_history",line+(history.isEmpty()?"":"\n"+history)).apply();
+            toast(message+" ✓ ready for auto reply");
+        }catch(Exception e){
+            toast(message+" failed: file dobara select karein");
+        }
     }
 
     private void pickBusinessFile(int code){
