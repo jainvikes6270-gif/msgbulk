@@ -1,43 +1,17 @@
-# Latha Bulk v3.0
+# LathaBulk v3.11 – Master Ledger PDF to Excel
 
-GitHub-ready Android project.
-
-Features: Accessibility auto-send, Send button at top, personalized `{Name}` messages, CSV import (`Name,Phone`), random delay, pause/resume, schedule while app remains open, history, failed queue retry, groups, PDF share, and dark mode.
-
-## GitHub build
-Upload extracted files to repository, open Actions, run/build workflow, and download the APK artifact.
+## Update flow
+1. Open **BUSINESS FILES**.
+2. Main screen par **MASTER LEDGER PDF → EXCEL (.xlsx)** tap karke Tally PDF select karein and Excel save karein.
+3. Customer matching ke liye **BUSINESS FILES → IMPORT CUSTOMER EXCEL (.xlsx)** select karein.
+4. Excel first-sheet columns:
+   - Phone Number
+   - Customer Name
+   - Ledger File Name
+5. Save ledger keyword, then keep Notification Access and Accessibility enabled.
 
 ## Important
-WhatsApp must open in foreground. Keep phone unlocked and Accessibility enabled. Delivery/read confirmation is not available; failed list only records automation/opening errors. Use responsibly and only message people who consented.
+PDF-to-Excel export text-based Tally PDFs ke page/line data ko editable Excel rows me save karta hai. Scanned/image-only PDF ke liye OCR required hoga. Customer-wise private sending ke liye separate ledger PDFs aur phone mapping required hai.
 
-
-## v3.2 Business Files
-- In-app Ledger PDF/Image selector
-- In-app Catalog PDF/Image selector
-- In-app Price List PDF/Image selector
-- Editable contains-word keywords for each file
-- WhatsApp/WhatsApp Business notification auto-reply integration
-
-Note: Accessibility and Notification Access must be enabled. File sharing may open WhatsApp and requires the phone to be unlocked.
-
-## v3.3.1 Business update
-- Colorful premium header
-- Bottom Choose/Share PDF controls removed
-- Saved contacts viewer
-- Auto-reply rule list with Contains, Exact, Starts With, Ends With and case-sensitive matching
-- Phone album image picker and saved reply image status
-- Master ledger current-file and update history
-- Ledger response restricted to configured customer phone/name match
-
-## v3.4 Gallery Image Fix
-- Auto Reply > Choose image opens the phone Gallery/Photos first.
-- Selected image is copied into private app storage so background auto reply can access it later.
-- FileProvider grants WhatsApp temporary read access while sharing.
-- Android 13+ Photo Picker supported, with Documents fallback for older devices.
-
-
-## v3.5 additions
-- 4-digit PIN login with enable/disable and change PIN
-- Full JSON backup through Android Files picker (phone storage or Google Drive)
-- Restore backup from phone storage or Google Drive
-- Backup includes app preferences, groups, saved contacts, rules, history and internal reply images
+## Build APK
+Upload the extracted project to GitHub. GitHub Actions workflow is included under `.github/workflows/build-apk.yml`.

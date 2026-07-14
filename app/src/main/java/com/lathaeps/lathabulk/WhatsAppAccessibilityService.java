@@ -28,14 +28,27 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         if (event == null || event.getPackageName() == null) return;
         String pkg = event.getPackageName().toString();
         if (!pkg.equals("com.whatsapp") && !pkg.equals("com.whatsapp.w4b")) return;
+        SharedPreferences autoReply = getSharedPreferences(AutoReplyNotificationService.PREFS, MODE_PRIVATE);
+        boolean pendingShare = autoReply.getBoolean(AutoReplyNotificationService.PENDING_SHARE, false);
+        long pendingAt = autoReply.getLong(AutoReplyNotificationService.PENDING_SHARE_AT, 0L);
+        if (pendingShare && System.currentTimeMillis()-pendingAt > 30000L) {
+            autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
+            pendingShare=false;
+        }
         SharedPreferences p = getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE);
-        if (!p.getBoolean(MainActivity.AUTO_RUNNING, false) || clickLocked) return;
+        boolean bulkRunning=p.getBoolean(MainActivity.AUTO_RUNNING, false);
+        if ((!bulkRunning && !pendingShare) || clickLocked) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
         AccessibilityNodeInfo send = findSendButton(root, pkg);
         if (send != null && send.isEnabled() && send.isClickable()) {
             clickLocked = true;
             send.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            if(pendingShare){
+                autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
+                handler.postDelayed(()->clickLocked=false,1200);
+                return;
+            }
             int min=p.getInt(MainActivity.AUTO_MIN_DELAY,3);int max=p.getInt(MainActivity.AUTO_MAX_DELAY,7);if(max<min)max=min;
             int delay=(min+new Random().nextInt(max-min+1))*1000;
             handler.postDelayed(this::advanceQueue, delay);
