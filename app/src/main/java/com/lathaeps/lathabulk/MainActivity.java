@@ -1019,7 +1019,6 @@ public class MainActivity extends Activity {
         return "";
     }
 
-    private String last10Digits(String value){String d=value==null?"":value.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
 
     private static class LedgerPageData{
         final String phone,name,balance;final int pageIndex;
