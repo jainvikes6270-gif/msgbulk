@@ -20,7 +20,7 @@ WhatsApp must open in foreground. Keep phone unlocked and Accessibility enabled.
 
 Note: Accessibility and Notification Access must be enabled. File sharing may open WhatsApp and requires the phone to be unlocked.
 
-## v3.3 Business update
+## v3.3.1 Business update
 - Colorful premium header
 - Bottom Choose/Share PDF controls removed
 - Saved contacts viewer

@@ -124,7 +124,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.3 BUSINESS");
+        title.setText("LATHA BULK v3.3.1 BUSINESS");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -553,22 +553,61 @@ public class MainActivity extends Activity {
     }
 
     private void showRulesDialog(){
-        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);StringBuilder out=new StringBuilder();
-        try{JSONArray a=new JSONArray(p.getString("rules","[]"));for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);String[] m={"Contains","Exact","Starts","Ends"};int mi=o.optInt("match",0);out.append(i+1).append(". ").append(o.optString("keyword")).append(" • ").append(m[Math.max(0,Math.min(3,mi))]).append("
-   Reply: ").append(o.optString("reply").isEmpty()?"(image only)":o.optString("reply")).append("
-   Image: ").append(o.optString("image").isEmpty()?"No":"Yes").append("
-
-");}if(a.length()==0)out.append("No saved rules");}catch(Exception e){out.append("No saved rules");}
-        new AlertDialog.Builder(this).setTitle("Saved keywords & reply images").setMessage(out.toString()).setPositiveButton("Close",null).setNeutralButton("Clear all",(d,w)->p.edit().remove("rules").apply()).show();
+        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+        StringBuilder out=new StringBuilder();
+        try{
+            JSONArray a=new JSONArray(p.getString("rules","[]"));
+            for(int i=0;i<a.length();i++){
+                JSONObject o=a.getJSONObject(i);
+                String[] m={"Contains","Exact","Starts","Ends"};
+                int mi=o.optInt("match",0);
+                out.append(i+1).append(". ")
+                   .append(o.optString("keyword"))
+                   .append(" • ")
+                   .append(m[Math.max(0,Math.min(3,mi))])
+                   .append("\n   Reply: ")
+                   .append(o.optString("reply").isEmpty()?"(image only)":o.optString("reply"))
+                   .append("\n   Image: ")
+                   .append(o.optString("image").isEmpty()?"No":"Yes")
+                   .append("\n\n");
+            }
+            if(a.length()==0)out.append("No saved rules");
+        }catch(Exception e){out.append("No saved rules");}
+        new AlertDialog.Builder(this)
+            .setTitle("Saved keywords & reply images")
+            .setMessage(out.toString())
+            .setPositiveButton("Close",null)
+            .setNeutralButton("Clear all",(d,w)->p.edit().remove("rules").apply())
+            .show();
     }
 
     private void saveSelectedContacts(){
         JSONArray a=new JSONArray();for(String n:selectedNumbers)a.put(n);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(SAVED_CONTACTS_KEY,a.toString()).apply();
     }
     private void showSavedContactsDialog(){
-        StringBuilder b=new StringBuilder();try{JSONArray a=new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(SAVED_CONTACTS_KEY,"[]"));for(int i=0;i<a.length();i++){String n=a.getString(i);b.append(i+1).append(". ").append(findName(n)).append(" • +").append(n).append("
-");}if(a.length()==0)b.append("No saved contacts yet");}catch(Exception e){b.append("No saved contacts yet");}
-        new AlertDialog.Builder(this).setTitle("Saved contacts list").setMessage(b.toString()).setPositiveButton("Close",null).setNeutralButton("Clear list",(d,w)->{selectedNumbers.clear();saveSelectedContacts();refreshChecks();}).show();
+        StringBuilder b=new StringBuilder();
+        try{
+            JSONArray a=new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(SAVED_CONTACTS_KEY,"[]"));
+            for(int i=0;i<a.length();i++){
+                String n=a.getString(i);
+                b.append(i+1).append(". ")
+                 .append(findName(n))
+                 .append(" • +")
+                 .append(n)
+                 .append("\n");
+            }
+            if(a.length()==0)b.append("No saved contacts yet");
+        }catch(Exception e){b.append("No saved contacts yet");}
+        new AlertDialog.Builder(this)
+            .setTitle("Saved contacts list")
+            .setMessage(b.toString())
+            .setPositiveButton("Close",null)
+            .setNeutralButton("Clear list",(d,w)->{
+                selectedNumbers.clear();
+                saveSelectedContacts();
+                refreshChecks();
+            })
+            .show();
     }
 
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
