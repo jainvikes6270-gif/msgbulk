@@ -1,4 +1,9 @@
-# LathaBulk v3.16.2 – Schedule Timer + Catalog Send Fix
+# LathaBulk v3.16.3 – Build Fixed
+
+## v3.16.3 changes
+
+- Fixed GitHub Actions Java compilation failure caused by duplicate `last10Digits()` method.
+- Increased Android `versionCode` to 28 for clean update installation.
 
 ## v3.16.2 changes
 

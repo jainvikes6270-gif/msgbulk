@@ -753,7 +753,7 @@ public class MainActivity extends Activity {
     }
 
     private void addSettingsButton(LinearLayout parent,String title,String subtitle,View.OnClickListener click){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(18),dp(13),dp(14),dp(12));card.setBackground(rounded(isDark()?Color.rgb(45,50,54):Color.WHITE,18));TextView a=new TextView(this);a.setText(title);a.setTextSize(18);a.setTypeface(Typeface.DEFAULT_BOLD);a.setTextColor(isDark()?Color.WHITE:Color.rgb(10,65,59));TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(isDark()?Color.LTGRAY:Color.DKGRAY);b.setPadding(0,dp(4),0,0);card.addView(a);card.addView(b);card.setOnClickListener(click);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.16.2";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.16.3";}}
     private void showScreenOffHelp(){
         new AlertDialog.Builder(this).setTitle("Screen-off Auto Send")
             .setMessage("Auto Send start hote hi app screen ko awake rakhega aur har contact se pehle phone ko wake karega.\n\nImportant: Phone unlocked rakhein. Secure PIN, pattern ya fingerprint lock ko app bypass nahi kar sakta. Auto Send ke beech Power button na dabayein.")
@@ -789,7 +789,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.15.1");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.16.3");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -1114,7 +1114,6 @@ public class MainActivity extends Activity {
         return "";
     }
 
-    private String last10Digits(String value){String d=value==null?"":value.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
 
     private static class LedgerPageData{
         final String phone,name,balance;final int pageIndex;
