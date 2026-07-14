@@ -1,12 +1,14 @@
-# LathaBulk v3.14.2 – Catalog + Price List Fix
+# LathaBulk v3.15.0 – Recipient Lists + Separate Catalog
 
-## New in v3.14.2
-1. Catalog and Price List file auto-reply flow fixed.
-2. Catalog accepts `catalog`, `catalogue` and `catlog`.
-3. Price List accepts `price`, `price list`, `pricelist` and `rate list`.
-4. Catalog and Price List use separate cooldown keys, so one no longer blocks the other.
-5. Business Files now shows selected Catalog/Price filenames and last send status.
-6. Saving a business file automatically turns Auto Reply ON.
+## New in v3.15.0
+1. `My Groups` is now **My Recipient Lists**.
+2. Recipient Lists have a premium dark card screen with contact counts.
+3. Catalog is a completely separate section with its own PDF/image list.
+4. Catalog screen supports View, WhatsApp Send, Rename and Delete.
+5. Catalog auto reply uses the latest file saved in the separate Catalog section.
+6. Catalog accepts `catalog`, `catalogue` and `catlog`.
+7. Price List has been completely removed from the app and auto reply.
+8. Saved Ledger filename is shown separately as **Master PDF** in a green highlight card.
 
 ## Preserved from v3.14.1
 1. Screenshot-style premium **AutoReply to Messages** screen.

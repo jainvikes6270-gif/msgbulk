@@ -23,8 +23,8 @@ import org.json.JSONObject;
 
 public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String PREFS="auto_reply_prefs", ENABLED="enabled", KEYWORD="keyword", REPLY="reply", IMAGE="image", COOLDOWN="cooldown";
-    public static final String LEDGER_URI="ledger_uri", CATALOG_URI="catalog_uri", PRICE_URI="price_uri";
-    public static final String LEDGER_KEY="ledger_key", CATALOG_KEY="catalog_key", PRICE_KEY="price_key";
+    public static final String LEDGER_URI="ledger_uri", CATALOG_URI="catalog_uri";
+    public static final String LEDGER_KEY="ledger_key", CATALOG_KEY="catalog_key";
     public static final String PENDING_SHARE="pending_share", PENDING_SHARE_AT="pending_share_at";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
     private final Map<String,Long> lastReply=new HashMap<>();
@@ -49,11 +49,9 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String file="", type="", caption="";
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
-        String pk=p.getString(PRICE_KEY,"price").trim().toLowerCase(Locale.ROOT);
         String command="rule";
         if(!lk.isEmpty() && lower.contains(lk)){command="ledger";JSONObject customer=findLedgerCustomer(p,title,senderPhone);if(customer==null)return;file=customer.optString("ledger_uri","");if(file.isEmpty())return;type="application/pdf";caption="LATHA EPS Ledger";}
-        else if(matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){command="catalog";file=p.getString(CATALOG_URI,"");type=p.getString(CATALOG_URI+"_type","application/pdf");caption="LATHA EPS Catalog";if(file.isEmpty()){sendRemoteReply(n,"Catalog file abhi upload nahi hai.");return;}}
-        else if(matchesBusinessKeyword(lower,pk,"price","price list","pricelist","rate list")){command="price";file=p.getString(PRICE_URI,"");type=p.getString(PRICE_URI+"_type","application/pdf");caption="LATHA EPS Price List";if(file.isEmpty()){sendRemoteReply(n,"Price List file abhi upload nahi hai.");return;}}
+        else if(matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){command="catalog";JSONObject catalog=findLatestCatalog();if(catalog==null){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}file=catalog.optString("uri","");type=catalog.optString("type","application/pdf");caption="LATHA EPS Catalog";if(file.isEmpty())return;}
         else {
             boolean matched=false;
             try{
@@ -99,6 +97,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }catch(Exception ignored){}
         return null;
     }
+
+    private JSONObject findLatestCatalog(){try{JSONArray items=new JSONArray(getSharedPreferences("latha_bulk_prefs",MODE_PRIVATE).getString("catalog_items","[]"));return items.length()==0?null:items.optJSONObject(items.length()-1);}catch(Exception ignored){return null;}}
 
     private void sendRemoteReply(Notification n,String message){
         if(n.actions==null) return;
