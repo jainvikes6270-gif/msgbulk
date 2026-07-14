@@ -54,5 +54,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".LockScreenSendActivity"
+            android:theme="@style/LockWakeTheme"
+            android:excludeFromRecents="true"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
+        <receiver
+            android:name=".AutoSendCancelReceiver"
+            android:exported="false" />
     </application>
 </manifest>

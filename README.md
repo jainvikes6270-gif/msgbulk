@@ -1,4 +1,39 @@
-# LathaBulk v3.16.3 – Build Fixed
+# LathaBulk v3.16.8 – Recipient List Image Composer
+
+## v3.16.8 changes
+
+- Recipient List cards now include a direct **SEND** button for Text or Image + Text.
+- Gallery image selection opens a built-in editor before sending.
+- Add overlay text, emoji/stickers, text color, text size and Top/Center/Bottom position.
+- Edited image is saved safely inside the app and sent automatically to the selected recipient list.
+- Existing lock-screen resume and notification Cancel Auto Send remain active for media queues.
+
+## v3.16.7 changes
+
+- Every Catalog category heading now has an **EDIT** button.
+- Edit the category name and auto-reply keywords across all files in that type.
+- Add more PDFs/pictures to an existing Catalog type without recreating it.
+- Existing per-file View, WhatsApp Send, Rename and Delete controls remain available.
+
+## v3.16.6 changes
+
+- Running notification includes a prominent **CANCEL AUTO SEND** action.
+- Cancel immediately stops the remaining recipient queue and releases the screen wake lock.
+- The same cancel action also clears a pending Catalog attachment queue.
+- Useful when recipients were selected by mistake, even after WhatsApp has opened.
+
+## v3.16.5 changes
+
+- Bulk and Catalog queues wake the display when the phone is locked.
+- Swipe-only keyguard is dismissed and sending continues automatically.
+- Secure PIN/pattern/fingerprint shows Android's unlock prompt; after successful unlock, the pending queue resumes automatically.
+- Android security is respected: secure device credentials are never bypassed.
+
+## v3.16.4 changes
+
+- Catalog auto reply sends every matched PDF/picture as a real WhatsApp attachment, one-by-one.
+- Avoids the WhatsApp multi-file share issue that sent only the `3 files` caption.
+- Accessibility continues the saved category queue until every file is sent.
 
 ## v3.16.3 changes
 
@@ -10,7 +45,7 @@
 - Schedule accepts Hours and Minutes with a live HH:MM:SS countdown.
 - Auto Send starts automatically when the countdown finishes.
 - Active schedule timer can be cancelled.
-- Catalog auto reply now sends every saved PDF/picture from the matched category together.
+- Catalog auto reply now sends every saved PDF/picture from the matched category one-by-one, avoiding WhatsApp builds that drop attachments from multi-file shares.
 - Catalog sharing grants file access correctly to both WhatsApp and WhatsApp Business.
 
 ## v3.16.1 changes

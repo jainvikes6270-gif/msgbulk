@@ -2,6 +2,7 @@ package com.lathaeps.lathabulk;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -47,8 +48,10 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             clickLocked = true;
             send.performAction(AccessibilityNodeInfo.ACTION_CLICK);
             if(pendingShare){
-                autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
-                handler.postDelayed(()->clickLocked=false,1200);
+                boolean more=AutoReplyNotificationService.advanceCatalogQueue(this);
+                if(more){
+                    handler.postDelayed(()->{clickLocked=false;AutoReplyNotificationService.shareNextCatalogFile(this);},1500);
+                }else handler.postDelayed(()->clickLocked=false,1200);
                 return;
             }
             int min=p.getInt(MainActivity.AUTO_MIN_DELAY,3);int max=p.getInt(MainActivity.AUTO_MAX_DELAY,7);if(max<min)max=min;
@@ -89,7 +92,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 String old=p.getString(MainActivity.AUTO_HISTORY,"");
                 String stamp=new SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new Date());
                 String entry=stamp+" • Completed "+a.length()+" contacts";
-                p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).putString(MainActivity.AUTO_HISTORY,entry+(old.isEmpty()?"":"\n"+old)).apply();
+                p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).remove(MainActivity.AUTO_IMAGE_URI).remove(MainActivity.AUTO_IMAGE_TYPE).putString(MainActivity.AUTO_HISTORY,entry+(old.isEmpty()?"":"\n"+old)).apply();
                 releaseQueueWakeLock();
                 clickLocked = false;
                 Intent done = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -110,6 +113,17 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         SharedPreferences p = context.getSharedPreferences(MainActivity.AUTO_PREFS, Context.MODE_PRIVATE);
         if (!p.getBoolean(MainActivity.AUTO_RUNNING, false)) return;
         wakeForQueue(context);
+        android.app.KeyguardManager keyguard=(android.app.KeyguardManager)context.getSystemService(Context.KEYGUARD_SERVICE);
+        if(keyguard!=null&&keyguard.isKeyguardLocked()){
+            LockScreenSendActivity.open(context,LockScreenSendActivity.MODE_BULK);
+            return;
+        }
+        openCurrentChatAfterUnlock(context);
+    }
+
+    static void openCurrentChatAfterUnlock(Context context) {
+        SharedPreferences p = context.getSharedPreferences(MainActivity.AUTO_PREFS, Context.MODE_PRIVATE);
+        if (!p.getBoolean(MainActivity.AUTO_RUNNING, false)) return;
         try {
             JSONArray a = new JSONArray(p.getString(MainActivity.AUTO_NUMBERS, "[]"));
             int index = p.getInt(MainActivity.AUTO_INDEX, 0);
@@ -121,15 +135,13 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             String number = a.getString(index);
             String message = p.getString(MainActivity.AUTO_MESSAGE, "");
             try { JSONArray names=new JSONArray(p.getString(MainActivity.AUTO_NAMES,"[]")); String name=index<names.length()?names.getString(index):""; message=message.replace("{Name}",name).replace("{name}",name); } catch(Exception ignored) {}
-            String encoded = URLEncoder.encode(message, StandardCharsets.UTF_8.name()).replace("+", "%20");
-            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + number + "?text=" + encoded));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            try {
-                i.setPackage("com.whatsapp");
-                context.startActivity(i);
-            } catch (Exception first) {
-                i.setPackage("com.whatsapp.w4b");
-                context.startActivity(i);
+            String image=p.getString(MainActivity.AUTO_IMAGE_URI,"");
+            if(!image.isEmpty()){
+                Uri uri=Uri.parse(image);Intent i=new Intent(Intent.ACTION_SEND);i.setType(p.getString(MainActivity.AUTO_IMAGE_TYPE,"image/jpeg"));i.putExtra(Intent.EXTRA_STREAM,uri);if(!message.isEmpty())i.putExtra(Intent.EXTRA_TEXT,message);i.setClipData(ClipData.newRawUri("recipient image",uri));i.putExtra("jid",number.replaceAll("[^0-9]","")+"@s.whatsapp.net");i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try{i.setPackage("com.whatsapp");context.grantUriPermission("com.whatsapp",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.startActivity(i);}catch(Exception first){i.setPackage("com.whatsapp.w4b");context.grantUriPermission("com.whatsapp.w4b",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.startActivity(i);}
+            }else{
+                String encoded = URLEncoder.encode(message, StandardCharsets.UTF_8.name()).replace("+", "%20");Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + number + "?text=" + encoded));i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                try {i.setPackage("com.whatsapp");context.startActivity(i);} catch (Exception first) {i.setPackage("com.whatsapp.w4b");context.startActivity(i);}
             }
         } catch (Exception e) {
             try { JSONArray failed=new JSONArray(p.getString(MainActivity.AUTO_FAILED,"[]")); JSONArray nums=new JSONArray(p.getString(MainActivity.AUTO_NUMBERS,"[]")); int idx=p.getInt(MainActivity.AUTO_INDEX,0); if(idx<nums.length())failed.put(nums.getString(idx)); p.edit().putString(MainActivity.AUTO_FAILED,failed.toString()).putBoolean(MainActivity.AUTO_RUNNING,false).apply(); } catch(Exception ignored) { p.edit().putBoolean(MainActivity.AUTO_RUNNING,false).apply(); }

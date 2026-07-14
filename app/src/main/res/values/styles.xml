@@ -7,4 +7,10 @@
         <item name="android:statusBarColor">#111111</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+    <style name="LockWakeTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:colorAccent">#B8860B</item>
+    </style>
 </resources>

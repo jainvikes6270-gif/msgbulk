@@ -14,6 +14,10 @@ import android.content.ComponentName;
 import android.text.TextUtils;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -47,6 +51,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.Spinner;
@@ -92,8 +97,9 @@ public class MainActivity extends Activity {
     private static final int PICK_LEDGER_CUSTOMERS_XLSX = 111;
     private static final int PICK_MASTER_PDF_FOR_EXCEL = 112;
     private static final int CREATE_MASTER_LEDGER_XLSX = 113;
-    private static final String CHANNEL_ID = "latha_bulk_progress";
-    private static final int NOTIFICATION_ID = 511;
+    private static final int PICK_DIRECT_IMAGE = 114;
+    static final String CHANNEL_ID = "latha_bulk_progress";
+    static final int NOTIFICATION_ID = 511;
     private static final String PREFS = "latha_bulk_prefs";
     static final String GROUPS_KEY = "saved_groups";
     static final String CATALOG_ITEMS_KEY = "catalog_items";
@@ -107,6 +113,8 @@ public class MainActivity extends Activity {
     static final String AUTO_MAX_DELAY = "max_delay";
     static final String AUTO_HISTORY = "history";
     static final String AUTO_FAILED = "failed";
+    static final String AUTO_IMAGE_URI = "send_image_uri";
+    static final String AUTO_IMAGE_TYPE = "send_image_type";
     private static final String SCHEDULE_AT_KEY = "schedule_start_at";
     private static final String DARK_KEY = "dark_mode";
     private static final String SAVED_CONTACTS_KEY = "saved_contacts";
@@ -139,6 +147,9 @@ public class MainActivity extends Activity {
     private boolean pendingRecipientContactPicker = false;
     private boolean pendingMainContactToggle = false;
     private boolean contactsVisible = false;
+    private Uri directSendImageUri;
+    private ImageView directSendPreview;
+    private Button directSendImageButton;
     private Runnable scheduleTicker;
 
     @Override public void onCreate(Bundle state) {
@@ -516,8 +527,8 @@ public class MainActivity extends Activity {
             String name=e.getKey();LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(16),dp(10),dp(8),dp(10));card.setBackground(rounded(Color.rgb(42,42,42),14));
             LinearLayout words=new LinearLayout(this);words.setOrientation(LinearLayout.VERTICAL);TextView a=new TextView(this);a.setText(name);a.setTextColor(Color.WHITE);a.setTextSize(24);a.setTypeface(Typeface.DEFAULT_BOLD);
             TextView b=new TextView(this);b.setText(e.getValue().size()+" contacts   ◉");b.setTextColor(Color.rgb(180,180,185));b.setTextSize(17);b.setPadding(0,dp(3),0,0);words.addView(a);words.addView(b);
-            Button more=button("⋮");more.setTextSize(30);more.setTextColor(Color.rgb(25,118,210));more.setBackgroundColor(Color.TRANSPARENT);card.addView(words,new LinearLayout.LayoutParams(0,dp(88),1f));card.addView(more,new LinearLayout.LayoutParams(dp(52),dp(72)));
-            card.setOnClickListener(v->{openGroup(name);dialog.dismiss();});more.setOnClickListener(v->showRecipientListMenu(more,name,dialog));
+            Button send=button("SEND");send.setTextSize(12);send.setTextColor(Color.WHITE);send.setBackground(rounded(Color.rgb(25,125,72),12));Button more=button("⋮");more.setTextSize(30);more.setTextColor(Color.rgb(25,118,210));more.setBackgroundColor(Color.TRANSPARENT);card.addView(words,new LinearLayout.LayoutParams(0,dp(88),1f));card.addView(send,new LinearLayout.LayoutParams(dp(72),dp(42)));card.addView(more,new LinearLayout.LayoutParams(dp(48),dp(72)));
+            card.setOnClickListener(v->{openGroup(name);dialog.dismiss();});send.setOnClickListener(v->{dialog.dismiss();showDirectRecipientSendDialog(name,new ArrayList<>(e.getValue()));});more.setOnClickListener(v->showRecipientListMenu(more,name,dialog));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(112));lp.setMargins(0,0,0,dp(14));parent.addView(card,lp);
         }
         if(shown==0){TextView empty=new TextView(this);empty.setText("No list found for this number");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.LTGRAY);empty.setTextSize(16);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(140)));}
@@ -529,8 +540,55 @@ public class MainActivity extends Activity {
         }).setNegativeButton("Cancel",null).show();
     }
     private void showRecipientListMenu(View anchor,String name,Dialog parent){
-        PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("Open contacts");m.getMenu().add("Add / remove contacts");m.getMenu().add("Rename");m.getMenu().add("Duplicate");m.getMenu().add("Delete");
-        m.setOnMenuItemClickListener(item->{String x=item.getTitle().toString();if(x.startsWith("Open")){openGroup(name);parent.dismiss();}else if(x.startsWith("Add")){openGroup(name);parent.dismiss();editActiveGroupContacts();}else if(x.equals("Rename")){parent.dismiss();renameGroup(name);}else if(x.equals("Duplicate")){duplicateGroup(name);parent.dismiss();showRecipientListsScreen();}else confirmDeleteGroup(name);return true;});m.show();
+        PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("Send Text / Image");m.getMenu().add("Open contacts");m.getMenu().add("Add / remove contacts");m.getMenu().add("Rename");m.getMenu().add("Duplicate");m.getMenu().add("Delete");
+        m.setOnMenuItemClickListener(item->{String x=item.getTitle().toString();if(x.startsWith("Send")){List<String> nums=readGroups().get(name);parent.dismiss();showDirectRecipientSendDialog(name,nums==null?new ArrayList<>():new ArrayList<>(nums));}else if(x.startsWith("Open")){openGroup(name);parent.dismiss();}else if(x.startsWith("Add")){openGroup(name);parent.dismiss();editActiveGroupContacts();}else if(x.equals("Rename")){parent.dismiss();renameGroup(name);}else if(x.equals("Duplicate")){duplicateGroup(name);parent.dismiss();showRecipientListsScreen();}else confirmDeleteGroup(name);return true;});m.show();
+    }
+
+    private void showDirectRecipientSendDialog(String listName,List<String> numbers){
+        directSendImageUri=null;LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        TextView count=new TextView(this);count.setText(listName+" • "+numbers.size()+" recipients");count.setTextSize(16);count.setTypeface(Typeface.DEFAULT_BOLD);count.setTextColor(Color.rgb(20,90,65));count.setPadding(0,dp(4),0,dp(6));
+        EditText message=new EditText(this);message.setHint("Type message / caption");message.setMinLines(3);message.setMaxLines(6);message.setGravity(Gravity.TOP);message.setText(getSharedPreferences(PREFS,MODE_PRIVATE).getString(MESSAGE_DRAFT_KEY,""));
+        directSendPreview=new ImageView(this);directSendPreview.setAdjustViewBounds(true);directSendPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);directSendPreview.setVisibility(View.GONE);
+        directSendImageButton=button("CHOOSE & EDIT IMAGE");directSendImageButton.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("image/*");startActivityForResult(Intent.createChooser(i,"Choose image"),PICK_DIRECT_IMAGE);});
+        TextView help=new TextView(this);help.setText("Image optional hai. Editor me photo ke upar text, sticker/emoji, color, size aur position set kar sakte hain.");help.setTextSize(12);help.setPadding(0,dp(7),0,0);
+        box.addView(count);box.addView(message);box.addView(directSendPreview,new LinearLayout.LayoutParams(-1,dp(190)));box.addView(directSendImageButton,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(help);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Send from Recipient List").setView(box).setPositiveButton("START AUTO SEND",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String text=message.getText().toString().trim();if(numbers.isEmpty()){toast("Recipient list empty");return;}if(text.isEmpty()&&directSendImageUri==null){message.setError("Type message or choose image");return;}if(!isAccessibilityServiceEnabled()){toast("Pehle Accessibility ON karein");try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}return;}startRecipientMediaQueue(listName,numbers,text,directSendImageUri);d.dismiss();}));d.show();
+    }
+
+    private void startRecipientMediaQueue(String listName,List<String> numbers,String message,Uri image){
+        JSONArray nums=new JSONArray(),names=new JSONArray();for(String n:numbers){nums.put(n);names.put(findName(n));}
+        SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);SharedPreferences.Editor ed=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message).putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7)).putBoolean(AUTO_RUNNING,true);
+        if(image==null)ed.remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE);else ed.putString(AUTO_IMAGE_URI,image.toString()).putString(AUTO_IMAGE_TYPE,"image/jpeg");ed.apply();
+        selectedNumbers.clear();selectedNumbers.addAll(numbers);activeGroup=listName;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(sendButton!=null)sendButton.setText("STOP AUTO SENDING");if(miniProgress!=null)miniProgress.setText((image==null?"Text":"Image + Text")+" • Starting 1 / "+numbers.size());showProgressNotification(0,numbers.size(),listName+" • "+(image==null?"Text":"Image + Text"));WhatsAppAccessibilityService.openCurrentChat(this);
+    }
+
+    private void showDirectImageEditor(Uri source){
+        Bitmap original=loadScaledBitmap(source,1600);if(original==null){toast("Image open nahi hui");return;}
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),0,dp(14),0);
+        ImageView preview=new ImageView(this);preview.setImageBitmap(original);preview.setAdjustViewBounds(true);preview.setScaleType(ImageView.ScaleType.CENTER_INSIDE);box.addView(preview,new LinearLayout.LayoutParams(-1,dp(230)));
+        EditText overlay=new EditText(this);overlay.setHint("Text on image • optional");overlay.setSingleLine(false);overlay.setMaxLines(2);box.addView(overlay);
+        TextView stickerLabel=new TextView(this);stickerLabel.setText("Choose sticker / emoji");stickerLabel.setTypeface(Typeface.DEFAULT_BOLD);stickerLabel.setPadding(0,dp(7),0,dp(4));box.addView(stickerLabel);
+        LinearLayout stickers=row();String[] stickerValue={""};String[] choices={"NONE","❤️","⭐","⚡","🎉","👍"};for(String s:choices){Button b=button(s);b.setTextSize(s.equals("NONE")?10:21);stickers.addView(b,weighted(1f,42));b.setOnClickListener(v->{stickerValue[0]=s.equals("NONE")?"":s;toast(stickerValue[0].isEmpty()?"Sticker removed":"Sticker selected "+stickerValue[0]);});}box.addView(stickers);
+        Spinner position=new Spinner(this);String[] positions={"Bottom","Center","Top"};position.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,positions));
+        Spinner color=new Spinner(this);String[] colors={"White","Yellow","Red","Black","Blue"};color.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,colors));
+        Spinner size=new Spinner(this);String[] sizes={"Medium","Large","Small"};size.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,sizes));
+        LinearLayout options=row();options.addView(position,weighted(1f,48));options.addView(color,weighted(1f,48));options.addView(size,weighted(1f,48));box.addView(options);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Edit Image").setView(box).setPositiveButton("APPLY & USE",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{Uri edited=createEditedImage(original,overlay.getText().toString().trim(),stickerValue[0],positions[position.getSelectedItemPosition()],colors[color.getSelectedItemPosition()],sizes[size.getSelectedItemPosition()]);if(edited==null){toast("Image edit save failed");return;}directSendImageUri=edited;if(directSendPreview!=null){directSendPreview.setImageURI(null);directSendPreview.setImageURI(edited);directSendPreview.setVisibility(View.VISIBLE);}if(directSendImageButton!=null)directSendImageButton.setText("CHANGE / EDIT IMAGE ✓");d.dismiss();}));d.show();
+    }
+
+    private Bitmap loadScaledBitmap(Uri uri,int maxSide){
+        try{BitmapFactory.Options bounds=new BitmapFactory.Options();bounds.inJustDecodeBounds=true;try(InputStream in=getContentResolver().openInputStream(uri)){BitmapFactory.decodeStream(in,null,bounds);}int sample=1;while(Math.max(bounds.outWidth,bounds.outHeight)/sample>maxSide)sample*=2;BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=Math.max(1,sample);try(InputStream in=getContentResolver().openInputStream(uri)){return BitmapFactory.decodeStream(in,null,options);}}catch(Exception e){return null;}
+    }
+
+    private Uri createEditedImage(Bitmap original,String text,String sticker,String position,String colorName,String sizeName){
+        try{Bitmap output=original.copy(Bitmap.Config.ARGB_8888,true);Canvas canvas=new Canvas(output);float scale=output.getWidth()/720f;float textSize=("Large".equals(sizeName)?62:"Small".equals(sizeName)?34:48)*Math.max(.65f,scale);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);paint.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));paint.setTextSize(textSize);paint.setTextAlign(Paint.Align.CENTER);paint.setColor("Yellow".equals(colorName)?Color.YELLOW:"Red".equals(colorName)?Color.RED:"Black".equals(colorName)?Color.BLACK:"Blue".equals(colorName)?Color.rgb(30,100,240):Color.WHITE);paint.setShadowLayer(Math.max(3,4*scale),0,Math.max(2,2*scale),Color.BLACK);
+            float baseY="Top".equals(position)?output.getHeight()*.18f:"Center".equals(position)?output.getHeight()*.52f:output.getHeight()*.84f;float center=output.getWidth()/2f;
+            if(sticker!=null&&!sticker.isEmpty()){Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG);sp.setTextAlign(Paint.Align.CENTER);sp.setTextSize(textSize*1.75f);canvas.drawText(sticker,center,text.isEmpty()?baseY:baseY-textSize*1.25f,sp);}
+            if(text!=null&&!text.isEmpty()){String[] lines=text.split("\\n",2);float firstY=baseY-(lines.length-1)*textSize*.58f;for(int i=0;i<lines.length;i++){String line=lines[i];float y=firstY+i*textSize*1.15f;float width=Math.min(output.getWidth()*.92f,paint.measureText(line)+textSize*.55f);Paint bg=new Paint(Paint.ANTI_ALIAS_FLAG);bg.setColor(Color.argb(105,0,0,0));canvas.drawRoundRect(center-width/2,y-textSize*.9f,center+width/2,y+textSize*.25f,textSize*.22f,textSize*.22f,bg);canvas.drawText(line,center,y,paint);}}
+            File dir=new File(getFilesDir(),"edited_images");if(!dir.exists()&&!dir.mkdirs())return null;File out=new File(dir,"edited_"+System.currentTimeMillis()+".jpg");try(FileOutputStream stream=new FileOutputStream(out)){output.compress(Bitmap.CompressFormat.JPEG,92,stream);}return FileProvider.getUriForFile(this,getPackageName()+".fileprovider",out);
+        }catch(Exception e){return null;}
     }
     private void openGroup(String name){
         List<String> nums=readGroups().get(name); if(nums==null)return;
@@ -623,7 +681,7 @@ public class MainActivity extends Activity {
         getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit()
                 .putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message)
                 .putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7))
-                .putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putBoolean(AUTO_RUNNING,true).apply();
+                .putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE).putBoolean(AUTO_RUNNING,true).apply();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sendButton.setText("STOP AUTO SENDING");
         miniProgress.setText("Screen awake ON • Starting 1 / "+selectedNumbers.size());
@@ -632,7 +690,7 @@ public class MainActivity extends Activity {
     }
 
     private void stopAutoSend(String label){
-        getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(AUTO_RUNNING,false).apply();
+        getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(AUTO_RUNNING,false).remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE).apply();
         WhatsAppAccessibilityService.releaseQueueWakeLock();
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sendButton.setText("AUTO SEND TO SELECTED CONTACTS");
@@ -655,12 +713,15 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_LEDGER_CUSTOMERS_XLSX&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importLedgerCustomersXlsx(data.getData());
         if(requestCode==PICK_MASTER_PDF_FOR_EXCEL&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pendingMasterPdfUri=data.getData();createMasterLedgerExcelFile();}
         if(requestCode==CREATE_MASTER_LEDGER_XLSX&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null&&pendingMasterPdfUri!=null) convertMasterPdfToExcel(pendingMasterPdfUri,data.getData());
+        if(requestCode==PICK_DIRECT_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)showDirectImageEditor(data.getData());
     }
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,buildFinalMessage());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
     private void createNotificationChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Sending progress",NotificationManager.IMPORTANCE_LOW);c.setDescription("Compact queue progress");c.setSound(null,null);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
     private void showProgressNotification(int current,int total,String contact){Intent launch=new Intent(this,MainActivity.class);PendingIntent p=PendingIntent.getActivity(this,0,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Intent cancelIntent=new Intent(this,AutoSendCancelReceiver.class).setAction(AutoSendCancelReceiver.ACTION_CANCEL);PendingIntent cancel=PendingIntent.getBroadcast(this,511,cancelIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder b=new NotificationCompat.Builder(this,CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_upload).setContentTitle(current>=total?"Latha Bulk completed":"Sending "+current+"/"+total).setContentText(contact).setOnlyAlertOnce(true).setOngoing(current<total).setPriority(NotificationCompat.PRIORITY_LOW).setProgress(total,Math.min(current,total),false).setContentIntent(p);
+        if(current<total)b.addAction(android.R.drawable.ic_menu_close_clear_cancel,"CANCEL AUTO SEND",cancel);
         ((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID,b.build());}
     private void cancelProgressNotification(){((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);}
 
@@ -753,10 +814,10 @@ public class MainActivity extends Activity {
     }
 
     private void addSettingsButton(LinearLayout parent,String title,String subtitle,View.OnClickListener click){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(18),dp(13),dp(14),dp(12));card.setBackground(rounded(isDark()?Color.rgb(45,50,54):Color.WHITE,18));TextView a=new TextView(this);a.setText(title);a.setTextSize(18);a.setTypeface(Typeface.DEFAULT_BOLD);a.setTextColor(isDark()?Color.WHITE:Color.rgb(10,65,59));TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(isDark()?Color.LTGRAY:Color.DKGRAY);b.setPadding(0,dp(4),0,0);card.addView(a);card.addView(b);card.setOnClickListener(click);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.16.3";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.16.8";}}
     private void showScreenOffHelp(){
         new AlertDialog.Builder(this).setTitle("Screen-off Auto Send")
-            .setMessage("Auto Send start hote hi app screen ko awake rakhega aur har contact se pehle phone ko wake karega.\n\nImportant: Phone unlocked rakhein. Secure PIN, pattern ya fingerprint lock ko app bypass nahi kar sakta. Auto Send ke beech Power button na dabayein.")
+            .setMessage("Auto Send screen ko awake rakhega. Phone pehle se lock ho to screen ON hogi. Swipe lock automatically dismiss hoga.\n\nPIN, pattern ya fingerprint lock par Android unlock prompt dikhayega; unlock karte hi pending Bulk/Catalog queue automatically continue hogi. Security lock ko app bypass nahi kar sakta.")
             .setPositiveButton("Display Settings",(d,w)->{try{startActivity(new Intent(Settings.ACTION_DISPLAY_SETTINGS));}catch(Exception e){toast("Display settings open nahi hui");}})
             .setNegativeButton("Close",null).show();
     }
@@ -789,7 +850,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.16.3");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version",appVersion());root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -975,9 +1036,39 @@ public class MainActivity extends Activity {
     private void renderCatalogCards(LinearLayout parent,Dialog dialog){
         parent.removeAllViews();JSONArray a=readCatalogs();if(a.length()==0){TextView empty=new TextView(this);empty.setText("No Catalog saved\nTap + to add PDF or image");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(160)));return;}
         Set<String> categories=new LinkedHashSet<>();for(int i=0;i<a.length();i++){JSONObject x=a.optJSONObject(i);if(x!=null)categories.add(x.optString("category","Other"));}
-        for(String category:categories){TextView heading=new TextView(this);heading.setText(category.toUpperCase(Locale.ROOT)+"  •  "+countCatalogCategory(a,category)+" files");heading.setTextColor(Color.rgb(80,170,255));heading.setTextSize(18);heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setPadding(dp(3),dp(9),dp(3),dp(9));parent.addView(heading);for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null||!category.equals(item.optString("category","Other")))continue;final int index=i;LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(16),dp(10),dp(8),dp(10));card.setBackground(rounded(Color.rgb(42,42,42),14));LinearLayout wordBox=new LinearLayout(this);wordBox.setOrientation(LinearLayout.VERTICAL);TextView n=new TextView(this);n.setText(item.optString("name","Catalog "+(i+1)));n.setTextColor(Color.WHITE);n.setTextSize(19);n.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);String mime=item.optString("type","").contains("pdf")?"PDF":"Picture";detail.setText(mime+"  •  words: "+item.optString("keywords",category.toLowerCase(Locale.ROOT)));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);wordBox.addView(n);wordBox.addView(detail);Button more=button("⋮");more.setTextSize(29);more.setTextColor(Color.rgb(25,118,210));more.setBackgroundColor(Color.TRANSPARENT);card.addView(wordBox,new LinearLayout.LayoutParams(0,dp(78),1f));card.addView(more,new LinearLayout.LayoutParams(dp(52),dp(68)));card.setOnClickListener(v->openCatalog(item));more.setOnClickListener(v->showCatalogMenu(more,index,item,dialog));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(102));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}}
+        for(String category:categories){
+            LinearLayout sectionHead=row();sectionHead.setGravity(Gravity.CENTER_VERTICAL);
+            TextView heading=new TextView(this);heading.setText(category.toUpperCase(Locale.ROOT)+"  •  "+countCatalogCategory(a,category)+" files");heading.setTextColor(Color.rgb(80,170,255));heading.setTextSize(18);heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setPadding(dp(3),dp(9),dp(3),dp(9));
+            Button edit=button("EDIT");edit.setTextSize(12);edit.setTextColor(Color.WHITE);edit.setBackground(rounded(Color.rgb(25,105,185),12));
+            sectionHead.addView(heading,new LinearLayout.LayoutParams(0,dp(48),1f));sectionHead.addView(edit,new LinearLayout.LayoutParams(dp(72),dp(38)));parent.addView(sectionHead);
+            edit.setOnClickListener(v->{dialog.dismiss();showEditCatalogType(category);});
+            for(int i=0;i<a.length();i++){
+                JSONObject item=a.optJSONObject(i);if(item==null||!category.equals(item.optString("category","Other")))continue;final int index=i;
+                LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(16),dp(10),dp(8),dp(10));card.setBackground(rounded(Color.rgb(42,42,42),14));
+                LinearLayout wordBox=new LinearLayout(this);wordBox.setOrientation(LinearLayout.VERTICAL);TextView n=new TextView(this);n.setText(item.optString("name","Catalog "+(i+1)));n.setTextColor(Color.WHITE);n.setTextSize(19);n.setTypeface(Typeface.DEFAULT_BOLD);
+                TextView detail=new TextView(this);String mime=item.optString("type","").contains("pdf")?"PDF":"Picture";detail.setText(mime+"  •  words: "+item.optString("keywords",category.toLowerCase(Locale.ROOT)));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);wordBox.addView(n);wordBox.addView(detail);
+                Button more=button("⋮");more.setTextSize(29);more.setTextColor(Color.rgb(25,118,210));more.setBackgroundColor(Color.TRANSPARENT);card.addView(wordBox,new LinearLayout.LayoutParams(0,dp(78),1f));card.addView(more,new LinearLayout.LayoutParams(dp(52),dp(68)));card.setOnClickListener(v->openCatalog(item));more.setOnClickListener(v->showCatalogMenu(more,index,item,dialog));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(102));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);
+            }
+        }
     }
     private int countCatalogCategory(JSONArray a,String category){int count=0;for(int i=0;i<a.length();i++){JSONObject x=a.optJSONObject(i);if(x!=null&&category.equals(x.optString("category","Other")))count++;}return count;}
+    private void showEditCatalogType(String oldCategory){
+        JSONArray items=readCatalogs();String savedWords="";for(int i=0;i<items.length();i++){JSONObject x=items.optJSONObject(i);if(x!=null&&oldCategory.equals(x.optString("category","Other"))){savedWords=x.optString("keywords",oldCategory.toLowerCase(Locale.ROOT));break;}}
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        EditText category=new EditText(this);category.setHint("Catalog type");category.setSingleLine(true);category.setText(oldCategory);
+        EditText words=new EditText(this);words.setHint("Auto reply words • wires, cable");words.setSingleLine(true);words.setText(savedWords);
+        EditText addName=new EditText(this);addName.setHint("Name for newly added files");addName.setSingleLine(true);addName.setText(oldCategory+" Catalog");
+        TextView help=new TextView(this);help.setText(countCatalogCategory(items,oldCategory)+" files saved\nSave se type/keywords sab files par update honge. Add More se isi list me new PDFs/pictures judenge.");help.setTextSize(13);help.setPadding(0,dp(8),0,0);
+        box.addView(category);box.addView(words);box.addView(addName);box.addView(help);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Edit Catalog Type").setView(box).setPositiveButton("Save Changes",null).setNeutralButton("Add More Files",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->{
+            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String c=category.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Catalog type required");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);if(updateCatalogType(oldCategory,c,k)){toast("Catalog type updated ✓");d.dismiss();showCatalogScreen();}});
+            d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{String c=category.getText().toString().trim();String k=words.getText().toString().trim();String n=addName.getText().toString().trim();if(c.isEmpty()){category.setError("Catalog type required");return;}if(n.isEmpty()){addName.setError("New files name required");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);if(!updateCatalogType(oldCategory,c,k))return;pendingCatalogCategory=c;pendingCatalogKeywords=k;pendingCatalogName=n;d.dismiss();pickBusinessFile(PICK_CATALOG_FILE);});
+        });d.show();
+    }
+    private boolean updateCatalogType(String oldCategory,String newCategory,String keywords){
+        try{JSONArray a=readCatalogs();for(int i=0;i<a.length();i++){JSONObject x=a.optJSONObject(i);if(x!=null&&oldCategory.equals(x.optString("category","Other"))){x.put("category",newCategory);x.put("keywords",keywords);x.put("updated",System.currentTimeMillis());}}writeCatalogs(a);return true;}catch(Exception e){toast("Catalog edit failed");return false;}
+    }
     private void showCatalogMenu(View anchor,int index,JSONObject item,Dialog parent){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("View");m.getMenu().add("Send on WhatsApp");m.getMenu().add("Rename");m.getMenu().add("Delete");m.setOnMenuItemClickListener(menu->{String x=menu.getTitle().toString();if(x.equals("View"))openCatalog(item);else if(x.startsWith("Send"))shareCatalog(item);else if(x.equals("Rename")){parent.dismiss();renameCatalog(index,item);}else{deleteCatalog(index,item);parent.dismiss();showCatalogScreen();}return true;});m.show();}
     private void openCatalog(JSONObject item){try{Uri uri=Uri.parse(item.optString("uri"));Intent i=new Intent(Intent.ACTION_VIEW);i.setDataAndType(uri,item.optString("type","application/pdf"));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Open Catalog"));}catch(Exception e){toast("Catalog open nahi hua");}}
     private void shareCatalog(JSONObject item){

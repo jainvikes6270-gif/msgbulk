@@ -3,4 +3,5 @@
     <files-path name="reply_images" path="reply_images/" />
     <files-path name="business_files" path="business_files/" />
     <files-path name="catalogs" path="catalogs/" />
+    <files-path name="edited_images" path="edited_images/" />
 </paths>

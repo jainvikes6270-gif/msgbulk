@@ -27,6 +27,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String LEDGER_URI="ledger_uri", CATALOG_URI="catalog_uri";
     public static final String LEDGER_KEY="ledger_key", CATALOG_KEY="catalog_key";
     public static final String PENDING_SHARE="pending_share", PENDING_SHARE_AT="pending_share_at";
+    public static final String CATALOG_QUEUE="catalog_share_queue", CATALOG_QUEUE_INDEX="catalog_share_index";
+    public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
     private final Map<String,Long> lastReply=new HashMap<>();
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -84,7 +86,10 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             final String f=file,t=type,c=caption;
             final ArrayList<Uri> files=new ArrayList<>(catalogFiles);
             final String phone=senderPhone;
-            handler.postDelayed(()->{if(files.size()>1)shareFiles(files,c,pkg,phone);else shareFile(Uri.parse(f),t,c,pkg,phone);},1200);
+            handler.postDelayed(()->{
+                if(files.size()>1){prepareCatalogQueue(files,c,pkg,phone);shareNextCatalogFile(this);}
+                else shareFile(Uri.parse(f),t,c,pkg,phone);
+            },1200);
         } else if(!caption.isEmpty()) {
             sendRemoteReply(n,caption);
         }
@@ -195,5 +200,61 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }catch(Exception error){
             getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PENDING_SHARE,false).putString("last_business_status","Catalog send failed • "+error.getClass().getSimpleName()).putLong("last_business_status_at",System.currentTimeMillis()).apply();
         }
+    }
+
+    private void prepareCatalogQueue(ArrayList<Uri> uris,String caption,String pkg,String phone){
+        JSONArray queue=new JSONArray();for(Uri uri:uris)queue.put(uri.toString());
+        getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+            .putString(CATALOG_QUEUE,queue.toString()).putInt(CATALOG_QUEUE_INDEX,0)
+            .putString(CATALOG_QUEUE_CAPTION,caption==null?"":caption)
+            .putString(CATALOG_QUEUE_PACKAGE,pkg==null?"com.whatsapp":pkg)
+            .putString(CATALOG_QUEUE_PHONE,phone==null?"":phone)
+            .putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();
+    }
+
+    public static boolean shareNextCatalogFile(android.content.Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        try{
+            JSONArray queue=new JSONArray(p.getString(CATALOG_QUEUE,"[]"));int index=p.getInt(CATALOG_QUEUE_INDEX,0);
+            if(index<0||index>=queue.length()){clearCatalogQueue(p);return false;}
+            wakeScreen(context);
+            android.app.KeyguardManager keyguard=(android.app.KeyguardManager)context.getSystemService(android.content.Context.KEYGUARD_SERVICE);
+            if(keyguard!=null&&keyguard.isKeyguardLocked()){
+                LockScreenSendActivity.open(context,LockScreenSendActivity.MODE_CATALOG);
+                p.edit().putString("last_business_status","Screen awake • unlock to continue catalog").putLong("last_business_status_at",System.currentTimeMillis()).apply();
+                return true;
+            }
+            Uri uri=Uri.parse(queue.getString(index));String pkg=p.getString(CATALOG_QUEUE_PACKAGE,"com.whatsapp");String phone=p.getString(CATALOG_QUEUE_PHONE,"");
+            Intent i=new Intent(Intent.ACTION_SEND);i.setType(context.getContentResolver().getType(uri)==null?"application/octet-stream":context.getContentResolver().getType(uri));
+            i.putExtra(Intent.EXTRA_STREAM,uri);
+            if(index==0){String caption=p.getString(CATALOG_QUEUE_CAPTION,"");if(!caption.isEmpty())i.putExtra(Intent.EXTRA_TEXT,caption);}
+            i.setClipData(ClipData.newRawUri("catalog file",uri));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            i.setPackage(pkg);if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
+            context.grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.startActivity(i);
+            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
+            return true;
+        }catch(Exception error){clearCatalogQueue(p);p.edit().putString("last_business_status","Catalog send failed • "+error.getClass().getSimpleName()).apply();return false;}
+    }
+
+    public static boolean advanceCatalogQueue(android.content.Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        try{
+            JSONArray queue=new JSONArray(p.getString(CATALOG_QUEUE,"[]"));int next=p.getInt(CATALOG_QUEUE_INDEX,0)+1;
+            if(next>=queue.length()){clearCatalogQueue(p);p.edit().putString("last_business_status","Catalog sent • "+queue.length()+" files").putLong("last_business_status_at",System.currentTimeMillis()).apply();return false;}
+            p.edit().putInt(CATALOG_QUEUE_INDEX,next).putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();return true;
+        }catch(Exception e){clearCatalogQueue(p);return false;}
+    }
+
+    private static void clearCatalogQueue(SharedPreferences p){
+        p.edit().putBoolean(PENDING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).apply();
+    }
+
+    @SuppressWarnings("deprecation") private static void wakeScreen(android.content.Context context){
+        try{
+            android.os.PowerManager pm=(android.os.PowerManager)context.getSystemService(android.content.Context.POWER_SERVICE);if(pm==null)return;
+            android.os.PowerManager.WakeLock lock=pm.newWakeLock(android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK|android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP|android.os.PowerManager.ON_AFTER_RELEASE,"LathaBulk:CatalogWake");
+            lock.setReferenceCounted(false);lock.acquire(30000L);
+        }catch(Exception ignored){}
     }
 }
