@@ -45,15 +45,15 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         if(title.toLowerCase(Locale.ROOT).contains("messages") || title.toLowerCase(Locale.ROOT).contains("whatsapp")) return;
         long now=System.currentTimeMillis();
         long wait=p.getInt(COOLDOWN,5)*60_000L;
-        if(now-lastReply.getOrDefault(title,0L)<wait) return;
 
         String file="", type="", caption="";
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         String pk=p.getString(PRICE_KEY,"price").trim().toLowerCase(Locale.ROOT);
-        if(!lk.isEmpty() && lower.contains(lk)){JSONObject customer=findLedgerCustomer(p,title,senderPhone);if(customer==null)return;file=customer.optString("ledger_uri","");if(file.isEmpty())return;type="application/pdf";caption="LATHA EPS Ledger";}
-        else if(!ck.isEmpty() && lower.contains(ck)){file=p.getString(CATALOG_URI,"");type=p.getString(CATALOG_URI+"_type","application/pdf");caption="LATHA EPS Catalog";}
-        else if(!pk.isEmpty() && lower.contains(pk)){file=p.getString(PRICE_URI,"");type=p.getString(PRICE_URI+"_type","application/pdf");caption="LATHA EPS Price List";}
+        String command="rule";
+        if(!lk.isEmpty() && lower.contains(lk)){command="ledger";JSONObject customer=findLedgerCustomer(p,title,senderPhone);if(customer==null)return;file=customer.optString("ledger_uri","");if(file.isEmpty())return;type="application/pdf";caption="LATHA EPS Ledger";}
+        else if(matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){command="catalog";file=p.getString(CATALOG_URI,"");type=p.getString(CATALOG_URI+"_type","application/pdf");caption="LATHA EPS Catalog";if(file.isEmpty()){sendRemoteReply(n,"Catalog file abhi upload nahi hai.");return;}}
+        else if(matchesBusinessKeyword(lower,pk,"price","price list","pricelist","rate list")){command="price";file=p.getString(PRICE_URI,"");type=p.getString(PRICE_URI+"_type","application/pdf");caption="LATHA EPS Price List";if(file.isEmpty()){sendRemoteReply(n,"Price List file abhi upload nahi hai.");return;}}
         else {
             boolean matched=false;
             try{
@@ -67,7 +67,9 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             }catch(Exception ignored){}
             if(!matched){String key=p.getString(KEYWORD,"").trim().toLowerCase(Locale.ROOT);if(key.isEmpty()||!lower.contains(key))return;caption=p.getString(REPLY,"").trim();file=p.getString(IMAGE,"");type=p.getString(IMAGE+"_type","image/*");}
         }
-        lastReply.put(title,now);
+        String replyKey=title+"|"+command;
+        if(now-lastReply.getOrDefault(replyKey,0L)<wait) return;
+        lastReply.put(replyKey,now);
         if(!file.isEmpty()){
             p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,now).apply();
             if(n.contentIntent!=null){ try{n.contentIntent.send();}catch(Exception ignored){} }
@@ -77,6 +79,12 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         } else if(!caption.isEmpty()) {
             sendRemoteReply(n,caption);
         }
+    }
+
+    private boolean matchesBusinessKeyword(String message,String saved,String... aliases){
+        if(saved!=null&&!saved.trim().isEmpty()&&message.contains(saved.trim().toLowerCase(Locale.ROOT)))return true;
+        for(String alias:aliases)if(message.contains(alias))return true;
+        return false;
     }
 
     private JSONObject findLedgerCustomer(SharedPreferences p,String title,String senderPhone){
@@ -136,8 +144,9 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
             grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             startActivity(i);
-        }catch(Exception ignored){
-            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PENDING_SHARE,false).apply();
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("last_business_status","Opening WhatsApp • "+caption).putLong("last_business_status_at",System.currentTimeMillis()).apply();
+        }catch(Exception error){
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PENDING_SHARE,false).putString("last_business_status","Send failed • "+error.getClass().getSimpleName()).putLong("last_business_status_at",System.currentTimeMillis()).apply();
         }
     }
 }

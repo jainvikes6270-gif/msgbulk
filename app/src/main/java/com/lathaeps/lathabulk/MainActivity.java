@@ -187,7 +187,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.14 • SMART LEDGER");
+        title.setText("LATHA BULK v3.14.2 • SMART LEDGER");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -711,7 +711,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.14.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.14.2");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -797,17 +797,18 @@ public class MainActivity extends Activity {
             Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);
             SharedPreferences bp=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
             String display=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();
-            SharedPreferences.Editor ed=bp.edit().putString(key,safe.toString()).putString(key+"_type",type==null?"application/octet-stream":type).putString(key+"_name",display).putLong(key+"_updated",System.currentTimeMillis());
+            SharedPreferences.Editor ed=bp.edit().putString(key,safe.toString()).putString(key+"_type",type==null?"application/octet-stream":type).putString(key+"_name",display).putLong(key+"_updated",System.currentTimeMillis()).putBoolean(AutoReplyNotificationService.ENABLED,true);
             String history=bp.getString("file_history",""); String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • "+message+" • "+display; ed.putString("file_history",line+(history.isEmpty()?"":"\n"+history)).apply();
             toast(message+" ✓");
         }catch(Exception e){toast(message+" failed • file dobara select karein");}
     }
 
     private void pickBusinessFile(int code){
-        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/*"});startActivityForResult(i,code);
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/jpeg","image/png","image/webp"});startActivityForResult(Intent.createChooser(i,"Select PDF or image"),code);
     }
 
     private void showBusinessFilesDialog(){
+        if(checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},CONTACT_PERMISSION);
         SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
         Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"UPLOAD & PREPARE MASTER LEDGER PDF":"UPDATE & PREPARE MASTER LEDGER PDF ✓");
@@ -820,7 +821,7 @@ public class MainActivity extends Activity {
         EditText ledgerKey=new EditText(this);ledgerKey.setHint("Ledger keyword");ledgerKey.setText(p.getString(AutoReplyNotificationService.LEDGER_KEY,"ledger"));
         EditText catalogKey=new EditText(this);catalogKey.setHint("Catalog keyword");catalogKey.setText(p.getString(AutoReplyNotificationService.CATALOG_KEY,"catalog"));
         EditText priceKey=new EditText(this);priceKey.setHint("Price keyword");priceKey.setText(p.getString(AutoReplyNotificationService.PRICE_KEY,"price"));
-        TextView current=new TextView(this);current.setPadding(4,8,4,8);current.setText("Current ledger: "+p.getString(AutoReplyNotificationService.LEDGER_URI+"_name","Not selected")+"\nCustomers: "+ledgerCustomerCount());
+        TextView current=new TextView(this);current.setPadding(dp(4),dp(8),dp(4),dp(8));current.setText("LEDGER: "+p.getString(AutoReplyNotificationService.LEDGER_URI+"_name","Not selected")+"\nCustomers: "+ledgerCustomerCount()+"\n\nCATALOG: "+p.getString(AutoReplyNotificationService.CATALOG_URI+"_name","Not selected")+"\nPRICE LIST: "+p.getString(AutoReplyNotificationService.PRICE_URI+"_name","Not selected")+"\n\nLast status: "+p.getString("last_business_status","No send attempt yet"));
         box.addView(current);box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
         box.addView(catalog,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(catalogKey);box.addView(price,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(priceKey);box.addView(history,new LinearLayout.LayoutParams(-1,dp(42)));
         ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));catalog.setOnClickListener(v->pickBusinessFile(PICK_CATALOG_FILE));price.setOnClickListener(v->pickBusinessFile(PICK_PRICE_FILE));
@@ -829,8 +830,8 @@ public class MainActivity extends Activity {
         importCsv.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select optional customer Excel"),PICK_LEDGER_CUSTOMERS_XLSX);});
         history.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("File update history").setMessage(p.getString("file_history","No file updates yet")).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->p.edit().remove("file_history").apply()).show());
         ScrollView scroll=new ScrollView(this);scroll.addView(box);
-        new AlertDialog.Builder(this).setTitle("Smart Master Ledger").setMessage("Master PDF upload karte hi phone-number wale ledgers alag prepare honge. Customer WhatsApp se 'ledger' bheje to exact number ka PDF jayega. Bina number wale skip honge.").setView(scroll)
-            .setPositiveButton("Save",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putString(AutoReplyNotificationService.CATALOG_KEY,catalogKey.getText().toString().trim()).putString(AutoReplyNotificationService.PRICE_KEY,priceKey.getText().toString().trim()).apply();toast("Business settings saved");})
+        new AlertDialog.Builder(this).setTitle("Business Files").setMessage("Catalog keyword: catalog / catalogue / catlog\nPrice keywords: price / price list / rate list\nAuto Reply and Notification Access ON rakhein.").setView(scroll)
+            .setPositiveButton("Save & Turn ON",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putString(AutoReplyNotificationService.CATALOG_KEY,catalogKey.getText().toString().trim()).putString(AutoReplyNotificationService.PRICE_KEY,priceKey.getText().toString().trim()).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast("Business files saved • Auto Reply ON");})
             .setNegativeButton("Close",null).show();
     }
 

@@ -1,6 +1,14 @@
-# LathaBulk v3.14 – Premium Auto Reply + Settings + Smart Master Ledger
+# LathaBulk v3.14.2 – Catalog + Price List Fix
 
-## New in v3.14
+## New in v3.14.2
+1. Catalog and Price List file auto-reply flow fixed.
+2. Catalog accepts `catalog`, `catalogue` and `catlog`.
+3. Price List accepts `price`, `price list`, `pricelist` and `rate list`.
+4. Catalog and Price List use separate cooldown keys, so one no longer blocks the other.
+5. Business Files now shows selected Catalog/Price filenames and last send status.
+6. Saving a business file automatically turns Auto Reply ON.
+
+## Preserved from v3.14.1
 1. Screenshot-style premium **AutoReply to Messages** screen.
 2. Global Auto Reply ON/OFF switch and scrollable rule cards.
 3. Add, edit, delete and reorder keyword rules with the floating **+** button.
