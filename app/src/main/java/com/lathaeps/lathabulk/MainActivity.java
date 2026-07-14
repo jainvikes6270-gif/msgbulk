@@ -40,6 +40,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -106,6 +107,7 @@ public class MainActivity extends Activity {
     static final String AUTO_MAX_DELAY = "max_delay";
     static final String AUTO_HISTORY = "history";
     static final String AUTO_FAILED = "failed";
+    private static final String SCHEDULE_AT_KEY = "schedule_start_at";
     private static final String DARK_KEY = "dark_mode";
     private static final String SAVED_CONTACTS_KEY = "saved_contacts";
     private static final String PIN_KEY = "login_pin";
@@ -126,7 +128,7 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView statusText, pdfText, miniProgress, ledgerFileNameText;
     private EditText messageBox, searchBox;
-    private Button sendButton, accessibilityButton, editGroupButton;
+    private Button sendButton, accessibilityButton, editGroupButton, contactsButton, scheduleButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
     private String pendingCatalogName = "";
@@ -135,6 +137,9 @@ public class MainActivity extends Activity {
     private int queueIndex = 0;
     private String activeGroup = "";
     private boolean pendingRecipientContactPicker = false;
+    private boolean pendingMainContactToggle = false;
+    private boolean contactsVisible = false;
+    private Runnable scheduleTicker;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -177,11 +182,14 @@ public class MainActivity extends Activity {
         super.onResume();
         refreshAccessibilityButton();
         boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
+        if(running)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if(sendButton!=null)sendButton.setText(running?"STOP AUTO SENDING":"AUTO SEND TO SELECTED CONTACTS");
         if(miniProgress!=null&&running){
             int i=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getInt(AUTO_INDEX,0);
             miniProgress.setText("Sending contact "+(i+1));
         }
+        restoreScheduledTimer();
     }
 
     private View buildUi() {
@@ -191,7 +199,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.15.1 • SMART LEDGER");
+        title.setText("LATHAEPS");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -201,28 +209,25 @@ public class MainActivity extends Activity {
         root.addView(title, new LinearLayout.LayoutParams(-1, dp(34)));
 
         LinearLayout tools = row();
-        Button load = button("Contacts");
+        contactsButton = button("Contacts");
         Button selectAll = button("Select all");
-        tools.addView(load, weighted(1f, 42));
+        tools.addView(contactsButton, weighted(1f, 42));
         tools.addView(selectAll, weighted(1f, 42));
         root.addView(tools);
-        load.setOnClickListener(v -> requestContacts());
+        contactsButton.setOnClickListener(v -> toggleContacts());
         selectAll.setOnClickListener(v -> selectAllVisible());
 
         LinearLayout featureRow = row();
         Button csv = button("Import CSV");
         Button delay = button("Delay");
-        Button schedule = button("Schedule");
-        Button theme = button(isDark()?"Light":"Dark");
+        scheduleButton = button("Schedule");
         featureRow.addView(csv, weighted(1f, 38));
         featureRow.addView(delay, weighted(.8f, 38));
-        featureRow.addView(schedule, weighted(1f, 38));
-        featureRow.addView(theme, weighted(.8f, 38));
+        featureRow.addView(scheduleButton, weighted(1f, 38));
         root.addView(featureRow);
         csv.setOnClickListener(v -> chooseCsv());
         delay.setOnClickListener(v -> showDelayDialog());
-        schedule.setOnClickListener(v -> showScheduleDialog());
-        theme.setOnClickListener(v -> { getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply(); recreate(); });
+        scheduleButton.setOnClickListener(v -> showScheduleDialog());
 
         LinearLayout accountRow=row();
         Button login=button("SETTINGS");
@@ -282,16 +287,6 @@ public class MainActivity extends Activity {
         businessFiles.setOnClickListener(v->showBusinessFilesDialog());
         catalogSection.setOnClickListener(v->showCatalogScreen());
         autoReplyButton.setOnClickListener(v->showAutoReplyScreen());
-
-        Button ledgerExcel=button("MASTER LEDGER → PHONE + BALANCE EXCEL");
-        ledgerExcel.setTypeface(Typeface.DEFAULT_BOLD);
-        ledgerExcel.setTextSize(14);
-        ledgerExcel.setTextColor(Color.WHITE);
-        ledgerExcel.setBackgroundColor(Color.rgb(180,105,10));
-        LinearLayout.LayoutParams xlp=new LinearLayout.LayoutParams(-1,dp(46));
-        xlp.setMargins(dp(2),dp(2),dp(2),dp(3));
-        root.addView(ledgerExcel,xlp);
-        ledgerExcel.setOnClickListener(v->chooseMasterPdfForExcel());
 
         LinearLayout messageShell=row();
         messageShell.setGravity(Gravity.CENTER_VERTICAL);
@@ -372,6 +367,7 @@ public class MainActivity extends Activity {
         listView = new ListView(this);
         listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
         listView.setDividerHeight(1);
+        listView.setVisibility(View.GONE);
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_multiple_choice, visibleContacts);
         listView.setAdapter(adapter);
         listView.setOnItemClickListener((p,v,pos,id) -> {
@@ -402,6 +398,21 @@ public class MainActivity extends Activity {
         if(checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED) loadContacts();
         else requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},CONTACT_PERMISSION);
     }
+    private void toggleContacts(){
+        if(contactsVisible){setContactsVisible(false);return;}
+        if(checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED){
+            loadContacts();
+            setContactsVisible(true);
+        }else{
+            pendingMainContactToggle=true;
+            requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},CONTACT_PERMISSION);
+        }
+    }
+    private void setContactsVisible(boolean visible){
+        contactsVisible=visible;
+        if(listView!=null)listView.setVisibility(visible?View.VISIBLE:View.GONE);
+        if(contactsButton!=null)contactsButton.setText(visible?"Hide Contacts":"Contacts");
+    }
     private void requestNotificationPermissionIfNeeded(){
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_PERMISSION);
@@ -409,7 +420,10 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){
         super.onRequestPermissionsResult(requestCode,permissions,results);
         if(requestCode==CONTACT_PERMISSION){
-            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)loadContacts(); else toast("Contacts permission required");
+            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED){
+                loadContacts();
+                if(pendingMainContactToggle){pendingMainContactToggle=false;setContactsVisible(true);}
+            }else{pendingMainContactToggle=false;toast("Contacts permission required");}
         }
     }
 
@@ -610,14 +624,17 @@ public class MainActivity extends Activity {
                 .putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message)
                 .putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7))
                 .putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putBoolean(AUTO_RUNNING,true).apply();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sendButton.setText("STOP AUTO SENDING");
-        miniProgress.setText("Starting 1 / "+selectedNumbers.size());
+        miniProgress.setText("Screen awake ON • Starting 1 / "+selectedNumbers.size());
         showProgressNotification(0,selectedNumbers.size(),"Starting");
         WhatsAppAccessibilityService.openCurrentChat(this);
     }
 
     private void stopAutoSend(String label){
         getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(AUTO_RUNNING,false).apply();
+        WhatsAppAccessibilityService.releaseQueueWakeLock();
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sendButton.setText("AUTO SEND TO SELECTED CONTACTS");
         miniProgress.setText(label);
         cancelProgressNotification();
@@ -632,7 +649,7 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());
         if(requestCode==PICK_REPLY_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveReplyImagePermanently(data.getData());}
         if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){importMasterLedgerPdf(data.getData());}
-        if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveCatalog(data.getData());}
+        if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null){saveCatalogSelections(data);}
         if(requestCode==CREATE_BACKUP&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) writeBackup(data.getData());
         if(requestCode==PICK_RESTORE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) restoreBackup(data.getData());
         if(requestCode==PICK_LEDGER_CUSTOMERS_XLSX&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importLedgerCustomersXlsx(data.getData());
@@ -723,6 +740,9 @@ public class MainActivity extends Activity {
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Settings");title.setTextColor(Color.WHITE);title.setTextSize(24);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(6),0,dp(8),0);head.setBackground(rounded(Color.rgb(0,91,78),18));head.addView(back,new LinearLayout.LayoutParams(dp(48),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);back.setOnClickListener(v->d.dismiss());
         ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
+        addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS").setPositiveButton("OK",null).show());
+        addSettingsButton(list,"☀  Screen-off Auto Send","Keeps screen awake while bulk sending",v->showScreenOffHelp());
+        addSettingsButton(list,"✉  Contact Us","lathaeps@gmail.com",v->contactSupport());
         addSettingsButton(list,"🔒  Login & Forgot PIN","Change PIN, recovery word, login ON/OFF",v->showLoginSettings());
         addSettingsButton(list,"▣  Local Backup","Save contacts, rules, images, templates & ledger to phone",v->createBackupFile());
         addSettingsButton(list,"☁  Drive Backup","Choose Google Drive in the save window",v->createDriveBackupFile());
@@ -733,6 +753,20 @@ public class MainActivity extends Activity {
     }
 
     private void addSettingsButton(LinearLayout parent,String title,String subtitle,View.OnClickListener click){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(18),dp(13),dp(14),dp(12));card.setBackground(rounded(isDark()?Color.rgb(45,50,54):Color.WHITE,18));TextView a=new TextView(this);a.setText(title);a.setTextSize(18);a.setTypeface(Typeface.DEFAULT_BOLD);a.setTextColor(isDark()?Color.WHITE:Color.rgb(10,65,59));TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(isDark()?Color.LTGRAY:Color.DKGRAY);b.setPadding(0,dp(4),0,0);card.addView(a);card.addView(b);card.setOnClickListener(click);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.16.2";}}
+    private void showScreenOffHelp(){
+        new AlertDialog.Builder(this).setTitle("Screen-off Auto Send")
+            .setMessage("Auto Send start hote hi app screen ko awake rakhega aur har contact se pehle phone ko wake karega.\n\nImportant: Phone unlocked rakhein. Secure PIN, pattern ya fingerprint lock ko app bypass nahi kar sakta. Auto Send ke beech Power button na dabayein.")
+            .setPositiveButton("Display Settings",(d,w)->{try{startActivity(new Intent(Settings.ACTION_DISPLAY_SETTINGS));}catch(Exception e){toast("Display settings open nahi hui");}})
+            .setNegativeButton("Close",null).show();
+    }
+    private void contactSupport(){
+        try{
+            Intent i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:lathaeps@gmail.com"));
+            i.putExtra(Intent.EXTRA_SUBJECT,"LathaBulk Support • v"+appVersion());
+            startActivity(Intent.createChooser(i,"Contact LATHAEPS"));
+        }catch(Exception e){toast("Email: lathaeps@gmail.com");}
+    }
     private void createDriveBackupFile(){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Drive_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(Intent.createChooser(i,"Choose Google Drive and save backup"),CREATE_BACKUP);}
     private void confirmClearAllData(Dialog settings){new AlertDialog.Builder(this).setTitle("Clear all app data?").setMessage("Contacts, recipient lists, catalogs, auto-reply rules, images, templates, ledgers and history delete honge. Login PIN aur recovery word safe rahenge.").setPositiveButton("Clear All",(d,w)->{clearAllUserData();settings.dismiss();recreate();}).setNegativeButton("Cancel",null).show();}
     private void clearAllUserData(){SharedPreferences main=getSharedPreferences(PREFS,MODE_PRIVATE);String pin=main.getString(PIN_KEY,"");String recovery=main.getString(RECOVERY_KEY,"");boolean login=main.getBoolean(LOGIN_ENABLED_KEY,true);boolean dark=main.getBoolean(DARK_KEY,false);main.edit().clear().putString(PIN_KEY,pin).putString(RECOVERY_KEY,recovery).putBoolean(LOGIN_ENABLED_KEY,login).putBoolean(DARK_KEY,dark).apply();getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();deleteAppFiles(getFilesDir());selectedNumbers.clear();allContacts.clear();visibleContacts.clear();toast("All data cleared • PIN kept safe");}
@@ -771,7 +805,47 @@ public class MainActivity extends Activity {
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);EditText min=new EditText(this);EditText max=new EditText(this);min.setHint("Minimum seconds");max.setHint("Maximum seconds");min.setInputType(2);max.setInputType(2);SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);min.setText(String.valueOf(p.getInt(AUTO_MIN_DELAY,3)));max.setText(String.valueOf(p.getInt(AUTO_MAX_DELAY,7)));box.addView(min);box.addView(max);
         new AlertDialog.Builder(this).setTitle("Random delay").setMessage("Recommended 3–8 seconds").setView(box).setPositiveButton("Save",(d,w)->{try{int a=Integer.parseInt(min.getText().toString());int b=Integer.parseInt(max.getText().toString());if(a<2)a=2;if(b<a)b=a;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putInt(AUTO_MIN_DELAY,a).putInt(AUTO_MAX_DELAY,b).apply();toast("Delay saved: "+a+"–"+b+" sec");}catch(Exception e){toast("Enter valid seconds");}}).setNegativeButton("Cancel",null).show();
     }
-    private void showScheduleDialog(){EditText mins=new EditText(this);mins.setHint("Start after minutes");mins.setInputType(2);new AlertDialog.Builder(this).setTitle("Schedule auto send").setMessage("App open rakhein. Phone unlocked aur Accessibility ON honi chahiye.").setView(mins).setPositiveButton("Schedule",(d,w)->{try{int m=Integer.parseInt(mins.getText().toString());if(m<1)m=1;miniProgress.setText("Scheduled after "+m+" min");uiHandler.postDelayed(this::startOrStopAutoSend,m*60_000L);toast("Scheduled");}catch(Exception e){toast("Enter minutes");}}).setNegativeButton("Cancel",null).show();}
+    private void showScheduleDialog(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        EditText hours=new EditText(this);hours.setHint("Hours • 0 to 23");hours.setInputType(InputType.TYPE_CLASS_NUMBER);hours.setText("0");
+        EditText mins=new EditText(this);mins.setHint("Minutes • 0 to 59");mins.setInputType(InputType.TYPE_CLASS_NUMBER);mins.setText("5");
+        TextView note=new TextView(this);note.setText("Countdown main screen par HH:MM:SS me dikhega. Timer complete hote hi Auto Send start hoga. Phone unlocked aur Accessibility ON rakhein.");note.setTextSize(13);note.setPadding(0,dp(8),0,0);
+        box.addView(hours);box.addView(mins);box.addView(note);
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle("Schedule Timer").setView(box)
+            .setPositiveButton("Start Timer",(d,w)->{try{int h=Integer.parseInt(hours.getText().toString().trim());int m=Integer.parseInt(mins.getText().toString().trim());if(h<0||h>23||m<0||m>59||(h==0&&m==0)){toast("Valid timer enter karein");return;}long at=System.currentTimeMillis()+((h*60L+m)*60_000L);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putLong(SCHEDULE_AT_KEY,at).apply();startScheduleCountdown(at);toast("Timer started • "+formatCountdown(at-System.currentTimeMillis()));}catch(Exception e){toast("Hours aur minutes enter karein");}})
+            .setNegativeButton("Close",null);
+        if(getSharedPreferences(PREFS,MODE_PRIVATE).getLong(SCHEDULE_AT_KEY,0L)>System.currentTimeMillis())b.setNeutralButton("Cancel Timer",(d,w)->cancelScheduleTimer());
+        b.show();
+    }
+    private void restoreScheduledTimer(){long at=getSharedPreferences(PREFS,MODE_PRIVATE).getLong(SCHEDULE_AT_KEY,0L);if(at>0)startScheduleCountdown(at);}
+    private void startScheduleCountdown(long at){
+        if(scheduleTicker!=null)uiHandler.removeCallbacks(scheduleTicker);
+        scheduleTicker=new Runnable(){@Override public void run(){
+            long left=at-System.currentTimeMillis();
+            if(left<=0){
+                getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(SCHEDULE_AT_KEY).apply();
+                if(scheduleButton!=null)scheduleButton.setText("Schedule");
+                if(miniProgress!=null)miniProgress.setText("Timer complete • Starting Auto Send");
+                scheduleTicker=null;
+                if(!getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false))startOrStopAutoSend();
+                return;
+            }
+            String time=formatCountdown(left);
+            if(scheduleButton!=null)scheduleButton.setText("Timer "+time);
+            if(miniProgress!=null)miniProgress.setText("Scheduled Auto Send • "+time+" remaining");
+            uiHandler.postDelayed(this,1000L);
+        }};
+        uiHandler.post(scheduleTicker);
+    }
+    private void cancelScheduleTimer(){
+        getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(SCHEDULE_AT_KEY).apply();
+        if(scheduleTicker!=null)uiHandler.removeCallbacks(scheduleTicker);
+        scheduleTicker=null;
+        if(scheduleButton!=null)scheduleButton.setText("Schedule");
+        if(miniProgress!=null)miniProgress.setText("Schedule timer cancelled");
+        toast("Timer cancelled");
+    }
+    private String formatCountdown(long millis){long total=Math.max(0,millis/1000L);long h=total/3600L;long m=(total%3600L)/60L;long s=total%60L;return String.format(Locale.US,"%02d:%02d:%02d",h,m,s);}
     private void showHistory(){String h=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_HISTORY,"No sending history yet");new AlertDialog.Builder(this).setTitle("Sending history").setMessage(h).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().remove(AUTO_HISTORY).apply()).show();}
     private void retryFailed(){try{JSONArray f=new JSONArray(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_FAILED,"[]"));if(f.length()==0){toast("No failed contacts");return;}selectedNumbers.clear();for(int i=0;i<f.length();i++)selectedNumbers.add(f.getString(i));refreshChecks();toast(f.length()+" failed contacts selected");}catch(Exception e){toast("No failed contacts");}}
     private void resumeQueue(){SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);try{JSONArray a=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int i=p.getInt(AUTO_INDEX,0);if(a.length()==0||i>=a.length()){toast("No paused queue");return;}p.edit().putBoolean(AUTO_RUNNING,true).apply();sendButton.setText("STOP AUTO SENDING");miniProgress.setText("Resuming "+(i+1)+" / "+a.length());WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("No paused queue");}}
@@ -848,7 +922,9 @@ public class MainActivity extends Activity {
     }
 
     private void pickBusinessFile(int code){
-        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/jpeg","image/png","image/webp"});startActivityForResult(Intent.createChooser(i,"Select PDF or image"),code);
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/jpeg","image/png","image/webp"});
+        if(code==PICK_CATALOG_FILE)i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+        startActivityForResult(Intent.createChooser(i,code==PICK_CATALOG_FILE?"Select one or multiple PDFs / pictures":"Select PDF or image"),code);
     }
 
     private JSONArray readCatalogs(){
@@ -859,13 +935,26 @@ public class MainActivity extends Activity {
         }catch(Exception e){return new JSONArray();}
     }
     private void writeCatalogs(JSONArray items){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(CATALOG_ITEMS_KEY,items.toString()).apply();}
-    private void saveCatalog(Uri source){
+    private void saveCatalogSelections(Intent data){
+        List<Uri> selected=new ArrayList<>();
+        android.content.ClipData clips=data.getClipData();
+        if(clips!=null){for(int i=0;i<clips.getItemCount();i++){Uri uri=clips.getItemAt(i).getUri();if(uri!=null)selected.add(uri);}}
+        else if(data.getData()!=null)selected.add(data.getData());
+        if(selected.isEmpty()){toast("No Catalog file selected");return;}
+        int saved=0;
+        for(int i=0;i<selected.size();i++)if(saveCatalog(selected.get(i),i,selected.size()))saved++;
+        String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();
+        pendingCatalogName="";pendingCatalogCategory="";pendingCatalogKeywords="";
+        toast(saved+" / "+selected.size()+" "+category+" files saved ✓");
+        uiHandler.postDelayed(this::showCatalogScreen,250);
+    }
+    private boolean saveCatalog(Uri source,int selectedIndex,int selectedTotal){
         try{
             String type=getContentResolver().getType(source);String ext=(type!=null&&type.contains("pdf"))?"pdf":(type!=null&&type.contains("png"))?"png":(type!=null&&type.contains("webp"))?"webp":"jpg";
-            File dir=new File(getFilesDir(),"catalogs");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");File target=new File(dir,"catalog_"+System.currentTimeMillis()+"."+ext);
+            File dir=new File(getFilesDir(),"catalogs");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");File target=new File(dir,"catalog_"+System.currentTimeMillis()+"_"+selectedIndex+"."+ext);
             try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){if(in==null)throw new Exception("File read failed");byte[] buf=new byte[16*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}
-            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);String original=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();String display=pendingCatalogName.trim().isEmpty()?original:pendingCatalogName.trim();String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();String keywords=pendingCatalogKeywords.trim();JSONArray a=readCatalogs();JSONObject item=new JSONObject();item.put("name",display);item.put("category",category);item.put("keywords",keywords);item.put("original_name",original);item.put("uri",safe.toString());item.put("type",type==null?"application/octet-stream":type);item.put("updated",System.currentTimeMillis());item.put("path",target.getAbsolutePath());a.put(item);writeCatalogs(a);getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putBoolean(AutoReplyNotificationService.ENABLED,true).apply();pendingCatalogName="";pendingCatalogCategory="";pendingCatalogKeywords="";toast(category+" catalog saved ✓");uiHandler.postDelayed(this::showCatalogScreen,250);
-        }catch(Exception e){toast("Catalog save failed • file dobara select karein");}
+            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);String original=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();String baseName=pendingCatalogName.trim().isEmpty()?original:pendingCatalogName.trim();String display=selectedTotal>1?baseName+" • "+(selectedIndex+1):baseName;String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();String keywords=pendingCatalogKeywords.trim();JSONArray a=readCatalogs();JSONObject item=new JSONObject();item.put("name",display);item.put("category",category);item.put("keywords",keywords);item.put("original_name",original);item.put("uri",safe.toString());item.put("type",type==null?"application/octet-stream":type);item.put("updated",System.currentTimeMillis());item.put("path",target.getAbsolutePath());a.put(item);writeCatalogs(a);getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putBoolean(AutoReplyNotificationService.ENABLED,true).apply();return true;
+        }catch(Exception e){return false;}
     }
     private void showCatalogScreen(){
         Dialog dialog=new Dialog(this,android.R.style.Theme_Material_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(Color.BLACK);
@@ -878,9 +967,9 @@ public class MainActivity extends Activity {
         EditText category=new EditText(this);category.setHint("Type • Wires / Switch / DB");category.setSingleLine(true);
         EditText name=new EditText(this);name.setHint("Catalog name");name.setSingleLine(true);
         EditText words=new EditText(this);words.setHint("Auto reply words • wires, cable");words.setSingleLine(true);
-        TextView help=new TextView(this);help.setText("PDF ya picture dono save honge. Customer saved word bhejega to isi catalog ka file auto reply hoga.");help.setTextSize(13);help.setPadding(0,dp(8),0,0);
+        TextView help=new TextView(this);help.setText("Ek saath multiple pictures aur PDFs select kar sakte hain. Sab files isi type ki list me save hongi.");help.setTextSize(13);help.setPadding(0,dp(8),0,0);
         box.addView(category);box.addView(name);box.addView(words);box.addView(help);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Add Catalog Type").setView(box).setPositiveButton("Select PDF / Picture",null).setNegativeButton("Cancel",null).create();
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Add Catalog Type").setView(box).setPositiveButton("Select PDFs / Pictures",null).setNegativeButton("Cancel",null).create();
         d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String c=category.getText().toString().trim();String n=name.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Enter Wires, Switch, DB or another type");return;}if(n.isEmpty()){name.setError("Enter catalog name");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);pendingCatalogCategory=c;pendingCatalogName=n;pendingCatalogKeywords=k;d.dismiss();pickBusinessFile(PICK_CATALOG_FILE);}));d.show();
     }
     private void renderCatalogCards(LinearLayout parent,Dialog dialog){
@@ -891,7 +980,13 @@ public class MainActivity extends Activity {
     private int countCatalogCategory(JSONArray a,String category){int count=0;for(int i=0;i<a.length();i++){JSONObject x=a.optJSONObject(i);if(x!=null&&category.equals(x.optString("category","Other")))count++;}return count;}
     private void showCatalogMenu(View anchor,int index,JSONObject item,Dialog parent){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("View");m.getMenu().add("Send on WhatsApp");m.getMenu().add("Rename");m.getMenu().add("Delete");m.setOnMenuItemClickListener(menu->{String x=menu.getTitle().toString();if(x.equals("View"))openCatalog(item);else if(x.startsWith("Send"))shareCatalog(item);else if(x.equals("Rename")){parent.dismiss();renameCatalog(index,item);}else{deleteCatalog(index,item);parent.dismiss();showCatalogScreen();}return true;});m.show();}
     private void openCatalog(JSONObject item){try{Uri uri=Uri.parse(item.optString("uri"));Intent i=new Intent(Intent.ACTION_VIEW);i.setDataAndType(uri,item.optString("type","application/pdf"));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Open Catalog"));}catch(Exception e){toast("Catalog open nahi hua");}}
-    private void shareCatalog(JSONObject item){try{Uri uri=Uri.parse(item.optString("uri"));Intent i=new Intent(Intent.ACTION_SEND);i.setType(item.optString("type","application/pdf"));i.putExtra(Intent.EXTRA_STREAM,uri);i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS Catalog");i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Send Catalog"));}}catch(Exception e){toast("Catalog send nahi hua");}}
+    private void shareCatalog(JSONObject item){
+        try{
+            Uri uri=Uri.parse(item.optString("uri"));Intent i=new Intent(Intent.ACTION_SEND);i.setType(item.optString("type","application/pdf"));i.putExtra(Intent.EXTRA_STREAM,uri);i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS "+item.optString("category","Catalog")+" • "+item.optString("name","Catalog"));i.setClipData(android.content.ClipData.newRawUri("catalog file",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            grantUriPermission("com.whatsapp",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);grantUriPermission("com.whatsapp.w4b",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception normal){try{i.setPackage("com.whatsapp.w4b");startActivity(i);}catch(Exception business){i.setPackage(null);startActivity(Intent.createChooser(i,"Send Catalog"));}}
+        }catch(Exception e){toast("Catalog send nahi hua • file dobara save karein");}
+    }
     private void renameCatalog(int index,JSONObject item){EditText input=new EditText(this);input.setText(item.optString("name","Catalog"));input.setSelectAllOnFocus(true);new AlertDialog.Builder(this).setTitle("Rename Catalog").setView(input).setPositiveButton("Save",(d,w)->{String n=input.getText().toString().trim();if(n.isEmpty())return;try{JSONArray a=readCatalogs();if(index<a.length()){a.getJSONObject(index).put("name",n);writeCatalogs(a);}showCatalogScreen();}catch(Exception e){toast("Rename failed");}}).setNegativeButton("Cancel",null).show();}
     private void deleteCatalog(int index,JSONObject item){try{JSONArray old=readCatalogs(),fresh=new JSONArray();for(int i=0;i<old.length();i++)if(i!=index)fresh.put(old.get(i));writeCatalogs(fresh);String path=item.optString("path","");if(!path.isEmpty())new File(path).delete();toast("Catalog deleted");}catch(Exception e){toast("Delete failed");}}
 
@@ -1019,6 +1114,7 @@ public class MainActivity extends Activity {
         return "";
     }
 
+    private String last10Digits(String value){String d=value==null?"":value.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
 
     private static class LedgerPageData{
         final String phone,name,balance;final int pageIndex;

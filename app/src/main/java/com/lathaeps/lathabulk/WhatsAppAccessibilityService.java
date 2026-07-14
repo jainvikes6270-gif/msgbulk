@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -23,6 +24,7 @@ import java.util.Locale;
 public class WhatsAppAccessibilityService extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean clickLocked = false;
+    private static PowerManager.WakeLock queueWakeLock;
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null || event.getPackageName() == null) return;
@@ -88,6 +90,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 String stamp=new SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new Date());
                 String entry=stamp+" • Completed "+a.length()+" contacts";
                 p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).putString(MainActivity.AUTO_HISTORY,entry+(old.isEmpty()?"":"\n"+old)).apply();
+                releaseQueueWakeLock();
                 clickLocked = false;
                 Intent done = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(done);
@@ -95,6 +98,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             }
         } catch (Exception e) {
             p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).apply();
+            releaseQueueWakeLock();
             clickLocked = false;
             return;
         }
@@ -105,11 +109,13 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     static void openCurrentChat(Context context) {
         SharedPreferences p = context.getSharedPreferences(MainActivity.AUTO_PREFS, Context.MODE_PRIVATE);
         if (!p.getBoolean(MainActivity.AUTO_RUNNING, false)) return;
+        wakeForQueue(context);
         try {
             JSONArray a = new JSONArray(p.getString(MainActivity.AUTO_NUMBERS, "[]"));
             int index = p.getInt(MainActivity.AUTO_INDEX, 0);
             if (index < 0 || index >= a.length()) {
                 p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).apply();
+                releaseQueueWakeLock();
                 return;
             }
             String number = a.getString(index);
@@ -127,7 +133,26 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             }
         } catch (Exception e) {
             try { JSONArray failed=new JSONArray(p.getString(MainActivity.AUTO_FAILED,"[]")); JSONArray nums=new JSONArray(p.getString(MainActivity.AUTO_NUMBERS,"[]")); int idx=p.getInt(MainActivity.AUTO_INDEX,0); if(idx<nums.length())failed.put(nums.getString(idx)); p.edit().putString(MainActivity.AUTO_FAILED,failed.toString()).putBoolean(MainActivity.AUTO_RUNNING,false).apply(); } catch(Exception ignored) { p.edit().putBoolean(MainActivity.AUTO_RUNNING,false).apply(); }
+            releaseQueueWakeLock();
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static synchronized void wakeForQueue(Context context){
+        try{
+            PowerManager pm=(PowerManager)context.getSystemService(Context.POWER_SERVICE);
+            if(pm==null)return;
+            if(queueWakeLock==null){
+                queueWakeLock=pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK|PowerManager.ACQUIRE_CAUSES_WAKEUP|PowerManager.ON_AFTER_RELEASE,"LathaBulk:AutoSendScreen");
+                queueWakeLock.setReferenceCounted(false);
+            }
+            if(queueWakeLock.isHeld())queueWakeLock.release();
+            queueWakeLock.acquire(120000L);
+        }catch(Exception ignored){}
+    }
+
+    static synchronized void releaseQueueWakeLock(){
+        try{if(queueWakeLock!=null&&queueWakeLock.isHeld())queueWakeLock.release();}catch(Exception ignored){}
     }
 
     @Override public void onInterrupt() { }

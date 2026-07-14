@@ -1,4 +1,29 @@
-# LathaBulk v3.15.1 – Recipient Search + Category Catalog
+# LathaBulk v3.16.2 – Schedule Timer + Catalog Send Fix
+
+## v3.16.2 changes
+
+- Schedule accepts Hours and Minutes with a live HH:MM:SS countdown.
+- Auto Send starts automatically when the countdown finishes.
+- Active schedule timer can be cancelled.
+- Catalog auto reply now sends every saved PDF/picture from the matched category together.
+- Catalog sharing grants file access correctly to both WhatsApp and WhatsApp Business.
+
+## v3.16.1 changes
+
+- Auto Send now acquires a timed screen wake lock before opening every WhatsApp contact.
+- The app keeps the display awake throughout the active sending queue.
+- Wake lock is released automatically when sending completes, fails or is stopped.
+- Settings now includes **Screen-off Auto Send** help and display guidance.
+- Secure PIN/pattern/fingerprint locks still cannot be bypassed; start while the phone is unlocked.
+
+## v3.16.0 changes
+
+- Main header now shows only **LATHAEPS**; version is available inside Settings.
+- Master PDF → Phone + Balance Excel is now inside **Business Files** only.
+- Dark/Light Theme is now available inside **Settings** only.
+- Contacts button toggles the contact list: first tap shows it, next tap hides it.
+- Catalog supports selecting and saving multiple pictures and PDFs in one action.
+- Settings includes **Current Version** and **Contact Us: lathaeps@gmail.com**.
 
 ## New in v3.15.1
 

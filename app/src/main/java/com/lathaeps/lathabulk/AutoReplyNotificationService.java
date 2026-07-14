@@ -16,6 +16,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 import org.json.JSONArray;
@@ -47,11 +48,20 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         long wait=p.getInt(COOLDOWN,5)*60_000L;
 
         String file="", type="", caption="";
+        ArrayList<Uri> catalogFiles=new ArrayList<>();
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         String command="rule";
         if(!lk.isEmpty() && lower.contains(lk)){command="ledger";JSONObject customer=findLedgerCustomer(p,title,senderPhone);if(customer==null)return;file=customer.optString("ledger_uri","");if(file.isEmpty())return;type="application/pdf";caption="LATHA EPS Ledger";}
-        else if(findCatalogForMessage(lower,ck)!=null||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){command="catalog";JSONObject catalog=findCatalogForMessage(lower,ck);if(catalog==null){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}file=catalog.optString("uri","");type=catalog.optString("type","application/pdf");caption="LATHA EPS "+catalog.optString("category","Catalog")+" • "+catalog.optString("name","Catalog");if(file.isEmpty())return;}
+        else if(findCatalogsForMessage(lower,ck).length()>0||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){
+            command="catalog";JSONArray catalogs=findCatalogsForMessage(lower,ck);
+            if(catalogs.length()==0){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}
+            JSONObject first=catalogs.optJSONObject(0);if(first==null)return;
+            for(int i=0;i<catalogs.length();i++){JSONObject item=catalogs.optJSONObject(i);if(item==null)continue;String uri=item.optString("uri","");if(!uri.isEmpty())catalogFiles.add(Uri.parse(uri));}
+            if(catalogFiles.isEmpty())return;
+            file=catalogFiles.get(0).toString();type=first.optString("type","application/pdf");
+            caption="LATHA EPS "+first.optString("category","Catalog")+" • "+catalogFiles.size()+" file"+(catalogFiles.size()>1?"s":"");
+        }
         else {
             boolean matched=false;
             try{
@@ -72,8 +82,9 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,now).apply();
             if(n.contentIntent!=null){ try{n.contentIntent.send();}catch(Exception ignored){} }
             final String f=file,t=type,c=caption;
+            final ArrayList<Uri> files=new ArrayList<>(catalogFiles);
             final String phone=senderPhone;
-            handler.postDelayed(()->shareFile(Uri.parse(f),t,c,pkg,phone),900);
+            handler.postDelayed(()->{if(files.size()>1)shareFiles(files,c,pkg,phone);else shareFile(Uri.parse(f),t,c,pkg,phone);},1200);
         } else if(!caption.isEmpty()) {
             sendRemoteReply(n,caption);
         }
@@ -98,13 +109,19 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return null;
     }
 
-    private JSONObject findCatalogForMessage(String message,String genericKeyword){
+    private JSONArray findCatalogsForMessage(String message,String genericKeyword){
+        JSONArray found=new JSONArray();
         try{
             JSONArray items=new JSONArray(getSharedPreferences("latha_bulk_prefs",MODE_PRIVATE).getString("catalog_items","[]"));
-            for(int i=items.length()-1;i>=0;i--){JSONObject item=items.optJSONObject(i);if(item==null)continue;String terms=item.optString("keywords","")+","+item.optString("category","");for(String term:terms.split("[,;|]"))if(keywordMatches(message,term))return item;}
-            if(matchesBusinessKeyword(message,genericKeyword,"catalog","catalogue","catlog"))return items.length()==0?null:items.optJSONObject(items.length()-1);
+            JSONObject matched=null;
+            for(int i=items.length()-1;i>=0&&matched==null;i--){JSONObject item=items.optJSONObject(i);if(item==null)continue;String terms=item.optString("keywords","")+","+item.optString("category","");for(String term:terms.split("[,;|]"))if(keywordMatches(message,term)){matched=item;break;}}
+            if(matched==null&&matchesBusinessKeyword(message,genericKeyword,"catalog","catalogue","catlog")&&items.length()>0)matched=items.optJSONObject(items.length()-1);
+            if(matched==null)return found;
+            String category=matched.optString("category","Other");
+            for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item!=null&&category.equalsIgnoreCase(item.optString("category","Other"))&&!item.optString("uri","").isEmpty())found.put(item);}
+            if(found.length()==0)found.put(matched);
         }catch(Exception ignored){}
-        return null;
+        return found;
     }
     private boolean keywordMatches(String message,String raw){
         String term=raw==null?"":raw.trim().toLowerCase(Locale.ROOT);if(term.length()<2)return false;
@@ -158,6 +175,25 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("last_business_status","Opening WhatsApp • "+caption).putLong("last_business_status_at",System.currentTimeMillis()).apply();
         }catch(Exception error){
             getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PENDING_SHARE,false).putString("last_business_status","Send failed • "+error.getClass().getSimpleName()).putLong("last_business_status_at",System.currentTimeMillis()).apply();
+        }
+    }
+
+    private void shareFiles(ArrayList<Uri> uris,String caption,String pkg,String phone){
+        try{
+            Intent i=new Intent(Intent.ACTION_SEND_MULTIPLE);i.setType("*/*");
+            i.putParcelableArrayListExtra(Intent.EXTRA_STREAM,uris);
+            if(caption!=null&&!caption.isEmpty())i.putExtra(Intent.EXTRA_TEXT,caption);
+            ClipData clips=ClipData.newRawUri("catalog file",uris.get(0));
+            for(int x=1;x<uris.size();x++)clips.addItem(new ClipData.Item(uris.get(x)));
+            i.setClipData(clips);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            i.setPackage(pkg);
+            if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
+            for(Uri uri:uris)grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            startActivity(i);
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("last_business_status","Opening WhatsApp • "+uris.size()+" catalog files").putLong("last_business_status_at",System.currentTimeMillis()).apply();
+        }catch(Exception error){
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PENDING_SHARE,false).putString("last_business_status","Catalog send failed • "+error.getClass().getSimpleName()).putLong("last_business_status_at",System.currentTimeMillis()).apply();
         }
     }
 }
