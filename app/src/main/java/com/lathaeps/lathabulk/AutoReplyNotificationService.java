@@ -51,7 +51,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         String pk=p.getString(PRICE_KEY,"price").trim().toLowerCase(Locale.ROOT);
-        if(!lk.isEmpty() && lower.contains(lk)){boolean customerOk=isLedgerCustomerAllowed(p,title,senderPhone);if(!customerOk)return;file=p.getString(LEDGER_URI,"");type=p.getString(LEDGER_URI+"_type","application/pdf");caption="LATHA EPS Ledger";}
+        if(!lk.isEmpty() && lower.contains(lk)){JSONObject customer=findLedgerCustomer(p,title,senderPhone);if(customer==null)return;file=customer.optString("ledger_uri","");if(file.isEmpty())return;type="application/pdf";caption="LATHA EPS Ledger";}
         else if(!ck.isEmpty() && lower.contains(ck)){file=p.getString(CATALOG_URI,"");type=p.getString(CATALOG_URI+"_type","application/pdf");caption="LATHA EPS Catalog";}
         else if(!pk.isEmpty() && lower.contains(pk)){file=p.getString(PRICE_URI,"");type=p.getString(PRICE_URI+"_type","application/pdf");caption="LATHA EPS Price List";}
         else {
@@ -79,23 +79,17 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }
     }
 
-    private boolean isLedgerCustomerAllowed(SharedPreferences p,String title,String senderPhone){
-        String td=last10(title), sp=last10(senderPhone), lowTitle=title==null?"":title.toLowerCase(Locale.ROOT);
+    private JSONObject findLedgerCustomer(SharedPreferences p,String title,String senderPhone){
+        String td=last10(title), sp=last10(senderPhone);
         try{
             JSONArray a=new JSONArray(p.getString(LEDGER_CUSTOMERS,"[]"));
-            if(a.length()>0){
-                for(int i=0;i<a.length();i++){
-                    JSONObject o=a.optJSONObject(i);if(o==null)continue;
-                    String ph=last10(o.optString("phone",""));
-                    String nm=o.optString("name","").trim().toLowerCase(Locale.ROOT);
-                    if((!ph.isEmpty()&&(ph.equals(td)||ph.equals(sp)))||(!nm.isEmpty()&&lowTitle.contains(nm)))return true;
-                }
-                return false;
+            for(int i=0;i<a.length();i++){
+                JSONObject o=a.optJSONObject(i);if(o==null)continue;
+                String ph=last10(o.optString("phone",""));
+                if(!ph.isEmpty()&&(ph.equals(td)||ph.equals(sp)))return o;
             }
         }catch(Exception ignored){}
-        String lp=last10(p.getString("ledger_phone",""));
-        String ln=p.getString("ledger_name","").trim().toLowerCase(Locale.ROOT);
-        return (!lp.isEmpty()&&(lp.equals(td)||lp.equals(sp)))||(!ln.isEmpty()&&lowTitle.contains(ln));
+        return null;
     }
 
     private void sendRemoteReply(Notification n,String message){
@@ -125,7 +119,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         if(checkSelfPermission(android.Manifest.permission.READ_CONTACTS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return "";
         Cursor c=null;try{
             c=getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,new String[]{ContactsContract.CommonDataKinds.Phone.NUMBER,ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME},ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME+" = ?",new String[]{title},null);
-            if(c!=null&&c.moveToFirst()){String d=digits(c.getString(0));if(d.startsWith("0")&&d.length()==11)d=d.substring(1);if(d.length()==10)d="91"+d;return d;}
+            String found="";if(c!=null)while(c.moveToNext()){String d=digits(c.getString(0));if(d.startsWith("0")&&d.length()==11)d=d.substring(1);String ten=last10(d);if(ten.length()!=10)continue;if(!found.isEmpty()&&!last10(found).equals(ten))return "";found=d.length()==10?"91"+d:d;}return found;
         }catch(Exception ignored){}finally{if(c!=null)c.close();}
         return "";
     }

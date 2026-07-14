@@ -72,6 +72,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final int CONTACT_PERMISSION = 101;
@@ -175,7 +177,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.11 • PDF TO EXCEL");
+        title.setText("LATHA BULK v3.12 • SMART LEDGER");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -269,7 +271,7 @@ public class MainActivity extends Activity {
         businessFiles.setOnClickListener(v->showBusinessFilesDialog());
         autoReplyButton.setOnClickListener(v->showAutoReplyDialog());
 
-        Button ledgerExcel=button("MASTER LEDGER PDF  →  EXCEL (.xlsx)");
+        Button ledgerExcel=button("MASTER LEDGER → PHONE + BALANCE EXCEL");
         ledgerExcel.setTypeface(Typeface.DEFAULT_BOLD);
         ledgerExcel.setTextSize(14);
         ledgerExcel.setTextColor(Color.WHITE);
@@ -541,7 +543,7 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_PDF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pdfUri=data.getData();try{getContentResolver().takePersistableUriPermission(pdfUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}if(pdfText!=null)pdfText.setText("PDF: "+pdfUri.getLastPathSegment());}
         if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());
         if(requestCode==PICK_REPLY_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveReplyImagePermanently(data.getData());}
-        if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.LEDGER_URI,data.getData(),"Ledger file saved");}
+        if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){importMasterLedgerPdf(data.getData());}
         if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.CATALOG_URI,data.getData(),"Catalog file saved");}
         if(requestCode==PICK_PRICE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.PRICE_URI,data.getData(),"Price List file saved");}
         if(requestCode==CREATE_BACKUP&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) writeBackup(data.getData());
@@ -588,7 +590,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.10.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.12.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -687,10 +689,10 @@ public class MainActivity extends Activity {
     private void showBusinessFilesDialog(){
         SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
-        Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"UPDATE MASTER LEDGER PDF":"UPDATE MASTER LEDGER PDF ✓");
+        Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"UPLOAD & PREPARE MASTER LEDGER PDF":"UPDATE & PREPARE MASTER LEDGER PDF ✓");
         Button customers=button("Manage Ledger Customers ("+ledgerCustomerCount()+")");
-        Button convertPdf=button("CONVERT MASTER PDF → EXCEL (.xlsx)");
-        Button importCsv=button("IMPORT CUSTOMER EXCEL (.xlsx)");
+        Button convertPdf=button("MASTER PDF → PHONE + BALANCE EXCEL");
+        Button importCsv=button("IMPORT CUSTOMER EXCEL (OPTIONAL)");
         Button catalog=button(p.getString(AutoReplyNotificationService.CATALOG_URI,"").isEmpty()?"Add Catalog":"Change Catalog ✓");
         Button price=button(p.getString(AutoReplyNotificationService.PRICE_URI,"").isEmpty()?"Add Price List":"Change Price List ✓");
         Button history=button("View updated files history");
@@ -703,10 +705,10 @@ public class MainActivity extends Activity {
         ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));catalog.setOnClickListener(v->pickBusinessFile(PICK_CATALOG_FILE));price.setOnClickListener(v->pickBusinessFile(PICK_PRICE_FILE));
         customers.setOnClickListener(v->showLedgerCustomersDialog());
         convertPdf.setOnClickListener(v->chooseMasterPdfForExcel());
-        importCsv.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select Excel: Phone Number, Customer Name, Ledger File Name"),PICK_LEDGER_CUSTOMERS_XLSX);});
+        importCsv.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select optional customer Excel"),PICK_LEDGER_CUSTOMERS_XLSX);});
         history.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("File update history").setMessage(p.getString("file_history","No file updates yet")).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->p.edit().remove("file_history").apply()).show());
         ScrollView scroll=new ScrollView(this);scroll.addView(box);
-        new AlertDialog.Builder(this).setTitle("Master Ledger • PDF + Excel").setMessage("PDF ko Excel me convert karne ke liye first button use karein. Customer matching ke liye alag Customer Excel import karein: Phone Number, Customer Name, Ledger File Name.").setView(scroll)
+        new AlertDialog.Builder(this).setTitle("Smart Master Ledger").setMessage("Master PDF upload karte hi phone-number wale ledgers alag prepare honge. Customer WhatsApp se 'ledger' bheje to exact number ka PDF jayega. Bina number wale skip honge.").setView(scroll)
             .setPositiveButton("Save",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putString(AutoReplyNotificationService.CATALOG_KEY,catalogKey.getText().toString().trim()).putString(AutoReplyNotificationService.PRICE_KEY,priceKey.getText().toString().trim()).apply();toast("Business settings saved");})
             .setNegativeButton("Close",null).show();
     }
@@ -724,28 +726,98 @@ public class MainActivity extends Activity {
     }
 
     private void convertMasterPdfToExcel(Uri pdf,Uri output){
-        toast("Converting PDF to Excel…");
-        if(miniProgress!=null)miniProgress.setText("PDF → Excel converting…");
+        toast("Phone number aur closing balance nikal rahe hain…");
+        if(miniProgress!=null)miniProgress.setText("Master Ledger processing…");
         new Thread(()->{
-            int pages=0,lines=0;
             try(InputStream in=getContentResolver().openInputStream(pdf);PDDocument document=PDDocument.load(in)){
-                pages=document.getNumberOfPages();
+                MasterLedgerResult result=prepareCustomerLedgers(document);
                 List<List<String>> rows=new ArrayList<>();
-                rows.add(java.util.Arrays.asList("Page No","Line No","Ledger / Particular","Value 2","Value 3","Value 4","Value 5"));
-                PDFTextStripper stripper=new PDFTextStripper();
-                for(int page=1;page<=pages;page++){
-                    stripper.setStartPage(page);stripper.setEndPage(page);stripper.setSortByPosition(true);
-                    String text=stripper.getText(document);int lineNo=0;
-                    for(String raw:text.split("\\r?\\n")){
-                        String line=raw.replace('\u00a0',' ').trim();if(line.isEmpty())continue;lineNo++;lines++;
-                        String[] parts=line.split("\\s{2,}");ArrayList<String> row=new ArrayList<>();row.add(String.valueOf(page));row.add(String.valueOf(lineNo));
-                        for(int i=0;i<Math.min(parts.length,5);i++)row.add(parts[i].trim());rows.add(row);
-                    }
-                }
+                rows.add(java.util.Arrays.asList("Phone Number","Closing Balance"));
+                for(LedgerPageData item:result.entries)rows.add(java.util.Arrays.asList(last10Digits(item.phone),item.balance));
                 try(OutputStream out=getContentResolver().openOutputStream(output)){if(out==null)throw new Exception("Output unavailable");writeSimpleXlsx(out,rows);}
-                int finalPages=pages,finalLines=lines;runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("Excel ready • "+finalPages+" pages • "+finalLines+" rows");toast("Excel created successfully ✓");});
-            }catch(Exception e){runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("PDF → Excel failed");toast("Conversion failed • text-based PDF select karein");});}
+                runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("Ready • "+result.entries.size()+" ledgers • "+result.uniquePhones+" numbers");toast("Excel ready ✓ Bina number: "+result.skippedPages+" skipped");});
+            }catch(Exception e){runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("Master Ledger failed");toast("Failed • Tally text-based PDF select karein");});}
         }).start();
+    }
+
+    private void importMasterLedgerPdf(Uri source){
+        toast("Master Ledger save aur prepare ho raha hai…");
+        if(miniProgress!=null)miniProgress.setText("Master Ledger processing…");
+        new Thread(()->{
+            try{
+                File dir=new File(getFilesDir(),"business_files");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");
+                File target=new File(dir,"master_ledger_current.pdf");
+                try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){
+                    if(in==null)throw new Exception("PDF read failed");byte[] buf=new byte[32*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);
+                }
+                MasterLedgerResult result;
+                try(PDDocument document=PDDocument.load(target)){result=prepareCustomerLedgers(document);}
+                Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);
+                SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+                String display=source.getLastPathSegment()==null?"Master Ledger PDF":source.getLastPathSegment();
+                String history=p.getString("file_history","");String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • Master Ledger prepared • "+display;
+                p.edit().putString(AutoReplyNotificationService.LEDGER_URI,safe.toString()).putString(AutoReplyNotificationService.LEDGER_URI+"_type","application/pdf").putString(AutoReplyNotificationService.LEDGER_URI+"_name",display).putLong(AutoReplyNotificationService.LEDGER_URI+"_updated",System.currentTimeMillis()).putString("file_history",line+(history.isEmpty()?"":"\n"+history)).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();
+                runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("Ledger ready • "+result.uniquePhones+" numbers");toast(result.entries.size()+" ledgers ready • "+result.skippedPages+" without number skipped");});
+            }catch(Exception e){runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("Master Ledger failed");toast("Master Ledger prepare failed • valid Tally PDF select karein");});}
+        }).start();
+    }
+
+    private MasterLedgerResult prepareCustomerLedgers(PDDocument document) throws Exception{
+        MasterLedgerResult result=new MasterLedgerResult();result.totalPages=document.getNumberOfPages();
+        PDFTextStripper stripper=new PDFTextStripper();stripper.setSortByPosition(true);
+        LinkedHashMap<String,List<LedgerPageData>> byPhone=new LinkedHashMap<>();
+        for(int page=1;page<=result.totalPages;page++){
+            stripper.setStartPage(page);stripper.setEndPage(page);String text=stripper.getText(document);
+            String phone=extractLedgerPhone(text);if(phone.isEmpty()){result.skippedPages++;continue;}
+            LedgerPageData item=new LedgerPageData(phone,extractLedgerName(text),extractClosingBalance(text),page-1);
+            result.entries.add(item);byPhone.computeIfAbsent(phone,k->new ArrayList<>()).add(item);
+        }
+        File dir=new File(getFilesDir(),"business_files/customer_ledgers");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Ledger folder create failed");
+        File[] old=dir.listFiles();if(old!=null)for(File f:old)if(f.isFile())f.delete();
+        JSONArray customers=new JSONArray();
+        for(Map.Entry<String,List<LedgerPageData>> group:byPhone.entrySet()){
+            String phone=group.getKey();File file=new File(dir,last10Digits(phone)+".pdf");
+            try(PDDocument customerPdf=new PDDocument()){
+                for(LedgerPageData item:group.getValue())customerPdf.importPage(document.getPage(item.pageIndex));
+                customerPdf.save(file);
+            }
+            Uri uri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",file);
+            LedgerPageData first=group.getValue().get(0);JSONObject o=new JSONObject();o.put("phone",phone);o.put("name",first.name);o.put("balance",first.balance);o.put("ledger_uri",uri.toString());o.put("ledger_file",file.getName());o.put("pages",group.getValue().size());customers.put(o);
+        }
+        result.uniquePhones=byPhone.size();
+        getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,customers.toString()).putInt("ledger_source_pages",result.totalPages).putInt("ledger_skipped_pages",result.skippedPages).apply();
+        return result;
+    }
+
+    private String extractLedgerPhone(String text){
+        for(String raw:text.split("\\r?\\n")){
+            String low=raw.toLowerCase(Locale.ROOT);if(!low.contains("tel")||!low.contains("no"))continue;
+            String digits=raw.replaceAll("[^0-9]","");if(digits.length()>=10){String last=digits.substring(digits.length()-10);if(last.matches("[6-9][0-9]{9}"))return "91"+last;}
+        }
+        return "";
+    }
+
+    private String extractLedgerName(String text){
+        for(String raw:text.split("\\r?\\n")){String line=raw.trim();if(line.isEmpty())continue;if(line.toLowerCase(Locale.ROOT).contains("ledger account"))break;return line;}
+        return "Ledger Customer";
+    }
+
+    private String extractClosingBalance(String text){
+        Pattern money=Pattern.compile("[0-9][0-9,]*(?:\\.[0-9]{1,2})?");
+        for(String raw:text.split("\\r?\\n"))if(raw.toLowerCase(Locale.ROOT).contains("closing balance")){
+            Matcher m=money.matcher(raw);String value="";while(m.find())value=m.group();return value;
+        }
+        return "";
+    }
+
+    private String last10Digits(String value){String d=value==null?"":value.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
+
+    private static class LedgerPageData{
+        final String phone,name,balance;final int pageIndex;
+        LedgerPageData(String phone,String name,String balance,int pageIndex){this.phone=phone;this.name=name;this.balance=balance;this.pageIndex=pageIndex;}
+    }
+    private static class MasterLedgerResult{
+        final List<LedgerPageData> entries=new ArrayList<>();int totalPages,skippedPages,uniquePhones;
     }
 
     private void writeSimpleXlsx(OutputStream output,List<List<String>> rows) throws Exception{
@@ -786,8 +858,8 @@ public class MainActivity extends Activity {
                 if(first&&(rawPhone.toLowerCase(Locale.ROOT).contains("phone")||ph.length()<10)){first=false;continue;}
                 first=false;
                 if(ph.length()<10){invalid++;continue;}
-                if(map.containsKey(ph))duplicates++;else added++;
-                JSONObject o=new JSONObject();o.put("phone",ph);o.put("name",name);o.put("ledger_file",ledgerFile);map.put(ph,o);
+                JSONObject existing=map.get(ph);if(existing!=null)duplicates++;else added++;
+                JSONObject o=existing==null?new JSONObject():new JSONObject(existing.toString());o.put("phone",ph);if(!name.isEmpty())o.put("name",name);if(!ledgerFile.isEmpty())o.put("ledger_file",ledgerFile);map.put(ph,o);
             }
             JSONArray out=new JSONArray();for(JSONObject o:map.values())out.put(o);
             p.edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,out.toString()).apply();

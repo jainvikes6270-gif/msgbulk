@@ -1,17 +1,15 @@
-# LathaBulk v3.11 – Master Ledger PDF to Excel
+# LathaBulk v3.12 – Smart Master Ledger
 
 ## Update flow
 1. Open **BUSINESS FILES**.
-2. Main screen par **MASTER LEDGER PDF → EXCEL (.xlsx)** tap karke Tally PDF select karein and Excel save karein.
-3. Customer matching ke liye **BUSINESS FILES → IMPORT CUSTOMER EXCEL (.xlsx)** select karein.
-4. Excel first-sheet columns:
-   - Phone Number
-   - Customer Name
-   - Ledger File Name
-5. Save ledger keyword, then keep Notification Access and Accessibility enabled.
+2. **UPLOAD & PREPARE MASTER LEDGER PDF** tap karke combined Tally PDF select karein.
+3. App phone-number wale pages ko customer-wise PDF me automatically prepare karta hai. Bina phone number wale pages skip hote hain.
+4. **MASTER PDF → PHONE + BALANCE EXCEL** se sirf do columns export hote hain: Phone Number, Closing Balance.
+5. Customer apne registered WhatsApp number se **ledger** bheje to exact number ka private ledger PDF send hota hai.
+6. Notification Access, Contacts permission aur Accessibility ON rakhein.
 
 ## Important
-PDF-to-Excel export text-based Tally PDFs ke page/line data ko editable Excel rows me save karta hai. Scanned/image-only PDF ke liye OCR required hoga. Customer-wise private sending ke liye separate ledger PDFs aur phone mapping required hai.
+Text-based Tally PDF required hai. Ek phone number multiple ledger pages me ho to pages ek customer PDF me combine hote hain. Name-only matching disabled hai; exact 10-digit sender number match required hai.
 
 ## Build APK
 Upload the extracted project to GitHub. GitHub Actions workflow is included under `.github/workflows/build-apk.yml`.
