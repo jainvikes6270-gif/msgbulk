@@ -1,0 +1,30 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.lathaeps.lathabulk'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.lathaeps.lathabulk'
+        minSdk 24
+        targetSdk 35
+        versionCode 13
+        versionName '3.6.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.15.0'
+}
