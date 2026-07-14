@@ -1090,7 +1090,7 @@ public class MainActivity extends Activity {
                 TextView summary=new TextView(this);summary.setText("Received Msg : "+key+"\nSend Msg : "+(reply.isEmpty()?(rule.optString("image","").isEmpty()?"—":"🖼 Image"):reply)+"\n"+mode+(rule.optBoolean("case",false)?" • Case sensitive":""));summary.setTextSize(15);summary.setTextColor(Color.rgb(28,28,28));summary.setMaxLines(4);summary.setEllipsize(TextUtils.TruncateAt.END);summary.setPadding(dp(5),0,dp(4),0);
                 Button edit=button("✎");edit.setTextSize(20);edit.setTextColor(Color.rgb(0,91,78));edit.setBackground(rounded(Color.rgb(220,245,241),40));
                 Button move=button("↕");move.setTextSize(21);move.setTextColor(Color.rgb(0,91,78));move.setBackground(rounded(Color.rgb(220,245,241),40));
-                Button more=button("⋮");more.setTextSize(23);more.setTextColor(Color.rgb(0,91,78));more.setBackground(Color.TRANSPARENT);
+                Button more=button("⋮");more.setTextSize(23);more.setTextColor(Color.rgb(0,91,78));more.setBackgroundColor(Color.TRANSPARENT);
                 content.addView(dot,new LinearLayout.LayoutParams(dp(38),dp(72)));content.addView(summary,new LinearLayout.LayoutParams(0,dp(86),1f));content.addView(edit,new LinearLayout.LayoutParams(dp(44),dp(44)));content.addView(move,new LinearLayout.LayoutParams(dp(44),dp(44)));content.addView(more,new LinearLayout.LayoutParams(dp(38),dp(48)));card.addView(content);
                 LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(132));cp.setMargins(0,dp(5),0,dp(7));cards.addView(card,cp);
                 edit.setOnClickListener(v->showRuleEditor(index,()->renderAutoReplyRules(cards,parent)));
