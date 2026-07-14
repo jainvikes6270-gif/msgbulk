@@ -16,6 +16,8 @@ import android.service.notification.StatusBarNotification;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String PREFS="auto_reply_prefs", ENABLED="enabled", KEYWORD="keyword", REPLY="reply", IMAGE="image", COOLDOWN="cooldown";
@@ -44,14 +46,21 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         String pk=p.getString(PRICE_KEY,"price").trim().toLowerCase(Locale.ROOT);
-        if(!lk.isEmpty() && lower.contains(lk)){file=p.getString(LEDGER_URI,"");type=p.getString(LEDGER_URI+"_type","application/pdf");caption="LATHA EPS Ledger";}
+        if(!lk.isEmpty() && lower.contains(lk)){String lp=digits(p.getString("ledger_phone",""));String ln=p.getString("ledger_name","").trim().toLowerCase(Locale.ROOT);String td=digits(title);boolean customerOk=(!lp.isEmpty()&&td.endsWith(lp.length()>10?lp.substring(lp.length()-10):lp))||(!ln.isEmpty()&&title.toLowerCase(Locale.ROOT).contains(ln));if(!customerOk)return;file=p.getString(LEDGER_URI,"");type=p.getString(LEDGER_URI+"_type","application/pdf");caption="LATHA EPS Ledger";}
         else if(!ck.isEmpty() && lower.contains(ck)){file=p.getString(CATALOG_URI,"");type=p.getString(CATALOG_URI+"_type","application/pdf");caption="LATHA EPS Catalog";}
         else if(!pk.isEmpty() && lower.contains(pk)){file=p.getString(PRICE_URI,"");type=p.getString(PRICE_URI+"_type","application/pdf");caption="LATHA EPS Price List";}
         else {
-            String key=p.getString(KEYWORD,"").trim().toLowerCase(Locale.ROOT);
-            if(key.isEmpty() || !lower.contains(key)) return;
-            caption=p.getString(REPLY,"").trim();
-            file=p.getString(IMAGE,""); type=p.getString(IMAGE+"_type","image/*");
+            boolean matched=false;
+            try{
+                JSONArray rules=new JSONArray(p.getString("rules","[]"));
+                for(int i=0;i<rules.length();i++){
+                    JSONObject r=rules.getJSONObject(i);String key=r.optString("keyword","").trim();if(key.isEmpty())continue;
+                    boolean cs=r.optBoolean("case",false);String source=cs?text:text.toLowerCase(Locale.ROOT);String target=cs?key:key.toLowerCase(Locale.ROOT);int mode=r.optInt("match",0);
+                    boolean ok=mode==1?source.trim().equals(target):mode==2?source.startsWith(target):mode==3?source.endsWith(target):source.contains(target);
+                    if(ok){caption=r.optString("reply","").trim();file=r.optString("image","");type=r.optString("type","image/*");matched=true;break;}
+                }
+            }catch(Exception ignored){}
+            if(!matched){String key=p.getString(KEYWORD,"").trim().toLowerCase(Locale.ROOT);if(key.isEmpty()||!lower.contains(key))return;caption=p.getString(REPLY,"").trim();file=p.getString(IMAGE,"");type=p.getString(IMAGE+"_type","image/*");}
         }
         lastReply.put(title,now);
         if(!caption.isEmpty()) sendRemoteReply(n,caption);
@@ -74,6 +83,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }
     }
 
+    private static String digits(String s){return s==null?"":s.replaceAll("[^0-9]","");}
+
     private void shareFile(Uri uri,String mime,String caption,String pkg){
         try{
             Intent i=new Intent(Intent.ACTION_SEND);
@@ -81,7 +92,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             i.putExtra(Intent.EXTRA_STREAM,uri);
             if(!caption.isEmpty()) i.putExtra(Intent.EXTRA_TEXT,caption);
             i.setClipData(ClipData.newRawUri("business file",uri));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             i.setPackage(pkg);
             startActivity(i);
         }catch(Exception ignored){}

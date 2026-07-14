@@ -19,3 +19,12 @@ WhatsApp must open in foreground. Keep phone unlocked and Accessibility enabled.
 - WhatsApp/WhatsApp Business notification auto-reply integration
 
 Note: Accessibility and Notification Access must be enabled. File sharing may open WhatsApp and requires the phone to be unlocked.
+
+## v3.3 Business update
+- Colorful premium header
+- Bottom Choose/Share PDF controls removed
+- Saved contacts viewer
+- Auto-reply rule list with Contains, Exact, Starts With, Ends With and case-sensitive matching
+- Phone album image picker and saved reply image status
+- Master ledger current-file and update history
+- Ledger response restricted to configured customer phone/name match
