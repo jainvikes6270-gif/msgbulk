@@ -28,3 +28,9 @@ Note: Accessibility and Notification Access must be enabled. File sharing may op
 - Phone album image picker and saved reply image status
 - Master ledger current-file and update history
 - Ledger response restricted to configured customer phone/name match
+
+## v3.4 Gallery Image Fix
+- Auto Reply > Choose image opens the phone Gallery/Photos first.
+- Selected image is copied into private app storage so background auto reply can access it later.
+- FileProvider grants WhatsApp temporary read access while sharing.
+- Android 13+ Photo Picker supported, with Documents fallback for older devices.

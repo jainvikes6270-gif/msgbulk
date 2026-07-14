@@ -20,10 +20,15 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.provider.Settings;
+import android.provider.MediaStore;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.InputStreamReader;
 import java.util.Random;
 import android.text.Editable;
@@ -42,6 +47,7 @@ import android.widget.Spinner;
 import android.widget.CheckBox;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.FileProvider;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -124,7 +130,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.3.1 BUSINESS");
+        title.setText("LATHA BULK v3.4 GALLERY FIX");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -469,7 +475,7 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);
         if(requestCode==PICK_PDF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pdfUri=data.getData();try{getContentResolver().takePersistableUriPermission(pdfUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}if(pdfText!=null)pdfText.setText("PDF: "+pdfUri.getLastPathSegment());}
         if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());
-        if(requestCode==PICK_REPLY_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.IMAGE,data.getData(),"Auto-reply image selected");}
+        if(requestCode==PICK_REPLY_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveReplyImagePermanently(data.getData());}
         if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.LEDGER_URI,data.getData(),"Ledger file saved");}
         if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.CATALOG_URI,data.getData(),"Catalog file saved");}
         if(requestCode==PICK_PRICE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.PRICE_URI,data.getData(),"Price List file saved");}
@@ -499,6 +505,55 @@ public class MainActivity extends Activity {
     private void retryFailed(){try{JSONArray f=new JSONArray(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_FAILED,"[]"));if(f.length()==0){toast("No failed contacts");return;}selectedNumbers.clear();for(int i=0;i<f.length();i++)selectedNumbers.add(f.getString(i));refreshChecks();toast(f.length()+" failed contacts selected");}catch(Exception e){toast("No failed contacts");}}
     private void resumeQueue(){SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);try{JSONArray a=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int i=p.getInt(AUTO_INDEX,0);if(a.length()==0||i>=a.length()){toast("No paused queue");return;}p.edit().putBoolean(AUTO_RUNNING,true).apply();sendButton.setText("STOP AUTO SENDING");miniProgress.setText("Resuming "+(i+1)+" / "+a.length());WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("No paused queue");}}
 
+
+    private void openPhoneGalleryFirst(){
+        try{
+            Intent i;
+            if(Build.VERSION.SDK_INT>=33){
+                i=new Intent(MediaStore.ACTION_PICK_IMAGES);
+                i.setType("image/*");
+            }else{
+                i=new Intent(Intent.ACTION_GET_CONTENT);
+                i.setType("image/*");
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+            }
+            startActivityForResult(Intent.createChooser(i,"Select image from Phone Gallery"),PICK_REPLY_IMAGE);
+        }catch(Exception first){
+            try{
+                Intent fallback=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                fallback.setType("image/*");
+                startActivityForResult(fallback,PICK_REPLY_IMAGE);
+            }catch(Exception e){toast("Phone Gallery open nahi hui");}
+        }
+    }
+
+    private void saveReplyImagePermanently(Uri source){
+        try{
+            String mime=getContentResolver().getType(source);
+            String ext="jpg";
+            if(mime!=null&&mime.contains("png"))ext="png";
+            else if(mime!=null&&mime.contains("webp"))ext="webp";
+            else if(mime!=null&&mime.contains("gif"))ext="gif";
+            File dir=new File(getFilesDir(),"reply_images");
+            if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");
+            File target=new File(dir,"auto_reply_"+System.currentTimeMillis()+"."+ext);
+            try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){
+                if(in==null)throw new Exception("Image read failed");
+                byte[] buf=new byte[16*1024];int n;
+                while((n=in.read(buf))>0)out.write(buf,0,n);
+            }
+            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);
+            SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+            p.edit().putString(AutoReplyNotificationService.IMAGE,safe.toString())
+                    .putString(AutoReplyNotificationService.IMAGE+"_type",mime==null?"image/*":mime)
+                    .putString(AutoReplyNotificationService.IMAGE+"_name",target.getName())
+                    .putLong(AutoReplyNotificationService.IMAGE+"_updated",System.currentTimeMillis()).apply();
+            toast("Gallery image saved ✓ Auto reply ke liye ready");
+        }catch(Exception e){
+            toast("Image save failed: phone Gallery se dobara select karein");
+        }
+    }
 
     private void saveBusinessUri(String key, Uri uri, String message){
         try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
@@ -544,7 +599,7 @@ public class MainActivity extends Activity {
         EditText cool=new EditText(this);cool.setHint("Cooldown minutes");cool.setInputType(2);cool.setText(String.valueOf(p.getInt(AutoReplyNotificationService.COOLDOWN,5)));
         Button image=button("Choose image from phone albums"); Button rules=button("View saved keywords & images"); Button access=button("Open Notification Access");
         box.addView(keyword);box.addView(match);box.addView(reply);box.addView(caseSensitive);box.addView(cool);box.addView(image,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(rules,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(access,new LinearLayout.LayoutParams(-1,dp(42)));
-        image.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("image/*");startActivityForResult(i,PICK_REPLY_IMAGE);});
+        image.setOnClickListener(v->openPhoneGalleryFirst());
         rules.setOnClickListener(v->showRulesDialog());
         access.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}});
         new AlertDialog.Builder(this).setTitle("WhatsApp Auto Reply Rules").setMessage("Keyword match type choose karo, text/image save karo.").setView(box)
