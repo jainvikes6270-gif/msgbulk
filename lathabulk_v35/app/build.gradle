@@ -8,8 +8,8 @@ android {
         applicationId 'com.lathaeps.lathabulk'
         minSdk 24
         targetSdk 35
-        versionCode 19
-        versionName '3.12.0'
+        versionCode 17
+        versionName '3.11.0'
     }
 
     buildTypes {

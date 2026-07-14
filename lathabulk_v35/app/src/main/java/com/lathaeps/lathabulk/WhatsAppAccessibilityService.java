@@ -23,7 +23,6 @@ import java.util.Locale;
 public class WhatsAppAccessibilityService extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean clickLocked = false;
-    private boolean pendingScanScheduled = false;
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null || event.getPackageName() == null) return;
@@ -39,10 +38,6 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         SharedPreferences p = getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE);
         boolean bulkRunning=p.getBoolean(MainActivity.AUTO_RUNNING, false);
         if ((!bulkRunning && !pendingShare) || clickLocked) return;
-        if(pendingShare && System.currentTimeMillis()-pendingAt < 1100L){
-            schedulePendingShareScan(1200L-(System.currentTimeMillis()-pendingAt));
-            return;
-        }
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
         AccessibilityNodeInfo send = findSendButton(root, pkg);
@@ -58,25 +53,6 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             int delay=(min+new Random().nextInt(max-min+1))*1000;
             handler.postDelayed(this::advanceQueue, delay);
         }
-    }
-
-    private void schedulePendingShareScan(long delay){
-        if(pendingScanScheduled)return;
-        pendingScanScheduled=true;
-        handler.postDelayed(()->{
-            pendingScanScheduled=false;
-            SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
-            if(!p.getBoolean(AutoReplyNotificationService.PENDING_SHARE,false)||clickLocked)return;
-            AccessibilityNodeInfo root=getRootInActiveWindow();
-            if(root==null)return;
-            String pkg=root.getPackageName()==null?"com.whatsapp":root.getPackageName().toString();
-            AccessibilityNodeInfo send=findSendButton(root,pkg);
-            if(send!=null&&send.isEnabled()&&send.isClickable()){
-                clickLocked=true;send.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                p.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
-                handler.postDelayed(()->clickLocked=false,1200);
-            }
-        },Math.max(100L,delay));
     }
 
     private AccessibilityNodeInfo findSendButton(AccessibilityNodeInfo root, String pkg) {
