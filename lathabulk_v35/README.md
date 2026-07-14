@@ -1,22 +1,17 @@
-# Latha Bulk v3.6 Fixed Groups
+# LathaBulk v3.10 – Master Ledger PDF + Excel Update
 
-GitHub-ready Android project.
+## Update flow
+1. Open **BUSINESS FILES**.
+2. Tap **UPDATE MASTER LEDGER PDF** and select the latest PDF.
+3. Tap **UPDATE CUSTOMER EXCEL (.xlsx)** and select the customer mapping workbook.
+4. Excel first-sheet columns:
+   - Phone Number
+   - Customer Name
+   - Ledger File Name
+5. Save ledger keyword, then keep Notification Access and Accessibility enabled.
 
-## Fixed / added
-- Login PIN: change, test, enable/disable and reset
-- WhatsApp notification auto reply reads standard and messaging-style notification text
-- Reply image is copied into app storage and shared using FileProvider
-- Direct WhatsApp image/file target uses resolved contact phone when available
-- Ledger phone matching supports +91, 0-prefix, spaces, dashes and contact-name-to-phone lookup
-- Saved contacts preserve name + phone
-- Saved list can be loaded or converted directly into a group
-- Groups: save, open, add/remove contacts, rename, duplicate and delete
-- Backup/restore includes settings, groups, rules and copied images/files
+## Important
+This build stores the selected master PDF safely inside the app and updates customer phone/name mapping from Excel. It does not split a combined Tally master PDF into separate customer PDFs automatically. For private customer-wise ledger sending, export separate ledger PDFs and map their filenames.
 
-## Required phone settings
-1. Allow Contacts permission.
-2. Enable Notification Access for **Latha Auto Reply**.
-3. Enable Accessibility for **Latha Bulk** for auto-send queue.
-4. Keep WhatsApp notifications enabled and message preview visible.
-
-Build with GitHub Actions using `.github/workflows/build-apk.yml`.
+## Build APK
+Upload the extracted project to GitHub. GitHub Actions workflow is included under `.github/workflows/build-apk.yml`.

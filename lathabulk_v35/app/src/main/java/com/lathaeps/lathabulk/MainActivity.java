@@ -79,6 +79,7 @@ public class MainActivity extends Activity {
     private static final int PICK_PRICE_FILE = 108;
     private static final int CREATE_BACKUP = 109;
     private static final int PICK_RESTORE = 110;
+    private static final int PICK_LEDGER_CUSTOMERS_XLSX = 111;
     private static final String CHANNEL_ID = "latha_bulk_progress";
     private static final int NOTIFICATION_ID = 511;
     private static final String PREFS = "latha_bulk_prefs";
@@ -165,7 +166,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.6 FIXED • GROUPS");
+        title.setText("LATHA BULK v3.10 • MASTER UPDATE");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -413,19 +414,7 @@ public class MainActivity extends Activity {
     private void showGroupsDialog(){
         Map<String,List<String>> groups=readGroups(); if(groups.isEmpty()){toast("No saved groups");return;}
         String[] names=groups.keySet().toArray(new String[0]);
-        String[] labels=new String[names.length];
-        for(int i=0;i<names.length;i++){
-            List<String> nums=groups.get(names[i]);
-            StringBuilder preview=new StringBuilder();
-            if(nums!=null){
-                for(int j=0;j<Math.min(3,nums.size());j++){
-                    if(j>0)preview.append(", ");
-                    preview.append(findName(nums.get(j)));
-                }
-            }
-            labels[i]=names[i]+"  ("+(nums==null?0:nums.size())+")"+(preview.length()>0?"\n"+preview:"");
-        }
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Saved groups • name + contacts").setItems(labels,null).setNegativeButton("Close",null).create();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Tap to open • Long press to manage").setItems(names,null).setNegativeButton("Close",null).create();
         dialog.setOnShowListener(x->{
             ListView lv=dialog.getListView();
             lv.setOnItemClickListener((p,v,pos,id)->{openGroup(names[pos]);dialog.dismiss();});
@@ -538,6 +527,7 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_PRICE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.PRICE_URI,data.getData(),"Price List file saved");}
         if(requestCode==CREATE_BACKUP&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) writeBackup(data.getData());
         if(requestCode==PICK_RESTORE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) restoreBackup(data.getData());
+        if(requestCode==PICK_LEDGER_CUSTOMERS_XLSX&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importLedgerCustomersXlsx(data.getData());
     }
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,messageBox.getText().toString().trim());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
@@ -577,7 +567,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.6.1");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.10.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -648,39 +638,25 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void saveBusinessUri(String key, Uri uri, String message){
+    private void saveBusinessUri(String key, Uri source, String message){
         try{
-            String type=getContentResolver().getType(uri);
-            String ext="bin";
-            if(type!=null){
-                if(type.contains("pdf"))ext="pdf";
-                else if(type.contains("png"))ext="png";
-                else if(type.contains("webp"))ext="webp";
-                else if(type.contains("gif"))ext="gif";
-                else if(type.startsWith("image/"))ext="jpg";
-            }
+            String type=getContentResolver().getType(source);
+            String ext=(type!=null&&type.contains("pdf"))?"pdf":(type!=null&&type.contains("png"))?"png":(type!=null&&type.contains("webp"))?"webp":"jpg";
             File dir=new File(getFilesDir(),"business_files");
-            if(!dir.exists()&&!dir.mkdirs())throw new Exception("Business folder create failed");
-            File target=new File(dir,key+"_"+System.currentTimeMillis()+"."+ext);
-            try(InputStream in=getContentResolver().openInputStream(uri);OutputStream out=new FileOutputStream(target)){
-                if(in==null)throw new Exception("Selected file read failed");
-                byte[] buf=new byte[16*1024];int n;
-                while((n=in.read(buf))>0)out.write(buf,0,n);
+            if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");
+            String base=key.replace("_uri","");
+            File target=new File(dir,base+"_"+System.currentTimeMillis()+"."+ext);
+            try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){
+                if(in==null)throw new Exception("File read failed");
+                byte[] buf=new byte[16*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);
             }
             Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);
             SharedPreferences bp=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
-            String original=uri.getLastPathSegment()==null?target.getName():uri.getLastPathSegment();
-            String history=bp.getString("file_history","");
-            String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • "+message+" • "+original;
-            bp.edit().putString(key,safe.toString())
-                    .putString(key+"_type",type==null?"application/octet-stream":type)
-                    .putString(key+"_name",original)
-                    .putLong(key+"_updated",System.currentTimeMillis())
-                    .putString("file_history",line+(history.isEmpty()?"":"\n"+history)).apply();
-            toast(message+" ✓ ready for auto reply");
-        }catch(Exception e){
-            toast(message+" failed: file dobara select karein");
-        }
+            String display=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();
+            SharedPreferences.Editor ed=bp.edit().putString(key,safe.toString()).putString(key+"_type",type==null?"application/octet-stream":type).putString(key+"_name",display).putLong(key+"_updated",System.currentTimeMillis());
+            String history=bp.getString("file_history",""); String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • "+message+" • "+display; ed.putString("file_history",line+(history.isEmpty()?"":"\n"+history)).apply();
+            toast(message+" ✓");
+        }catch(Exception e){toast(message+" failed • file dobara select karein");}
     }
 
     private void pickBusinessFile(int code){
@@ -690,23 +666,117 @@ public class MainActivity extends Activity {
     private void showBusinessFilesDialog(){
         SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
-        Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"Add Master Ledger":"Change Master Ledger ✓");
+        Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"UPDATE MASTER LEDGER PDF":"UPDATE MASTER LEDGER PDF ✓");
+        Button customers=button("Manage Ledger Customers ("+ledgerCustomerCount()+")");
+        Button importCsv=button("UPDATE CUSTOMER EXCEL (.xlsx)");
         Button catalog=button(p.getString(AutoReplyNotificationService.CATALOG_URI,"").isEmpty()?"Add Catalog":"Change Catalog ✓");
         Button price=button(p.getString(AutoReplyNotificationService.PRICE_URI,"").isEmpty()?"Add Price List":"Change Price List ✓");
         Button history=button("View updated files history");
         EditText ledgerKey=new EditText(this);ledgerKey.setHint("Ledger keyword");ledgerKey.setText(p.getString(AutoReplyNotificationService.LEDGER_KEY,"ledger"));
-        EditText ledgerPhone=new EditText(this);ledgerPhone.setHint("Customer phone (ledger only)");ledgerPhone.setText(p.getString("ledger_phone",""));ledgerPhone.setInputType(3);
-        EditText ledgerName=new EditText(this);ledgerName.setHint("Customer / WhatsApp name");ledgerName.setText(p.getString("ledger_name",""));
         EditText catalogKey=new EditText(this);catalogKey.setHint("Catalog keyword");catalogKey.setText(p.getString(AutoReplyNotificationService.CATALOG_KEY,"catalog"));
         EditText priceKey=new EditText(this);priceKey.setHint("Price keyword");priceKey.setText(p.getString(AutoReplyNotificationService.PRICE_KEY,"price"));
-        TextView current=new TextView(this);current.setPadding(4,8,4,8);current.setText("Current ledger: "+p.getString(AutoReplyNotificationService.LEDGER_URI+"_name","Not selected"));
-        box.addView(current);box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(ledgerPhone);box.addView(ledgerName);
+        TextView current=new TextView(this);current.setPadding(4,8,4,8);current.setText("Current ledger: "+p.getString(AutoReplyNotificationService.LEDGER_URI+"_name","Not selected")+"\nCustomers: "+ledgerCustomerCount());
+        box.addView(current);box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
         box.addView(catalog,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(catalogKey);box.addView(price,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(priceKey);box.addView(history,new LinearLayout.LayoutParams(-1,dp(42)));
         ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));catalog.setOnClickListener(v->pickBusinessFile(PICK_CATALOG_FILE));price.setOnClickListener(v->pickBusinessFile(PICK_PRICE_FILE));
+        customers.setOnClickListener(v->showLedgerCustomersDialog());
+        importCsv.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select Excel: Phone Number, Customer Name, Ledger File Name"),PICK_LEDGER_CUSTOMERS_XLSX);});
         history.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("File update history").setMessage(p.getString("file_history","No file updates yet")).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->p.edit().remove("file_history").apply()).show());
-        new AlertDialog.Builder(this).setTitle("Business Files & Ledger Mapping").setMessage("Ledger sirf matching customer phone/name ko reply hoga.").setView(box)
-            .setPositiveButton("Save",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putString("ledger_phone",normalize(ledgerPhone.getText().toString())).putString("ledger_name",ledgerName.getText().toString().trim()).putString(AutoReplyNotificationService.CATALOG_KEY,catalogKey.getText().toString().trim()).putString(AutoReplyNotificationService.PRICE_KEY,priceKey.getText().toString().trim()).apply();toast("Business settings saved");})
+        new AlertDialog.Builder(this).setTitle("Master Ledger Update • PDF + Excel").setMessage("1) Latest Master Ledger PDF select karein. 2) Customer Excel update karein. Excel columns: Phone Number, Customer Name, Ledger File Name. Phone/name match hone par saved ledger PDF reply hoga.").setView(box)
+            .setPositiveButton("Save",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putString(AutoReplyNotificationService.CATALOG_KEY,catalogKey.getText().toString().trim()).putString(AutoReplyNotificationService.PRICE_KEY,priceKey.getText().toString().trim()).apply();toast("Business settings saved");})
             .setNegativeButton("Close",null).show();
+    }
+
+    private int ledgerCustomerCount(){try{return new JSONArray(getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]")).length();}catch(Exception e){return 0;}}
+
+    private void importLedgerCustomersXlsx(Uri uri){
+        int added=0,duplicates=0,invalid=0;
+        try{
+            SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+            JSONArray old=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));
+            LinkedHashMap<String,JSONObject> map=new LinkedHashMap<>();
+            for(int i=0;i<old.length();i++){
+                JSONObject o=old.optJSONObject(i);if(o==null)continue;
+                String ph=normalize(o.optString("phone",""));if(!ph.isEmpty())map.put(ph,o);
+            }
+            List<List<String>> rows=readFirstXlsxSheet(uri);
+            boolean first=true;
+            for(List<String> cols:rows){
+                if(cols.isEmpty())continue;
+                String rawPhone=cols.size()>0?cols.get(0):"";
+                String ph=normalize(rawPhone);
+                String name=cols.size()>1?cols.get(1).trim():"";
+                String ledgerFile=cols.size()>2?cols.get(2).trim():"";
+                if(first&&(rawPhone.toLowerCase(Locale.ROOT).contains("phone")||ph.length()<10)){first=false;continue;}
+                first=false;
+                if(ph.length()<10){invalid++;continue;}
+                if(map.containsKey(ph))duplicates++;else added++;
+                JSONObject o=new JSONObject();o.put("phone",ph);o.put("name",name);o.put("ledger_file",ledgerFile);map.put(ph,o);
+            }
+            JSONArray out=new JSONArray();for(JSONObject o:map.values())out.put(o);
+            p.edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,out.toString()).apply();
+            toast("Excel imported: "+added+" • duplicate updated: "+duplicates+" • invalid: "+invalid);
+        }catch(Exception e){toast("Excel import failed • only .xlsx use karein");}
+    }
+
+    private List<List<String>> readFirstXlsxSheet(Uri uri) throws Exception{
+        Map<String,byte[]> files=new LinkedHashMap<>();
+        try(InputStream input=getContentResolver().openInputStream(uri);java.util.zip.ZipInputStream zin=new java.util.zip.ZipInputStream(input)){
+            java.util.zip.ZipEntry entry;
+            while((entry=zin.getNextEntry())!=null){
+                if(entry.isDirectory())continue;
+                ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[8192];int n;
+                while((n=zin.read(b))>0)out.write(b,0,n);files.put(entry.getName(),out.toByteArray());
+            }
+        }
+        ArrayList<String> shared=new ArrayList<>();
+        byte[] ss=files.get("xl/sharedStrings.xml");
+        if(ss!=null){
+            org.w3c.dom.Document d=javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new java.io.ByteArrayInputStream(ss));
+            org.w3c.dom.NodeList sis=d.getElementsByTagName("si");
+            for(int i=0;i<sis.getLength();i++){
+                org.w3c.dom.NodeList ts=((org.w3c.dom.Element)sis.item(i)).getElementsByTagName("t");StringBuilder v=new StringBuilder();
+                for(int j=0;j<ts.getLength();j++)v.append(ts.item(j).getTextContent());shared.add(v.toString());
+            }
+        }
+        byte[] sheet=files.get("xl/worksheets/sheet1.xml");
+        if(sheet==null)throw new Exception("First sheet missing");
+        org.w3c.dom.Document d=javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new java.io.ByteArrayInputStream(sheet));
+        org.w3c.dom.NodeList rowNodes=d.getElementsByTagName("row");ArrayList<List<String>> rows=new ArrayList<>();
+        for(int i=0;i<rowNodes.getLength();i++){
+            org.w3c.dom.Element row=(org.w3c.dom.Element)rowNodes.item(i);org.w3c.dom.NodeList cells=row.getElementsByTagName("c");ArrayList<String> vals=new ArrayList<>();
+            for(int j=0;j<cells.getLength();j++){
+                org.w3c.dom.Element c=(org.w3c.dom.Element)cells.item(j);String ref=c.getAttribute("r");int col=0;
+                for(int k=0;k<ref.length()&&Character.isLetter(ref.charAt(k));k++)col=col*26+(Character.toUpperCase(ref.charAt(k))-'A'+1);col=Math.max(0,col-1);
+                while(vals.size()<=col)vals.add("");String type=c.getAttribute("t");String value="";
+                org.w3c.dom.NodeList vs=c.getElementsByTagName("v");
+                if("inlineStr".equals(type)){org.w3c.dom.NodeList ts=c.getElementsByTagName("t");if(ts.getLength()>0)value=ts.item(0).getTextContent();}
+                else if(vs.getLength()>0){value=vs.item(0).getTextContent();if("s".equals(type)){try{value=shared.get(Integer.parseInt(value));}catch(Exception ignored){}}}
+                if(value.endsWith(".0"))value=value.substring(0,value.length()-2);vals.set(col,value.trim());
+            }
+            rows.add(vals);
+        }
+        return rows;
+    }
+
+    private void showLedgerCustomersDialog(){
+        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(12),0,dp(12),0);
+        EditText search=new EditText(this);search.setHint("Search phone or customer name");
+        ListView list=new ListView(this);box.addView(search);box.addView(list,new LinearLayout.LayoutParams(-1,dp(360)));
+        final ArrayList<String> rows=new ArrayList<>();final ArrayList<JSONObject> objects=new ArrayList<>();
+        Runnable refresh=()->{rows.clear();objects.clear();try{JSONArray a=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));String q=search.getText().toString().trim().toLowerCase(Locale.ROOT);for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;String ph=o.optString("phone","");String nm=o.optString("name","");String lf=o.optString("ledger_file","");String row=(nm.isEmpty()?ph:nm+"\n"+ph)+(lf.isEmpty()?"":"\nLedger: "+lf);if(q.isEmpty()||row.toLowerCase(Locale.ROOT).contains(q)){rows.add(row);objects.add(o);}}}catch(Exception ignored){}list.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,rows));};
+        search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});
+        list.setOnItemClickListener((a,v,pos,id)->showEditLedgerCustomer(objects.get(pos),refresh));refresh.run();
+        new AlertDialog.Builder(this).setTitle("Ledger Customers • "+ledgerCustomerCount()).setView(box).setPositiveButton("Add customer",(d,w)->showEditLedgerCustomer(null,()->showLedgerCustomersDialog())).setNeutralButton("Clear all",(d,w)->p.edit().remove(AutoReplyNotificationService.LEDGER_CUSTOMERS).apply()).setNegativeButton("Close",null).show();
+    }
+
+    private void showEditLedgerCustomer(JSONObject existing,Runnable after){
+        SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
+        EditText phone=new EditText(this);phone.setHint("10-digit phone number");phone.setInputType(InputType.TYPE_CLASS_PHONE);EditText name=new EditText(this);name.setHint("Customer / WhatsApp name");
+        String oldPhone="";if(existing!=null){oldPhone=normalize(existing.optString("phone",""));phone.setText(oldPhone);name.setText(existing.optString("name",""));}final String original=oldPhone;box.addView(phone);box.addView(name);
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(existing==null?"Add customer":"Edit customer").setView(box).setPositiveButton("Save",(d,w)->{String ph=normalize(phone.getText().toString());if(ph.length()<10){toast("Valid phone number required");return;}try{JSONArray a=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));JSONArray out=new JSONArray();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null&&!normalize(o.optString("phone","")).equals(original)&&!normalize(o.optString("phone","")).equals(ph))out.put(o);}JSONObject n=new JSONObject();n.put("phone",ph);n.put("name",name.getText().toString().trim());out.put(n);p.edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,out.toString()).apply();toast("Customer saved");after.run();}catch(Exception e){toast("Save failed");}}).setNegativeButton("Cancel",null);
+        if(existing!=null)b.setNeutralButton("Delete",(d,w)->{try{JSONArray a=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));JSONArray out=new JSONArray();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null&&!normalize(o.optString("phone","")).equals(original))out.put(o);}p.edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,out.toString()).apply();toast("Customer deleted");after.run();}catch(Exception ignored){}});b.show();
     }
     private void showAutoReplyDialog(){
         SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
