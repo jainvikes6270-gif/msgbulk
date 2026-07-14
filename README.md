@@ -1,4 +1,19 @@
-# LathaBulk v3.12 – Smart Master Ledger
+# LathaBulk v3.14 – Recipient Lists + WhatsApp Image Composer
+
+## New in v3.14
+1. Full-screen **Recipient Lists** page with dark cards, contact count, 3-dot management menu and blue `+` button.
+2. Tap a recipient list to select the whole group for sending.
+3. WhatsApp-style image composer: Gallery image preview, Change/Remove controls and caption/message in the same compose card.
+4. Bulk queue supports image + caption or image-only messages.
+5. Selected bulk image is included in Drive Backup/Restore.
+
+## Included from v3.13
+1. Rounded two-line message box with emoji button inside.
+2. Header and footer can be saved and automatically added to every bulk message.
+3. Save and reuse message templates, including their header and footer.
+4. Message draft is remembered automatically.
+5. **Drive Backup** includes saved templates, headers/footers, keyword rules, selected auto-reply images, business files, groups and settings.
+6. **Restore Backup** restores all of the above.
 
 ## Update flow
 1. Open **BUSINESS FILES**.

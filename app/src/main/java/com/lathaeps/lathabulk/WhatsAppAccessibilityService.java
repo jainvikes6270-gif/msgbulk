@@ -2,6 +2,7 @@ package com.lathaeps.lathabulk;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -115,8 +116,14 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             String number = a.getString(index);
             String message = p.getString(MainActivity.AUTO_MESSAGE, "");
             try { JSONArray names=new JSONArray(p.getString(MainActivity.AUTO_NAMES,"[]")); String name=index<names.length()?names.getString(index):""; message=message.replace("{Name}",name).replace("{name}",name); } catch(Exception ignored) {}
-            String encoded = URLEncoder.encode(message, StandardCharsets.UTF_8.name()).replace("+", "%20");
-            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + number + "?text=" + encoded));
+            String image=p.getString(MainActivity.AUTO_IMAGE,"");
+            Intent i;
+            if(!image.isEmpty()){
+                Uri imageUri=Uri.parse(image);i=new Intent(Intent.ACTION_SEND);i.setType(p.getString(MainActivity.AUTO_IMAGE_TYPE,"image/*"));i.putExtra(Intent.EXTRA_STREAM,imageUri);i.putExtra(Intent.EXTRA_TEXT,message);i.putExtra("jid",number+"@s.whatsapp.net");i.setClipData(ClipData.newRawUri("LathaBulk image",imageUri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                context.grantUriPermission("com.whatsapp",imageUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.grantUriPermission("com.whatsapp.w4b",imageUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }else{
+                String encoded = URLEncoder.encode(message, StandardCharsets.UTF_8.name()).replace("+", "%20");i=new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + number + "?text=" + encoded));
+            }
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             try {
                 i.setPackage("com.whatsapp");

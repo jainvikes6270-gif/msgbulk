@@ -43,8 +43,11 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.Spinner;
@@ -89,6 +92,7 @@ public class MainActivity extends Activity {
     private static final int PICK_LEDGER_CUSTOMERS_XLSX = 111;
     private static final int PICK_MASTER_PDF_FOR_EXCEL = 112;
     private static final int CREATE_MASTER_LEDGER_XLSX = 113;
+    private static final int PICK_BULK_IMAGE = 114;
     private static final String CHANNEL_ID = "latha_bulk_progress";
     private static final int NOTIFICATION_ID = 511;
     private static final String PREFS = "latha_bulk_prefs";
@@ -103,10 +107,18 @@ public class MainActivity extends Activity {
     static final String AUTO_MAX_DELAY = "max_delay";
     static final String AUTO_HISTORY = "history";
     static final String AUTO_FAILED = "failed";
+    static final String AUTO_IMAGE = "bulk_image";
+    static final String AUTO_IMAGE_TYPE = "bulk_image_type";
     private static final String DARK_KEY = "dark_mode";
     private static final String SAVED_CONTACTS_KEY = "saved_contacts";
     private static final String PIN_KEY = "login_pin";
     private static final String LOGIN_ENABLED_KEY = "login_enabled";
+    private static final String MESSAGE_HEADER_KEY = "message_header";
+    private static final String MESSAGE_FOOTER_KEY = "message_footer";
+    private static final String MESSAGE_TEMPLATES_KEY = "message_templates";
+    private static final String MESSAGE_DRAFT_KEY = "message_draft";
+    private static final String BULK_IMAGE_URI_KEY = "selected_bulk_image";
+    private static final String BULK_IMAGE_TYPE_KEY = "selected_bulk_image_type";
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     private final List<ContactItem> allContacts = new ArrayList<>();
@@ -118,11 +130,16 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView statusText, pdfText, miniProgress;
     private EditText messageBox, searchBox;
+    private ImageView bulkImagePreview;
+    private LinearLayout bulkImageActions;
     private Button sendButton, accessibilityButton, editGroupButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
+    private Uri selectedBulkImageUri;
+    private String selectedBulkImageType="image/*";
     private int queueIndex = 0;
     private String activeGroup = "";
+    private boolean recipientListsVisible=false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -177,7 +194,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.12 • SMART LEDGER");
+        title.setText("LATHA BULK v3.14 • SMART LEDGER");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -218,8 +235,8 @@ public class MainActivity extends Activity {
 
         LinearLayout accountRow=row();
         Button login=button("Login / PIN");
-        Button backup=button("Backup");
-        Button restore=button("Restore");
+        Button backup=button("Drive Backup");
+        Button restore=button("Restore Backup");
         accountRow.addView(login,weighted(1f,38)); accountRow.addView(backup,weighted(1f,38)); accountRow.addView(restore,weighted(1f,38));
         root.addView(accountRow);
         login.setOnClickListener(v->showLoginSettings());
@@ -247,7 +264,7 @@ public class MainActivity extends Activity {
         groups.addView(editGroupButton, weighted(1.15f, 41));
         root.addView(groups);
         saveGroup.setOnClickListener(v -> showSaveGroupDialog());
-        myGroups.setOnClickListener(v -> showGroupsDialog());
+        myGroups.setOnClickListener(v -> showRecipientListsScreen());
         editGroupButton.setOnClickListener(v -> editActiveGroupContacts());
 
         accessibilityButton = button("Accessibility: OFF");
@@ -281,13 +298,73 @@ public class MainActivity extends Activity {
         root.addView(ledgerExcel,xlp);
         ledgerExcel.setOnClickListener(v->chooseMasterPdfForExcel());
 
+        LinearLayout composeCard=new LinearLayout(this);
+        composeCard.setOrientation(LinearLayout.VERTICAL);
+        composeCard.setPadding(dp(5),dp(4),dp(5),dp(4));
+        GradientDrawable messageBg=new GradientDrawable();
+        messageBg.setColor(isDark()?Color.rgb(48,48,48):Color.WHITE);
+        messageBg.setStroke(dp(1),Color.rgb(95,125,185));
+        messageBg.setCornerRadius(dp(20));
+        composeCard.setBackground(messageBg);
+
+        bulkImagePreview=new ImageView(this);
+        bulkImagePreview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        bulkImagePreview.setAdjustViewBounds(true);
+        bulkImagePreview.setVisibility(View.GONE);
+        composeCard.addView(bulkImagePreview,new LinearLayout.LayoutParams(-1,dp(145)));
+
+        bulkImageActions=row();
+        bulkImageActions.setGravity(Gravity.CENTER_VERTICAL);
+        TextView imageLabel=new TextView(this);imageLabel.setText("Image selected • caption below");imageLabel.setTextSize(12);imageLabel.setPadding(dp(8),0,0,0);
+        Button changeImage=button("Change");Button removeImage=button("Remove");
+        bulkImageActions.addView(imageLabel,new LinearLayout.LayoutParams(0,dp(36),1f));
+        bulkImageActions.addView(changeImage,new LinearLayout.LayoutParams(dp(76),dp(36)));
+        bulkImageActions.addView(removeImage,new LinearLayout.LayoutParams(dp(76),dp(36)));
+        bulkImageActions.setVisibility(View.GONE);
+        composeCard.addView(bulkImageActions);
+
+        LinearLayout messageShell=row();
+        messageShell.setGravity(Gravity.CENTER_VERTICAL);
+        Button emoji=button("🙂");
+        emoji.setTextSize(20);
+        emoji.setContentDescription("Add emoji");
+        messageShell.addView(emoji,new LinearLayout.LayoutParams(dp(46),dp(54)));
+        Button addImage=button("📷");
+        addImage.setTextSize(19);
+        addImage.setContentDescription("Add image");
+        messageShell.addView(addImage,new LinearLayout.LayoutParams(dp(46),dp(54)));
         messageBox = new EditText(this);
-        messageBox.setHint("Message • use {Name} for personal name");
-        messageBox.setMinLines(1);
-        messageBox.setMaxLines(2);
+        messageBox.setHint("Add caption or message • {Name}");
+        messageBox.setMinLines(2);
+        messageBox.setMaxLines(3);
         messageBox.setTextSize(14);
-        messageBox.setGravity(Gravity.TOP);
-        root.addView(messageBox, new LinearLayout.LayoutParams(-1, dp(57)));
+        messageBox.setGravity(Gravity.CENTER_VERTICAL);
+        messageBox.setBackgroundColor(Color.TRANSPARENT);
+        messageBox.setPadding(dp(4),0,dp(5),0);
+        messageBox.setText(getSharedPreferences(PREFS,MODE_PRIVATE).getString(MESSAGE_DRAFT_KEY,""));
+        messageShell.addView(messageBox,new LinearLayout.LayoutParams(0,dp(66),1f));
+        composeCard.addView(messageShell,new LinearLayout.LayoutParams(-1,dp(66)));
+        LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(-1,-2);
+        mlp.setMargins(dp(1),dp(2),dp(1),dp(2));
+        root.addView(composeCard,mlp);
+        emoji.setOnClickListener(v->showEmojiPicker());
+        addImage.setOnClickListener(v->openBulkImageGallery());
+        changeImage.setOnClickListener(v->openBulkImageGallery());
+        removeImage.setOnClickListener(v->removeBulkImage());
+        messageBox.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(MESSAGE_DRAFT_KEY,s.toString()).apply();}public void afterTextChanged(Editable e){}});
+        loadBulkImageSelection();
+
+        LinearLayout messageTools=row();
+        Button headerFooter=button("Header / Footer");
+        Button templates=button("My Templates");
+        Button saveTemplate=button("Save Template");
+        messageTools.addView(headerFooter,weighted(1.1f,39));
+        messageTools.addView(templates,weighted(1f,39));
+        messageTools.addView(saveTemplate,weighted(1f,39));
+        root.addView(messageTools);
+        headerFooter.setOnClickListener(v->showHeaderFooterDialog());
+        templates.setOnClickListener(v->showTemplatesDialog());
+        saveTemplate.setOnClickListener(v->showSaveTemplateDialog());
 
         sendButton = button("AUTO SEND TO SELECTED CONTACTS");
         sendButton.setTextSize(15);
@@ -442,6 +519,47 @@ public class MainActivity extends Activity {
             lv.setOnItemLongClickListener((p,v,pos,id)->{showGroupLongPressMenu(names[pos]);dialog.dismiss();return true;});
         }); dialog.show();
     }
+    private void showRecipientListsScreen(){
+        recipientListsVisible=true;
+        FrameLayout page=new FrameLayout(this);page.setBackgroundColor(Color.BLACK);
+        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
+        page.addView(body,new FrameLayout.LayoutParams(-1,-1));
+
+        LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(10),0,dp(14),0);header.setBackgroundColor(Color.rgb(29,27,27));
+        Button back=button("‹");back.setTextSize(36);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
+        TextView title=new TextView(this);title.setText("Recipient Lists");title.setTextSize(27);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(back,new LinearLayout.LayoutParams(dp(62),dp(72)));header.addView(title,new LinearLayout.LayoutParams(0,dp(72),1f));body.addView(header);
+        back.setOnClickListener(v->returnToMainScreen());
+
+        ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(dp(16),dp(14),dp(16),dp(100));scroll.addView(cards,new ScrollView.LayoutParams(-1,-2));body.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
+        Map<String,List<String>> groups=readGroups();
+        if(groups.isEmpty()){
+            TextView empty=new TextView(this);empty.setText("No recipient lists yet\nTap + to create your first list");empty.setTextColor(Color.LTGRAY);empty.setTextSize(17);empty.setGravity(Gravity.CENTER);cards.addView(empty,new LinearLayout.LayoutParams(-1,dp(190)));
+        }else for(Map.Entry<String,List<String>> entry:groups.entrySet()){
+            String name=entry.getKey();int count=entry.getValue().size();
+            LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(14),dp(9),dp(7),dp(9));GradientDrawable bg=new GradientDrawable();bg.setColor(Color.rgb(42,42,42));bg.setCornerRadius(dp(14));card.setBackground(bg);
+            LinearLayout info=new LinearLayout(this);info.setOrientation(LinearLayout.VERTICAL);
+            TextView groupName=new TextView(this);groupName.setText(name);groupName.setTextSize(25);groupName.setTextColor(Color.WHITE);groupName.setTypeface(Typeface.DEFAULT_BOLD);
+            TextView groupCount=new TextView(this);groupCount.setText(count+" contacts   🟢");groupCount.setTextSize(17);groupCount.setTextColor(Color.rgb(175,175,175));
+            info.addView(groupName,new LinearLayout.LayoutParams(-1,dp(43)));info.addView(groupCount,new LinearLayout.LayoutParams(-1,dp(34)));
+            Button more=button("⋮");more.setTextSize(30);more.setTextColor(Color.rgb(20,115,220));more.setBackgroundColor(Color.TRANSPARENT);
+            card.addView(info,new LinearLayout.LayoutParams(0,dp(84),1f));card.addView(more,new LinearLayout.LayoutParams(dp(52),dp(70)));
+            LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(106));cp.setMargins(0,dp(7),0,dp(7));cards.addView(card,cp);
+            card.setOnClickListener(v->openRecipientList(name));more.setOnClickListener(v->showRecipientListMenu(more,name));
+        }
+
+        Button add=button("+");add.setTextSize(34);add.setTextColor(Color.WHITE);GradientDrawable fab=new GradientDrawable();fab.setColor(Color.rgb(20,105,205));fab.setShape(GradientDrawable.OVAL);add.setBackground(fab);
+        FrameLayout.LayoutParams fp=new FrameLayout.LayoutParams(dp(70),dp(70),Gravity.RIGHT|Gravity.BOTTOM);fp.setMargins(0,0,dp(26),dp(28));page.addView(add,fp);
+        add.setOnClickListener(v->{returnToMainScreen();uiHandler.postDelayed(()->{if(selectedNumbers.isEmpty())toast("Contacts select karke Save group dabaye");else showSaveGroupDialog();},250);});
+        setContentView(page);
+    }
+    private void showRecipientListMenu(View anchor,String name){
+        PopupMenu menu=new PopupMenu(this,anchor);menu.getMenu().add("Open list");menu.getMenu().add("Edit contacts");menu.getMenu().add("Rename");menu.getMenu().add("Duplicate");menu.getMenu().add("Delete");
+        menu.setOnMenuItemClickListener(item->{String a=item.getTitle().toString();if(a.equals("Open list"))openRecipientList(name);else if(a.equals("Edit contacts")){openGroup(name);returnToMainScreen();uiHandler.postDelayed(this::editActiveGroupContacts,250);}else if(a.equals("Rename"))renameGroup(name);else if(a.equals("Duplicate")){duplicateGroup(name);showRecipientListsScreen();}else confirmDeleteGroup(name);return true;});menu.show();
+    }
+    private void openRecipientList(String name){openGroup(name);returnToMainScreen();toast(name+" • "+selectedNumbers.size()+" recipients selected");}
+    private void returnToMainScreen(){recipientListsVisible=false;setContentView(buildUi());uiHandler.postDelayed(this::refreshChecks,80);}
+    @Override public void onBackPressed(){if(recipientListsVisible)returnToMainScreen();else super.onBackPressed();}
     private void openGroup(String name){
         List<String> nums=readGroups().get(name); if(nums==null)return;
         selectedNumbers.clear();selectedNumbers.addAll(nums);activeGroup=name;searchBox.setText("");refreshChecks();toast(name+" opened");
@@ -459,7 +577,7 @@ public class MainActivity extends Activity {
         EditText input=new EditText(this);input.setText(oldName);input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this).setTitle("Rename group").setView(input).setPositiveButton("Rename",(d,w)->{
             String n=input.getText().toString().trim();if(n.isEmpty()||n.equals(oldName))return;
-            Map<String,List<String>>g=readGroups();List<String>nums=g.remove(oldName);g.put(n,nums);writeGroups(g);if(activeGroup.equals(oldName))activeGroup=n;refreshChecks();toast("Renamed to "+n);
+            Map<String,List<String>>g=readGroups();List<String>nums=g.remove(oldName);g.put(n,nums);writeGroups(g);if(activeGroup.equals(oldName))activeGroup=n;refreshChecks();toast("Renamed to "+n);if(recipientListsVisible)showRecipientListsScreen();
         }).setNegativeButton("Cancel",null).show();
     }
     private void duplicateGroup(String name){
@@ -468,7 +586,7 @@ public class MainActivity extends Activity {
     }
     private void confirmDeleteGroup(String name){
         new AlertDialog.Builder(this).setTitle("Delete group?").setMessage(name+" will be removed. Phone contacts will not be deleted.")
-                .setPositiveButton("Delete",(d,w)->{Map<String,List<String>>g=readGroups();g.remove(name);writeGroups(g);if(activeGroup.equals(name)){activeGroup="";selectedNumbers.clear();}refreshChecks();toast("Deleted: "+name);})
+                .setPositiveButton("Delete",(d,w)->{Map<String,List<String>>g=readGroups();g.remove(name);writeGroups(g);if(activeGroup.equals(name)){activeGroup="";selectedNumbers.clear();}refreshChecks();toast("Deleted: "+name);if(recipientListsVisible)showRecipientListsScreen();})
                 .setNegativeButton("Cancel",null).show();
     }
     private void editActiveGroupContacts(){
@@ -508,9 +626,10 @@ public class MainActivity extends Activity {
             try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}
             return;
         }
-        String message=messageBox.getText().toString().trim();
+        String body=messageBox.getText().toString().trim();
+        String message=buildFinalMessage();
         if(selectedNumbers.isEmpty()){toast("Select contacts or open group");return;}
-        if(message.isEmpty()){toast("Type a message first");return;}
+        if(body.isEmpty()&&selectedBulkImageUri==null){toast("Type message or add an image first");return;}
         JSONArray nums=new JSONArray();
         JSONArray names=new JSONArray();
         for(String n:selectedNumbers){
@@ -520,6 +639,7 @@ public class MainActivity extends Activity {
         SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);
         getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit()
                 .putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message)
+                .putString(AUTO_IMAGE,selectedBulkImageUri==null?"":selectedBulkImageUri.toString()).putString(AUTO_IMAGE_TYPE,selectedBulkImageType)
                 .putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7))
                 .putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putBoolean(AUTO_RUNNING,true).apply();
         sendButton.setText("STOP AUTO SENDING");
@@ -543,6 +663,7 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_PDF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pdfUri=data.getData();try{getContentResolver().takePersistableUriPermission(pdfUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}if(pdfText!=null)pdfText.setText("PDF: "+pdfUri.getLastPathSegment());}
         if(requestCode==PICK_CSV&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null) importCsv(data.getData());
         if(requestCode==PICK_REPLY_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveReplyImagePermanently(data.getData());}
+        if(requestCode==PICK_BULK_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBulkImagePermanently(data.getData());}
         if(requestCode==PICK_LEDGER_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){importMasterLedgerPdf(data.getData());}
         if(requestCode==PICK_CATALOG_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.CATALOG_URI,data.getData(),"Catalog file saved");}
         if(requestCode==PICK_PRICE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){saveBusinessUri(AutoReplyNotificationService.PRICE_URI,data.getData(),"Price List file saved");}
@@ -552,7 +673,7 @@ public class MainActivity extends Activity {
         if(requestCode==PICK_MASTER_PDF_FOR_EXCEL&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){pendingMasterPdfUri=data.getData();createMasterLedgerExcelFile();}
         if(requestCode==CREATE_MASTER_LEDGER_XLSX&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null&&pendingMasterPdfUri!=null) convertMasterPdfToExcel(pendingMasterPdfUri,data.getData());
     }
-    private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,messageBox.getText().toString().trim());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
+    private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,buildFinalMessage());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
     private void createNotificationChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Sending progress",NotificationManager.IMPORTANCE_LOW);c.setDescription("Compact queue progress");c.setSound(null,null);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
     private void showProgressNotification(int current,int total,String contact){Intent launch=new Intent(this,MainActivity.class);PendingIntent p=PendingIntent.getActivity(this,0,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
@@ -562,6 +683,57 @@ public class MainActivity extends Activity {
 
     private boolean isDark(){return getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(DARK_KEY,false);}
     private String findName(String number){for(ContactItem c:allContacts)if(c.number.equals(number))return c.name;return number;}
+
+    private String buildFinalMessage(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        String header=p.getString(MESSAGE_HEADER_KEY,"").trim();
+        String body=messageBox==null?"":messageBox.getText().toString().trim();
+        String footer=p.getString(MESSAGE_FOOTER_KEY,"").trim();
+        StringBuilder out=new StringBuilder();
+        if(!header.isEmpty())out.append(header);
+        if(!body.isEmpty()){if(out.length()>0)out.append("\n");out.append(body);}
+        if(!footer.isEmpty()){if(out.length()>0)out.append("\n");out.append(footer);}
+        return out.toString();
+    }
+
+    private void showEmojiPicker(){
+        String[] emojis={"😀","😊","🙏","👍","👌","🎉","❤️","✅","📌","📞","📄","💰","⚡","🔔","🌟","➡️","⬇️","🏷️","🛒","🤝"};
+        new AlertDialog.Builder(this).setTitle("Choose emoji").setItems(emojis,(d,which)->{
+            int start=Math.max(messageBox.getSelectionStart(),0);
+            messageBox.getText().insert(start,emojis[which]);
+            messageBox.requestFocus();
+        }).setNegativeButton("Close",null).show();
+    }
+
+    private void showHeaderFooterDialog(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        EditText header=new EditText(this);header.setHint("Header • example: LATHA EPS");header.setText(p.getString(MESSAGE_HEADER_KEY,""));header.setMaxLines(2);
+        EditText footer=new EditText(this);footer.setHint("Footer • example: Thank you");footer.setText(p.getString(MESSAGE_FOOTER_KEY,""));footer.setMaxLines(2);
+        box.addView(header);box.addView(footer);
+        new AlertDialog.Builder(this).setTitle("Message Header & Footer").setMessage("Ye har bulk message ke upar aur niche automatically add hoga.").setView(box)
+            .setPositiveButton("Save",(d,w)->{p.edit().putString(MESSAGE_HEADER_KEY,header.getText().toString().trim()).putString(MESSAGE_FOOTER_KEY,footer.getText().toString().trim()).apply();toast("Header & footer saved");})
+            .setNeutralButton("Clear",(d,w)->{p.edit().remove(MESSAGE_HEADER_KEY).remove(MESSAGE_FOOTER_KEY).apply();toast("Header & footer cleared");})
+            .setNegativeButton("Cancel",null).show();
+    }
+
+    private JSONArray readTemplates(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(MESSAGE_TEMPLATES_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
+    private void showSaveTemplateDialog(){
+        String body=messageBox.getText().toString().trim();if(body.isEmpty()){toast("Type message before saving template");return;}
+        EditText name=new EditText(this);name.setHint("Template name • example: Payment reminder");name.setSingleLine(true);
+        new AlertDialog.Builder(this).setTitle("Save Message Template").setView(name).setPositiveButton("Save",(d,w)->{
+            String n=name.getText().toString().trim();if(n.isEmpty())n="Template "+(readTemplates().length()+1);
+            try{SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);JSONArray a=readTemplates();JSONObject o=new JSONObject();o.put("name",n);o.put("body",body);o.put("header",p.getString(MESSAGE_HEADER_KEY,""));o.put("footer",p.getString(MESSAGE_FOOTER_KEY,""));a.put(o);p.edit().putString(MESSAGE_TEMPLATES_KEY,a.toString()).apply();toast("Template saved: "+n);}catch(Exception e){toast("Template save failed");}
+        }).setNegativeButton("Cancel",null).show();
+    }
+    private void showTemplatesDialog(){
+        JSONArray a=readTemplates();if(a.length()==0){toast("No saved templates");return;}
+        String[] names=new String[a.length()];for(int i=0;i<a.length();i++)names[i]=a.optJSONObject(i)==null?"Template "+(i+1):a.optJSONObject(i).optString("name","Template "+(i+1));
+        new AlertDialog.Builder(this).setTitle("My Message Templates").setItems(names,(d,which)->{
+            JSONObject o=a.optJSONObject(which);if(o==null)return;SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);messageBox.setText(o.optString("body",""));messageBox.setSelection(messageBox.length());p.edit().putString(MESSAGE_HEADER_KEY,o.optString("header","")).putString(MESSAGE_FOOTER_KEY,o.optString("footer","")).apply();toast("Template loaded: "+names[which]);
+        }).setNeutralButton("Delete all",(d,w)->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(MESSAGE_TEMPLATES_KEY).apply();toast("All templates deleted");}).setNegativeButton("Close",null).show();
+    }
+
     private void showLoginSettings(){
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
         String[] items={"Change PIN","Turn login "+(p.getBoolean(LOGIN_ENABLED_KEY,true)?"OFF":"ON"),"Test login now","Reset PIN"};
@@ -590,7 +762,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.12.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved successfully");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.14.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -611,6 +783,33 @@ public class MainActivity extends Activity {
     private void retryFailed(){try{JSONArray f=new JSONArray(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_FAILED,"[]"));if(f.length()==0){toast("No failed contacts");return;}selectedNumbers.clear();for(int i=0;i<f.length();i++)selectedNumbers.add(f.getString(i));refreshChecks();toast(f.length()+" failed contacts selected");}catch(Exception e){toast("No failed contacts");}}
     private void resumeQueue(){SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);try{JSONArray a=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int i=p.getInt(AUTO_INDEX,0);if(a.length()==0||i>=a.length()){toast("No paused queue");return;}p.edit().putBoolean(AUTO_RUNNING,true).apply();sendButton.setText("STOP AUTO SENDING");miniProgress.setText("Resuming "+(i+1)+" / "+a.length());WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("No paused queue");}}
 
+    private void openBulkImageGallery(){
+        try{
+            Intent i=Build.VERSION.SDK_INT>=33?new Intent(MediaStore.ACTION_PICK_IMAGES):new Intent(Intent.ACTION_GET_CONTENT);
+            i.setType("image/*");if(Build.VERSION.SDK_INT<33)i.addCategory(Intent.CATEGORY_OPENABLE);
+            startActivityForResult(Intent.createChooser(i,"Choose image for WhatsApp message"),PICK_BULK_IMAGE);
+        }catch(Exception first){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("image/*");startActivityForResult(i,PICK_BULK_IMAGE);}
+    }
+    private void saveBulkImagePermanently(Uri source){
+        try{
+            String mime=getContentResolver().getType(source);String ext=(mime!=null&&mime.contains("png"))?"png":(mime!=null&&mime.contains("webp"))?"webp":(mime!=null&&mime.contains("gif"))?"gif":"jpg";
+            File dir=new File(getFilesDir(),"bulk_images");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");
+            File target=new File(dir,"selected_"+System.currentTimeMillis()+"."+ext);
+            try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){if(in==null)throw new Exception("Image read failed");byte[] buf=new byte[16*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}
+            selectedBulkImageUri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);selectedBulkImageType=mime==null?"image/*":mime;
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(BULK_IMAGE_URI_KEY,selectedBulkImageUri.toString()).putString(BULK_IMAGE_TYPE_KEY,selectedBulkImageType).apply();
+            showBulkImagePreview();toast("Image added • caption niche type karein");
+        }catch(Exception e){toast("Image add failed • Gallery se dobara select karein");}
+    }
+    private void loadBulkImageSelection(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);String raw=p.getString(BULK_IMAGE_URI_KEY,"");selectedBulkImageType=p.getString(BULK_IMAGE_TYPE_KEY,"image/*");selectedBulkImageUri=raw.isEmpty()?null:Uri.parse(raw);showBulkImagePreview();
+    }
+    private void showBulkImagePreview(){
+        if(bulkImagePreview==null||bulkImageActions==null)return;boolean has=selectedBulkImageUri!=null;bulkImagePreview.setVisibility(has?View.VISIBLE:View.GONE);bulkImageActions.setVisibility(has?View.VISIBLE:View.GONE);if(has)bulkImagePreview.setImageURI(selectedBulkImageUri);
+    }
+    private void removeBulkImage(){
+        selectedBulkImageUri=null;selectedBulkImageType="image/*";getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(BULK_IMAGE_URI_KEY).remove(BULK_IMAGE_TYPE_KEY).apply();showBulkImagePreview();toast("Image removed");
+    }
 
     private void openPhoneGalleryFirst(){
         try{
