@@ -129,8 +129,12 @@ public class MainActivity extends Activity {
     private Button sendButton, accessibilityButton, editGroupButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
+    private String pendingCatalogName = "";
+    private String pendingCatalogCategory = "";
+    private String pendingCatalogKeywords = "";
     private int queueIndex = 0;
     private String activeGroup = "";
+    private boolean pendingRecipientContactPicker = false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -187,7 +191,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHA BULK v3.15.0 • SMART LEDGER");
+        title.setText("LATHA BULK v3.15.1 • SMART LEDGER");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -198,18 +202,12 @@ public class MainActivity extends Activity {
 
         LinearLayout tools = row();
         Button load = button("Contacts");
-        Button savedContacts = button("Saved list");
         Button selectAll = button("Select all");
-        Button clear = button("Clear");
         tools.addView(load, weighted(1f, 42));
-        tools.addView(savedContacts, weighted(1f, 42));
-        tools.addView(selectAll, weighted(.9f, 42));
-        tools.addView(clear, weighted(.7f, 42));
+        tools.addView(selectAll, weighted(1f, 42));
         root.addView(tools);
         load.setOnClickListener(v -> requestContacts());
-        savedContacts.setOnClickListener(v -> showSavedContactsDialog());
         selectAll.setOnClickListener(v -> selectAllVisible());
-        clear.setOnClickListener(v -> clearSelection());
 
         LinearLayout featureRow = row();
         Button csv = button("Import CSV");
@@ -248,15 +246,15 @@ public class MainActivity extends Activity {
             public void afterTextChanged(Editable e){}
         });
 
-        LinearLayout groups = row();
-        Button saveGroup = button("Save recipient list");
-        Button myGroups = button("My Recipient Lists");
+        Button myGroups = button("MY RECIPIENT LISTS");
+        myGroups.setTextSize(16);
+        myGroups.setTypeface(Typeface.DEFAULT_BOLD);
+        myGroups.setTextColor(Color.WHITE);
+        myGroups.setBackground(rounded(Color.rgb(22,105,190),14));
         editGroupButton = button("Add / remove");
-        groups.addView(saveGroup, weighted(1f, 41));
-        groups.addView(myGroups, weighted(1f, 41));
-        groups.addView(editGroupButton, weighted(1.15f, 41));
-        root.addView(groups);
-        saveGroup.setOnClickListener(v -> showSaveGroupDialog());
+        LinearLayout.LayoutParams myListLp=new LinearLayout.LayoutParams(-1,dp(49));
+        myListLp.setMargins(dp(2),dp(3),dp(2),dp(3));
+        root.addView(myGroups,myListLp);
         myGroups.setOnClickListener(v -> showRecipientListsScreen());
         editGroupButton.setOnClickListener(v -> editActiveGroupContacts());
 
@@ -433,6 +431,7 @@ public class MainActivity extends Activity {
         }
         Collections.sort(allContacts, Comparator.comparing(a->a.name.toLowerCase(Locale.ROOT)));
         filterContacts(searchBox.getText().toString()); toast(allContacts.size()+" contacts loaded");
+        if(pendingRecipientContactPicker){pendingRecipientContactPicker=false;uiHandler.postDelayed(this::showRecipientContactPicker,180);}
     }
     private String normalize(String raw){
         if(raw==null)return""; String d=raw.replaceAll("[^0-9]","");
@@ -485,17 +484,21 @@ public class MainActivity extends Activity {
         Button back=button("‹");back.setTextSize(36);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
         TextView title=new TextView(this);title.setText("My Recipient Lists");title.setTextSize(25);title.setTypeface(Typeface.DEFAULT_BOLD);title.setTextColor(Color.WHITE);title.setGravity(Gravity.CENTER_VERTICAL);
         head.addView(back,new LinearLayout.LayoutParams(dp(58),dp(72)));head.addView(title,new LinearLayout.LayoutParams(0,dp(72),1f));page.addView(head);
+        EditText listSearch=new EditText(this);listSearch.setHint("Search list name or mobile number");listSearch.setSingleLine(true);listSearch.setTextColor(Color.WHITE);listSearch.setHintTextColor(Color.GRAY);listSearch.setTextSize(15);listSearch.setPadding(dp(16),0,dp(16),0);page.addView(listSearch,new LinearLayout.LayoutParams(-1,dp(52)));
         ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(dp(16),dp(16),dp(16),dp(100));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         Button plus=button("+");plus.setTextSize(34);plus.setTextColor(Color.WHITE);plus.setBackground(rounded(Color.rgb(20,112,210),60));
         LinearLayout foot=row();foot.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);foot.setPadding(0,0,dp(18),dp(14));foot.addView(plus,new LinearLayout.LayoutParams(dp(70),dp(70)));page.addView(foot,new LinearLayout.LayoutParams(-1,dp(88)));
-        Runnable refresh=()->renderRecipientListCards(cards,dialog);refresh.run();
+        Runnable refresh=()->renderRecipientListCards(cards,dialog,listSearch.getText().toString());refresh.run();
+        listSearch.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){renderRecipientListCards(cards,dialog,s.toString());}public void afterTextChanged(Editable e){}});
         back.setOnClickListener(v->dialog.dismiss());plus.setOnClickListener(v->{dialog.dismiss();showCreateRecipientListDialog();});
         dialog.setContentView(page);dialog.show();
     }
-    private void renderRecipientListCards(LinearLayout parent,Dialog dialog){
+    private void renderRecipientListCards(LinearLayout parent,Dialog dialog,String query){
         parent.removeAllViews();Map<String,List<String>> groups=readGroups();
         if(groups.isEmpty()){TextView empty=new TextView(this);empty.setText("No recipient lists yet\nTap + to create one");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.LTGRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(160)));return;}
+        String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);int shown=0;
         for(Map.Entry<String,List<String>> e:groups.entrySet()){
+            boolean match=q.isEmpty()||e.getKey().toLowerCase(Locale.ROOT).contains(q);if(!match)for(String number:e.getValue())if(number.contains(q)||last10Digits(number).contains(q)){match=true;break;}if(!match)continue;shown++;
             String name=e.getKey();LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(16),dp(10),dp(8),dp(10));card.setBackground(rounded(Color.rgb(42,42,42),14));
             LinearLayout words=new LinearLayout(this);words.setOrientation(LinearLayout.VERTICAL);TextView a=new TextView(this);a.setText(name);a.setTextColor(Color.WHITE);a.setTextSize(24);a.setTypeface(Typeface.DEFAULT_BOLD);
             TextView b=new TextView(this);b.setText(e.getValue().size()+" contacts   ◉");b.setTextColor(Color.rgb(180,180,185));b.setTextSize(17);b.setPadding(0,dp(3),0,0);words.addView(a);words.addView(b);
@@ -503,11 +506,12 @@ public class MainActivity extends Activity {
             card.setOnClickListener(v->{openGroup(name);dialog.dismiss();});more.setOnClickListener(v->showRecipientListMenu(more,name,dialog));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(112));lp.setMargins(0,0,0,dp(14));parent.addView(card,lp);
         }
+        if(shown==0){TextView empty=new TextView(this);empty.setText("No list found for this number");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.LTGRAY);empty.setTextSize(16);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(140)));}
     }
     private void showCreateRecipientListDialog(){
         EditText input=new EditText(this);input.setHint("Recipient list name");input.setSingleLine(true);
-        new AlertDialog.Builder(this).setTitle("New Recipient List").setMessage(selectedNumbers.size()+" currently selected contacts").setView(input).setPositiveButton("Create",(d,w)->{
-            String n=input.getText().toString().trim();if(n.isEmpty()){toast("Enter list name");return;}Map<String,List<String>>g=readGroups();if(g.containsKey(n)){toast("List name already exists");return;}g.put(n,new ArrayList<>(selectedNumbers));writeGroups(g);activeGroup=n;refreshChecks();toast("Recipient list created: "+n);
+        new AlertDialog.Builder(this).setTitle("New Recipient List").setMessage("New list 0 contacts se create hogi. Next screen me phone contacts select karein.").setView(input).setPositiveButton("Create & Add Contacts",(d,w)->{
+            String n=input.getText().toString().trim();if(n.isEmpty()){toast("Enter list name");return;}Map<String,List<String>>g=readGroups();if(g.containsKey(n)){toast("List name already exists");return;}g.put(n,new ArrayList<>());writeGroups(g);selectedNumbers.clear();activeGroup=n;refreshChecks();toast("Empty recipient list created: "+n);openRecipientContactPicker();
         }).setNegativeButton("Cancel",null).show();
     }
     private void showRecipientListMenu(View anchor,String name,Dialog parent){
@@ -545,15 +549,26 @@ public class MainActivity extends Activity {
     }
     private void editActiveGroupContacts(){
         if(activeGroup.isEmpty()){toast("Open a recipient list first");return;}
-        if(allContacts.isEmpty()){toast("Load phone contacts first");return;}
-        String[] labels=new String[allContacts.size()];boolean[] checked=new boolean[allContacts.size()];
-        for(int i=0;i<allContacts.size();i++){labels[i]=allContacts.get(i).toString();checked[i]=selectedNumbers.contains(allContacts.get(i).number);}
-        new AlertDialog.Builder(this).setTitle("Add / remove • "+activeGroup).setMultiChoiceItems(labels,checked,(d,which,isChecked)->checked[which]=isChecked)
-                .setPositiveButton("Save changes",(d,w)->{
-                    selectedNumbers.clear();for(int i=0;i<checked.length;i++)if(checked[i])selectedNumbers.add(allContacts.get(i).number);
-                    Map<String,List<String>>g=readGroups();g.put(activeGroup,new ArrayList<>(selectedNumbers));writeGroups(g);refreshChecks();toast("Recipient list updated: "+selectedNumbers.size()+" contacts");
-                }).setNegativeButton("Cancel",null).show();
+        openRecipientContactPicker();
     }
+    private void openRecipientContactPicker(){
+        pendingRecipientContactPicker=true;
+        if(checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED)loadContacts();
+        else requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},CONTACT_PERMISSION);
+    }
+    private void showRecipientContactPicker(){
+        if(activeGroup.isEmpty())return;
+        Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(12),dp(10),dp(12),dp(10));page.setBackgroundColor(Color.WHITE);
+        TextView title=new TextView(this);title.setText("Add Contacts • "+activeGroup);title.setTextSize(22);title.setTypeface(Typeface.DEFAULT_BOLD);title.setTextColor(Color.rgb(25,65,125));title.setPadding(dp(4),dp(8),dp(4),dp(8));page.addView(title);
+        EditText find=new EditText(this);find.setHint("Search contact name or mobile number");find.setSingleLine(true);page.addView(find,new LinearLayout.LayoutParams(-1,dp(52)));
+        List<ContactItem> filtered=new ArrayList<>(allContacts);Set<String> working=new LinkedHashSet<>(selectedNumbers);ArrayAdapter<ContactItem> a=new ArrayAdapter<>(this,android.R.layout.simple_list_item_multiple_choice,filtered);ListView list=new ListView(this);list.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);list.setAdapter(a);page.addView(list,new LinearLayout.LayoutParams(-1,0,1f));
+        Runnable checks=()->{list.clearChoices();for(int i=0;i<filtered.size();i++)list.setItemChecked(i,working.contains(filtered.get(i).number));};checks.run();
+        list.setOnItemClickListener((p,v,pos,id)->{String num=filtered.get(pos).number;if(working.contains(num))working.remove(num);else working.add(num);checks.run();});
+        find.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int x){}public void onTextChanged(CharSequence s,int st,int b,int c){String q=s.toString().trim().toLowerCase(Locale.ROOT);filtered.clear();for(ContactItem x:allContacts)if(q.isEmpty()||x.name.toLowerCase(Locale.ROOT).contains(q)||x.number.contains(q)||last10Digits(x.number).contains(q))filtered.add(x);a.notifyDataSetChanged();checks.run();}public void afterTextChanged(Editable e){}});
+        LinearLayout actions=row();Button cancel=button("Cancel");Button save=button("Save Contacts");save.setTypeface(Typeface.DEFAULT_BOLD);save.setTextColor(Color.WHITE);save.setBackgroundColor(Color.rgb(25,120,70));actions.addView(cancel,weighted(1f,48));actions.addView(save,weighted(1.3f,48));page.addView(actions);cancel.setOnClickListener(v->d.dismiss());save.setOnClickListener(v->{selectedNumbers.clear();selectedNumbers.addAll(working);Map<String,List<String>>g=readGroups();g.put(activeGroup,new ArrayList<>(selectedNumbers));writeGroups(g);refreshChecks();toast(activeGroup+" • "+selectedNumbers.size()+" contacts saved");d.dismiss();showRecipientListsScreen();});
+        d.setContentView(page);d.show();
+    }
+    private String last10Digits(String raw){String d=raw==null?"":raw.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
 
     private boolean isAccessibilityServiceEnabled(){
         ComponentName expected=new ComponentName(this,WhatsAppAccessibilityService.class);
@@ -740,7 +755,7 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.15.0");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version","3.15.1");root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
         try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
@@ -849,19 +864,31 @@ public class MainActivity extends Activity {
             String type=getContentResolver().getType(source);String ext=(type!=null&&type.contains("pdf"))?"pdf":(type!=null&&type.contains("png"))?"png":(type!=null&&type.contains("webp"))?"webp":"jpg";
             File dir=new File(getFilesDir(),"catalogs");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");File target=new File(dir,"catalog_"+System.currentTimeMillis()+"."+ext);
             try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){if(in==null)throw new Exception("File read failed");byte[] buf=new byte[16*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}
-            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);String display=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();JSONArray a=readCatalogs();JSONObject item=new JSONObject();item.put("name",display);item.put("uri",safe.toString());item.put("type",type==null?"application/octet-stream":type);item.put("updated",System.currentTimeMillis());item.put("path",target.getAbsolutePath());a.put(item);writeCatalogs(a);getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast("Catalog saved ✓");uiHandler.postDelayed(this::showCatalogScreen,250);
+            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);String original=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();String display=pendingCatalogName.trim().isEmpty()?original:pendingCatalogName.trim();String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();String keywords=pendingCatalogKeywords.trim();JSONArray a=readCatalogs();JSONObject item=new JSONObject();item.put("name",display);item.put("category",category);item.put("keywords",keywords);item.put("original_name",original);item.put("uri",safe.toString());item.put("type",type==null?"application/octet-stream":type);item.put("updated",System.currentTimeMillis());item.put("path",target.getAbsolutePath());a.put(item);writeCatalogs(a);getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putBoolean(AutoReplyNotificationService.ENABLED,true).apply();pendingCatalogName="";pendingCatalogCategory="";pendingCatalogKeywords="";toast(category+" catalog saved ✓");uiHandler.postDelayed(this::showCatalogScreen,250);
         }catch(Exception e){toast("Catalog save failed • file dobara select karein");}
     }
     private void showCatalogScreen(){
         Dialog dialog=new Dialog(this,android.R.style.Theme_Material_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(Color.BLACK);
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(10),0,dp(12),0);head.setBackgroundColor(Color.rgb(28,26,27));Button back=button("‹");back.setTextSize(36);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Catalog");title.setTextSize(25);title.setTypeface(Typeface.DEFAULT_BOLD);title.setTextColor(Color.WHITE);head.addView(back,new LinearLayout.LayoutParams(dp(56),dp(72)));head.addView(title,new LinearLayout.LayoutParams(0,dp(72),1f));page.addView(head);
         ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(dp(16),dp(16),dp(16),dp(100));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));Button plus=button("+");plus.setTextSize(34);plus.setTextColor(Color.WHITE);plus.setBackground(rounded(Color.rgb(20,112,210),60));LinearLayout foot=row();foot.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);foot.setPadding(0,0,dp(18),dp(14));foot.addView(plus,new LinearLayout.LayoutParams(dp(70),dp(70)));page.addView(foot,new LinearLayout.LayoutParams(-1,dp(88)));
-        renderCatalogCards(cards,dialog);back.setOnClickListener(v->dialog.dismiss());plus.setOnClickListener(v->{dialog.dismiss();pickBusinessFile(PICK_CATALOG_FILE);});dialog.setContentView(page);dialog.show();
+        renderCatalogCards(cards,dialog);back.setOnClickListener(v->dialog.dismiss());plus.setOnClickListener(v->{dialog.dismiss();showAddCatalogDialog();});dialog.setContentView(page);dialog.show();
+    }
+    private void showAddCatalogDialog(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        EditText category=new EditText(this);category.setHint("Type • Wires / Switch / DB");category.setSingleLine(true);
+        EditText name=new EditText(this);name.setHint("Catalog name");name.setSingleLine(true);
+        EditText words=new EditText(this);words.setHint("Auto reply words • wires, cable");words.setSingleLine(true);
+        TextView help=new TextView(this);help.setText("PDF ya picture dono save honge. Customer saved word bhejega to isi catalog ka file auto reply hoga.");help.setTextSize(13);help.setPadding(0,dp(8),0,0);
+        box.addView(category);box.addView(name);box.addView(words);box.addView(help);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Add Catalog Type").setView(box).setPositiveButton("Select PDF / Picture",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String c=category.getText().toString().trim();String n=name.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Enter Wires, Switch, DB or another type");return;}if(n.isEmpty()){name.setError("Enter catalog name");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);pendingCatalogCategory=c;pendingCatalogName=n;pendingCatalogKeywords=k;d.dismiss();pickBusinessFile(PICK_CATALOG_FILE);}));d.show();
     }
     private void renderCatalogCards(LinearLayout parent,Dialog dialog){
         parent.removeAllViews();JSONArray a=readCatalogs();if(a.length()==0){TextView empty=new TextView(this);empty.setText("No Catalog saved\nTap + to add PDF or image");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(160)));return;}
-        for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;final int index=i;LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(16),dp(10),dp(8),dp(10));card.setBackground(rounded(Color.rgb(42,42,42),14));LinearLayout words=new LinearLayout(this);words.setOrientation(LinearLayout.VERTICAL);TextView n=new TextView(this);n.setText(item.optString("name","Catalog "+(i+1)));n.setTextColor(Color.WHITE);n.setTextSize(19);n.setTypeface(Typeface.DEFAULT_BOLD);TextView date=new TextView(this);date.setText(new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date(item.optLong("updated",0))));date.setTextColor(Color.LTGRAY);date.setTextSize(14);date.setPadding(0,dp(5),0,0);words.addView(n);words.addView(date);Button more=button("⋮");more.setTextSize(29);more.setTextColor(Color.rgb(25,118,210));more.setBackgroundColor(Color.TRANSPARENT);card.addView(words,new LinearLayout.LayoutParams(0,dp(78),1f));card.addView(more,new LinearLayout.LayoutParams(dp(52),dp(68)));card.setOnClickListener(v->openCatalog(item));more.setOnClickListener(v->showCatalogMenu(more,index,item,dialog));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(102));lp.setMargins(0,0,0,dp(12));parent.addView(card,lp);}
+        Set<String> categories=new LinkedHashSet<>();for(int i=0;i<a.length();i++){JSONObject x=a.optJSONObject(i);if(x!=null)categories.add(x.optString("category","Other"));}
+        for(String category:categories){TextView heading=new TextView(this);heading.setText(category.toUpperCase(Locale.ROOT)+"  •  "+countCatalogCategory(a,category)+" files");heading.setTextColor(Color.rgb(80,170,255));heading.setTextSize(18);heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setPadding(dp(3),dp(9),dp(3),dp(9));parent.addView(heading);for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null||!category.equals(item.optString("category","Other")))continue;final int index=i;LinearLayout card=row();card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(16),dp(10),dp(8),dp(10));card.setBackground(rounded(Color.rgb(42,42,42),14));LinearLayout wordBox=new LinearLayout(this);wordBox.setOrientation(LinearLayout.VERTICAL);TextView n=new TextView(this);n.setText(item.optString("name","Catalog "+(i+1)));n.setTextColor(Color.WHITE);n.setTextSize(19);n.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);String mime=item.optString("type","").contains("pdf")?"PDF":"Picture";detail.setText(mime+"  •  words: "+item.optString("keywords",category.toLowerCase(Locale.ROOT)));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);wordBox.addView(n);wordBox.addView(detail);Button more=button("⋮");more.setTextSize(29);more.setTextColor(Color.rgb(25,118,210));more.setBackgroundColor(Color.TRANSPARENT);card.addView(wordBox,new LinearLayout.LayoutParams(0,dp(78),1f));card.addView(more,new LinearLayout.LayoutParams(dp(52),dp(68)));card.setOnClickListener(v->openCatalog(item));more.setOnClickListener(v->showCatalogMenu(more,index,item,dialog));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(102));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}}
     }
+    private int countCatalogCategory(JSONArray a,String category){int count=0;for(int i=0;i<a.length();i++){JSONObject x=a.optJSONObject(i);if(x!=null&&category.equals(x.optString("category","Other")))count++;}return count;}
     private void showCatalogMenu(View anchor,int index,JSONObject item,Dialog parent){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("View");m.getMenu().add("Send on WhatsApp");m.getMenu().add("Rename");m.getMenu().add("Delete");m.setOnMenuItemClickListener(menu->{String x=menu.getTitle().toString();if(x.equals("View"))openCatalog(item);else if(x.startsWith("Send"))shareCatalog(item);else if(x.equals("Rename")){parent.dismiss();renameCatalog(index,item);}else{deleteCatalog(index,item);parent.dismiss();showCatalogScreen();}return true;});m.show();}
     private void openCatalog(JSONObject item){try{Uri uri=Uri.parse(item.optString("uri"));Intent i=new Intent(Intent.ACTION_VIEW);i.setDataAndType(uri,item.optString("type","application/pdf"));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Open Catalog"));}catch(Exception e){toast("Catalog open nahi hua");}}
     private void shareCatalog(JSONObject item){try{Uri uri=Uri.parse(item.optString("uri"));Intent i=new Intent(Intent.ACTION_SEND);i.setType(item.optString("type","application/pdf"));i.putExtra(Intent.EXTRA_STREAM,uri);i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS Catalog");i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Send Catalog"));}}catch(Exception e){toast("Catalog send nahi hua");}}

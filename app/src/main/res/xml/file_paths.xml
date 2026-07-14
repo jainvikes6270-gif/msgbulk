@@ -2,4 +2,5 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path name="reply_images" path="reply_images/" />
     <files-path name="business_files" path="business_files/" />
+    <files-path name="catalogs" path="catalogs/" />
 </paths>

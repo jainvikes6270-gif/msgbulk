@@ -1,6 +1,15 @@
-# LathaBulk v3.15.0 – Recipient Lists + Separate Catalog
+# LathaBulk v3.15.1 – Recipient Search + Category Catalog
 
-## New in v3.15.0
+## New in v3.15.1
+
+- My Recipient Lists is now a large, clearly visible home button.
+- New Recipient List always starts empty; Add Contacts opens the phone contact selector.
+- Recipient lists and contact picker support mobile-number search.
+- Catalog files are saved list-wise by type such as Wires, Switch and DB.
+- Each catalog type accepts PDF/pictures and its own auto-reply words.
+- Removed duplicate top Saved list and Clear controls; Clear All remains in Settings.
+
+## Included from v3.15.0
 1. `My Groups` is now **My Recipient Lists**.
 2. Recipient Lists have a premium dark card screen with contact counts.
 3. Catalog is a completely separate section with its own PDF/image list.

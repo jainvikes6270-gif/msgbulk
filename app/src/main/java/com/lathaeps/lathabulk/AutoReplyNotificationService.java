@@ -51,7 +51,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         String command="rule";
         if(!lk.isEmpty() && lower.contains(lk)){command="ledger";JSONObject customer=findLedgerCustomer(p,title,senderPhone);if(customer==null)return;file=customer.optString("ledger_uri","");if(file.isEmpty())return;type="application/pdf";caption="LATHA EPS Ledger";}
-        else if(matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){command="catalog";JSONObject catalog=findLatestCatalog();if(catalog==null){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}file=catalog.optString("uri","");type=catalog.optString("type","application/pdf");caption="LATHA EPS Catalog";if(file.isEmpty())return;}
+        else if(findCatalogForMessage(lower,ck)!=null||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){command="catalog";JSONObject catalog=findCatalogForMessage(lower,ck);if(catalog==null){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}file=catalog.optString("uri","");type=catalog.optString("type","application/pdf");caption="LATHA EPS "+catalog.optString("category","Catalog")+" • "+catalog.optString("name","Catalog");if(file.isEmpty())return;}
         else {
             boolean matched=false;
             try{
@@ -98,7 +98,18 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return null;
     }
 
-    private JSONObject findLatestCatalog(){try{JSONArray items=new JSONArray(getSharedPreferences("latha_bulk_prefs",MODE_PRIVATE).getString("catalog_items","[]"));return items.length()==0?null:items.optJSONObject(items.length()-1);}catch(Exception ignored){return null;}}
+    private JSONObject findCatalogForMessage(String message,String genericKeyword){
+        try{
+            JSONArray items=new JSONArray(getSharedPreferences("latha_bulk_prefs",MODE_PRIVATE).getString("catalog_items","[]"));
+            for(int i=items.length()-1;i>=0;i--){JSONObject item=items.optJSONObject(i);if(item==null)continue;String terms=item.optString("keywords","")+","+item.optString("category","");for(String term:terms.split("[,;|]"))if(keywordMatches(message,term))return item;}
+            if(matchesBusinessKeyword(message,genericKeyword,"catalog","catalogue","catlog"))return items.length()==0?null:items.optJSONObject(items.length()-1);
+        }catch(Exception ignored){}
+        return null;
+    }
+    private boolean keywordMatches(String message,String raw){
+        String term=raw==null?"":raw.trim().toLowerCase(Locale.ROOT);if(term.length()<2)return false;
+        String source=" "+message.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim()+" ";String target=" "+term.replaceAll("[^a-z0-9]+"," ").trim()+" ";return !target.trim().isEmpty()&&source.contains(target);
+    }
 
     private void sendRemoteReply(Notification n,String message){
         if(n.actions==null) return;
