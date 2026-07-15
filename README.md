@@ -1,13 +1,9 @@
-# LathaBulk v3.21.5 – Catalog, Gallery & Ledger Workflow Fix
+# LathaBulk v3.21.5 – Ledger + CATLOG Workflow Fix
 
-## v3.21.5 fixes
-
-- Accessibility and Notification Access buttons are now side-by-side on the main screen with live ON/OFF status.
-- Catalog PDF/image selection uses the phone Gallery/Albums/Files picker with multi-select and durable file access.
-- Catalog auto-reply can search and select the intended WhatsApp recipient when WhatsApp opens its "Send to" window.
-- Catalog workflow timeout increased so it does not stop while WhatsApp is opening or selecting a recipient.
-- Master Ledger parser now recognizes Tel, Telephone, Mobile, Mob, Phone, WhatsApp and Contact labels.
-- An invalid Master Ledger with no recognised customer phone numbers is rejected instead of silently replacing the working customer list.
+- Ledger parser now recognises Mobile, Mob, Phone, Telephone, Tel, WhatsApp and Contact labels.
+- CATLOG resolves the notification sender through Contacts or the verified Ledger customer map, preventing the WhatsApp recipient-picker stop.
+- One and multiple CATLOG files share the same reliable send queue.
+- Phone Gallery/Albums multi-select is enabled for Catalog pictures.
 
 - App automatically checks for a newer version once every 24 hours.
 - **Settings → Check for App Update** is also available for a manual check.
@@ -175,7 +171,7 @@
 ## v3.16.3 changes
 
 - Fixed GitHub Actions Java compilation failure caused by duplicate `last10Digits()` method.
-- Increased Android `versionCode` to 28 for clean update installation.
+- Android `versionCode` is 52 for clean update installation over v3.21.4.
 
 ## v3.16.2 changes
 
