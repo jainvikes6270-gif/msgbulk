@@ -1006,6 +1006,7 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
         addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS SMART").setPositiveButton("OK",null).show());
+        addSettingsButton(list,"↗  Share App APK","Direct APK share karein • GitHub username ya source code nahi dikhega",v->shareApp());
         addSettingsButton(list,"₹  Subscription & Payment",SubscriptionManager.statusText(this),v->startActivity(new Intent(this,SubscriptionActivity.class)));
         addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
         addSettingsButton(list,"☀  Screen-off Auto Send","Keeps screen awake while bulk sending",v->showScreenOffHelp());
@@ -1086,7 +1087,27 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.0";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.2";}}
+
+    private void shareApp(){
+        try{
+            File folder=new File(getCacheDir(),"shared_apk");
+            if(!folder.exists()&&!folder.mkdirs())throw new Exception("Share folder unavailable");
+            File apk=new File(folder,"LATHAEPS_Smart_v"+appVersion()+".apk");
+            try(InputStream in=new FileInputStream(getApplicationInfo().sourceDir);OutputStream out=new FileOutputStream(apk)){
+                byte[] buffer=new byte[64*1024];int read;
+                while((read=in.read(buffer))!=-1)out.write(buffer,0,read);
+            }
+            Uri uri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",apk);
+            Intent share=new Intent(Intent.ACTION_SEND);
+            share.setType("application/vnd.android.package-archive");
+            share.putExtra(Intent.EXTRA_STREAM,uri);
+            share.putExtra(Intent.EXTRA_TEXT,"LATHAEPS Smart App v"+appVersion());
+            share.setClipData(android.content.ClipData.newRawUri("LATHAEPS Smart APK",uri));
+            share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(share,"Share LATHAEPS Smart App APK"));
+        }catch(Exception e){toast("APK share nahi hua: "+e.getMessage());}
+    }
     private void showScreenOffHelp(){
         new AlertDialog.Builder(this).setTitle("Screen-off Auto Send")
             .setMessage("Auto Send screen ko awake rakhega. Phone pehle se lock ho to screen ON hogi. Swipe lock automatically dismiss hoga.\n\nPIN, pattern ya fingerprint lock par Android unlock prompt dikhayega; unlock karte hi pending Bulk/Catalog queue automatically continue hogi. Security lock ko app bypass nahi kar sakta.")

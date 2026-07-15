@@ -1,6 +1,10 @@
-# LathaBulk v3.23.0 – Paid Plans + Admin Activation
+# LathaBulk v3.23.2 – Direct APK Share + Paid Plans + Admin Activation
 
-## v3.23.0 subscription system
+## v3.23.2
+
+- Settings me **Share App APK** option added. Installed APK direct share hota hai; GitHub username aur source code nahi dikhte.
+
+## Subscription system
 
 - 12-day free trial starts on first launch after install/update.
 - ₹800 yearly plan opens the installed UPI apps and pays to `jainvikes6270@oksbi`.
