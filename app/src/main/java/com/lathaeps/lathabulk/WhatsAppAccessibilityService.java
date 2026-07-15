@@ -56,7 +56,9 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             }
             int min=p.getInt(MainActivity.AUTO_MIN_DELAY,3);int max=p.getInt(MainActivity.AUTO_MAX_DELAY,7);if(max<min)max=min;
             int delay=(min+new Random().nextInt(max-min+1))*1000;
-            handler.postDelayed(this::advanceQueue, delay);
+            int sentIndex=p.getInt(MainActivity.AUTO_INDEX,0);
+            String queueToken=p.getString(MainActivity.AUTO_QUEUE_TOKEN,"");
+            handler.postDelayed(()->advanceQueue(sentIndex,queueToken), delay);
         }
     }
 
@@ -82,9 +84,12 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         return null;
     }
 
-    private void advanceQueue() {
+    private void advanceQueue(int sentIndex,String queueToken) {
         SharedPreferences p = getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE);
-        int next = p.getInt(MainActivity.AUTO_INDEX, 0) + 1;
+        if(!queueToken.equals(p.getString(MainActivity.AUTO_QUEUE_TOKEN,""))){clickLocked=false;return;}
+        int stored=p.getInt(MainActivity.AUTO_INDEX,0);
+        if(stored!=sentIndex){clickLocked=false;return;}
+        int next=sentIndex+1;
         p.edit().putInt(MainActivity.AUTO_INDEX, next).apply();
         try {
             JSONArray a = new JSONArray(p.getString(MainActivity.AUTO_NUMBERS, "[]"));
@@ -92,7 +97,8 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 String old=p.getString(MainActivity.AUTO_HISTORY,"");
                 String stamp=new SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new Date());
                 String entry=stamp+" • Completed "+a.length()+" contacts";
-                p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).remove(MainActivity.AUTO_IMAGE_URI).remove(MainActivity.AUTO_IMAGE_TYPE).putString(MainActivity.AUTO_HISTORY,entry+(old.isEmpty()?"":"\n"+old)).apply();
+                p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).remove(MainActivity.AUTO_IMAGE_URI).remove(MainActivity.AUTO_IMAGE_TYPE).remove(MainActivity.AUTO_MESSAGES).remove(MainActivity.AUTO_QUEUE_TOKEN).putString(MainActivity.AUTO_HISTORY,entry+(old.isEmpty()?"":"\n"+old)).apply();
+                MainActivity.updateProgressNotification(this,a.length(),a.length(),"All contacts completed",true);
                 releaseQueueWakeLock();
                 clickLocked = false;
                 Intent done = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -134,7 +140,10 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             }
             String number = a.getString(index);
             String message = p.getString(MainActivity.AUTO_MESSAGE, "");
-            try { JSONArray names=new JSONArray(p.getString(MainActivity.AUTO_NAMES,"[]")); String name=index<names.length()?names.getString(index):""; message=message.replace("{Name}",name).replace("{name}",name); } catch(Exception ignored) {}
+            String progressName=number;
+            try {JSONArray messages=new JSONArray(p.getString(MainActivity.AUTO_MESSAGES,"[]"));if(index<messages.length()&&!messages.optString(index,"").isEmpty())message=messages.optString(index,message);}catch(Exception ignored){}
+            try { JSONArray names=new JSONArray(p.getString(MainActivity.AUTO_NAMES,"[]")); String name=index<names.length()?names.getString(index):"";progressName=name.isEmpty()?number:name; message=message.replace("{Name}",name).replace("{name}",name); } catch(Exception ignored) {}
+            MainActivity.updateProgressNotification(context,index+1,a.length(),progressName+" • +"+number,false);
             String image=p.getString(MainActivity.AUTO_IMAGE_URI,"");
             if(!image.isEmpty()){
                 Uri uri=Uri.parse(image);Intent i=new Intent(Intent.ACTION_SEND);i.setType(p.getString(MainActivity.AUTO_IMAGE_TYPE,"image/jpeg"));i.putExtra(Intent.EXTRA_STREAM,uri);if(!message.isEmpty())i.putExtra(Intent.EXTRA_TEXT,message);i.setClipData(ClipData.newRawUri("recipient image",uri));i.putExtra("jid",number.replaceAll("[^0-9]","")+"@s.whatsapp.net");i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);

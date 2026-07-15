@@ -13,7 +13,7 @@ public class AutoSendCancelReceiver extends BroadcastReceiver {
 
     @Override public void onReceive(Context context,Intent intent){
         if(intent==null||!ACTION_CANCEL.equals(intent.getAction()))return;
-        context.getSharedPreferences(MainActivity.AUTO_PREFS,Context.MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_RUNNING,false).remove(MainActivity.AUTO_IMAGE_URI).remove(MainActivity.AUTO_IMAGE_TYPE).apply();
+        context.getSharedPreferences(MainActivity.AUTO_PREFS,Context.MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_RUNNING,false).remove(MainActivity.AUTO_IMAGE_URI).remove(MainActivity.AUTO_IMAGE_TYPE).remove(MainActivity.AUTO_MESSAGES).remove(MainActivity.AUTO_QUEUE_TOKEN).apply();
         SharedPreferences reply=context.getSharedPreferences(AutoReplyNotificationService.PREFS,Context.MODE_PRIVATE);
         reply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false)
             .remove(AutoReplyNotificationService.CATALOG_QUEUE).remove(AutoReplyNotificationService.CATALOG_QUEUE_INDEX)

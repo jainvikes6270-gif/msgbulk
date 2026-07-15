@@ -106,6 +106,7 @@ public class MainActivity extends Activity {
     static final String AUTO_PREFS = "latha_auto_send";
     static final String AUTO_NUMBERS = "numbers";
     static final String AUTO_MESSAGE = "message";
+    static final String AUTO_MESSAGES = "messages_by_recipient";
     static final String AUTO_INDEX = "index";
     static final String AUTO_RUNNING = "running";
     static final String AUTO_NAMES = "names";
@@ -115,6 +116,7 @@ public class MainActivity extends Activity {
     static final String AUTO_FAILED = "failed";
     static final String AUTO_IMAGE_URI = "send_image_uri";
     static final String AUTO_IMAGE_TYPE = "send_image_type";
+    static final String AUTO_QUEUE_TOKEN = "queue_token";
     private static final String SCHEDULE_AT_KEY = "schedule_start_at";
     private static final String DARK_KEY = "dark_mode";
     private static final String SAVED_CONTACTS_KEY = "saved_contacts";
@@ -125,6 +127,11 @@ public class MainActivity extends Activity {
     private static final String MESSAGE_FOOTER_KEY = "message_footer";
     private static final String MESSAGE_TEMPLATES_KEY = "message_templates";
     private static final String MESSAGE_DRAFT_KEY = "message_draft";
+    private static final String DO_NOT_SEND_KEY = "do_not_send_numbers";
+    private static final String LIST_TEMPLATES_KEY = "recipient_list_templates";
+    private static final String PAYMENT_REMINDERS_KEY = "payment_reminders";
+    private static final String PAYMENT_TEMPLATE_KEY = "payment_reminder_template";
+    private static final String PAYMENT_HISTORY_KEY = "payment_reminder_history";
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
     private final List<ContactItem> allContacts = new ArrayList<>();
@@ -136,7 +143,7 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView statusText, pdfText, miniProgress, ledgerFileNameText;
     private EditText messageBox, searchBox;
-    private Button sendButton, accessibilityButton, editGroupButton, contactsButton, scheduleButton;
+    private Button sendButton, accessibilityButton, editGroupButton, contactsButton, scheduleButton, selectedReviewButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
     private String pendingCatalogName = "";
@@ -198,7 +205,7 @@ public class MainActivity extends Activity {
         if(sendButton!=null)sendButton.setText(running?"STOP AUTO SENDING":"AUTO SEND TO SELECTED CONTACTS");
         if(miniProgress!=null&&running){
             int i=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getInt(AUTO_INDEX,0);
-            miniProgress.setText("Sending contact "+(i+1));
+            try{int total=new JSONArray(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getString(AUTO_NUMBERS,"[]")).length();miniProgress.setText("Sending "+Math.min(i+1,total)+" / "+total);}catch(Exception e){miniProgress.setText("Sending contact "+(i+1));}
         }
         restoreScheduledTimer();
     }
@@ -227,6 +234,24 @@ public class MainActivity extends Activity {
         root.addView(tools);
         contactsButton.setOnClickListener(v -> toggleContacts());
         selectAll.setOnClickListener(v -> selectAllVisible());
+
+        LinearLayout selectionRow = row();
+        selectedReviewButton = button("Review Selected (0)");
+        selectedReviewButton.setTypeface(Typeface.DEFAULT_BOLD);
+        selectedReviewButton.setTextColor(Color.rgb(20,75,150));
+        Button cancelSelection = button("Clear Selection");
+        cancelSelection.setTextColor(Color.rgb(175,35,35));
+        selectionRow.addView(selectedReviewButton, weighted(1.35f, 39));
+        selectionRow.addView(cancelSelection, weighted(1f, 39));
+        root.addView(selectionRow);
+        selectedReviewButton.setOnClickListener(v -> showSelectedContactsDialog());
+        cancelSelection.setOnClickListener(v -> {
+            if(selectedNumbers.isEmpty()){toast("No contacts selected");return;}
+            new AlertDialog.Builder(this).setTitle("Cancel contact selection?")
+                    .setMessage(selectedNumbers.size()+" selected contacts remove honge.")
+                    .setPositiveButton("Clear All",(d,w)->clearSelection())
+                    .setNegativeButton("Keep",null).show();
+        });
 
         LinearLayout featureRow = row();
         Button csv = button("Import CSV");
@@ -339,15 +364,23 @@ public class MainActivity extends Activity {
         templates.setOnClickListener(v->showTemplatesDialog());
         saveTemplate.setOnClickListener(v->showSaveTemplateDialog());
 
+        LinearLayout sendRow=row();
+        Button testSendButton=button("TEST SEND • 1 CONTACT");
+        testSendButton.setTextSize(12);
+        testSendButton.setTypeface(Typeface.DEFAULT_BOLD);
+        testSendButton.setTextColor(Color.rgb(25,75,155));
         sendButton = button("AUTO SEND TO SELECTED CONTACTS");
         sendButton.setTextSize(15);
         sendButton.setTypeface(Typeface.DEFAULT_BOLD);
         sendButton.setTextColor(Color.WHITE);
         sendButton.setBackgroundColor(Color.rgb(25,110,60));
+        testSendButton.setOnClickListener(v -> testSendOneContact());
         sendButton.setOnClickListener(v -> startOrStopAutoSend());
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, dp(52));
+        sendRow.addView(testSendButton,weighted(1f,52));
+        sendRow.addView(sendButton,weighted(1.45f,52));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, dp(54));
         slp.setMargins(0, dp(3), 0, dp(3));
-        root.addView(sendButton, slp);
+        root.addView(sendRow, slp);
 
         miniProgress = new TextView(this);
         miniProgress.setText("Ready");
@@ -474,10 +507,42 @@ public class MainActivity extends Activity {
         for(int i=0;i<visibleContacts.size();i++)listView.setItemChecked(i,selectedNumbers.contains(visibleContacts.get(i).number));
         statusText.setText("Selected: "+selectedNumbers.size()+" | Showing: "+visibleContacts.size()+" / "+allContacts.size()+
                 (activeGroup.isEmpty()?"":" | "+activeGroup));
+        if(selectedReviewButton!=null){
+            selectedReviewButton.setText("Review Selected ("+selectedNumbers.size()+")");
+            selectedReviewButton.setEnabled(!selectedNumbers.isEmpty());
+        }
         editGroupButton.setEnabled(!activeGroup.isEmpty());
     }
-    private void selectAllVisible(){for(ContactItem i:visibleContacts)selectedNumbers.add(i.number);refreshChecks();}
-    private void clearSelection(){selectedNumbers.clear();queue.clear();queueIndex=0;activeGroup="";sendButton.setText("AUTO SEND TO SELECTED CONTACTS");miniProgress.setText("Ready");cancelProgressNotification();refreshChecks();}
+    private void selectAllVisible(){for(ContactItem i:visibleContacts)selectedNumbers.add(i.number);saveSelectedContacts();refreshChecks();}
+    private void clearSelection(){selectedNumbers.clear();queue.clear();queueIndex=0;activeGroup="";saveSelectedContacts();sendButton.setText("AUTO SEND TO SELECTED CONTACTS");miniProgress.setText("Ready");cancelProgressNotification();refreshChecks();toast("Contact selection cleared");}
+
+    private void showSelectedContactsDialog(){
+        if(selectedNumbers.isEmpty()){toast("No contacts selected");return;}
+        List<String> numbers=new ArrayList<>(selectedNumbers);
+        String[] labels=new String[numbers.size()];
+        boolean[] checked=new boolean[numbers.size()];
+        Set<String> working=new LinkedHashSet<>(selectedNumbers);
+        for(int i=0;i<numbers.size();i++){
+            String number=numbers.get(i);
+            labels[i]=findName(number)+"  •  +"+number;
+            checked[i]=true;
+        }
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Selected Contacts • "+numbers.size())
+                .setMessage("Galat contact ko uncheck karke Save Changes dabayein.")
+                .setMultiChoiceItems(labels,checked,(d,which,isChecked)->{
+                    String number=numbers.get(which);
+                    if(isChecked)working.add(number);else working.remove(number);
+                })
+                .setPositiveButton("Save Changes",(d,w)->{
+                    selectedNumbers.clear();selectedNumbers.addAll(working);
+                    saveSelectedContacts();refreshChecks();
+                    toast(selectedNumbers.size()+" contacts selected");
+                })
+                .setNeutralButton("Clear All",(d,w)->clearSelection())
+                .setNegativeButton("Cancel",null).create();
+        dialog.show();
+    }
 
     private Map<String,List<String>> readGroups(){
         Map<String,List<String>> groups=new LinkedHashMap<>();
@@ -548,19 +613,21 @@ public class MainActivity extends Activity {
         directSendImageUri=null;LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
         TextView count=new TextView(this);count.setText(listName+" • "+numbers.size()+" recipients");count.setTextSize(16);count.setTypeface(Typeface.DEFAULT_BOLD);count.setTextColor(Color.rgb(20,90,65));count.setPadding(0,dp(4),0,dp(6));
         EditText message=new EditText(this);message.setHint("Type message / caption");message.setMinLines(3);message.setMaxLines(6);message.setGravity(Gravity.TOP);message.setText(getSharedPreferences(PREFS,MODE_PRIVATE).getString(MESSAGE_DRAFT_KEY,""));
+        JSONArray listTemplates=templatesForList(listName);Spinner templatePicker=null;if(listTemplates.length()>0){List<String> templateNames=new ArrayList<>();templateNames.add("Choose Recipient List Template");for(int i=0;i<listTemplates.length();i++){JSONObject o=listTemplates.optJSONObject(i);templateNames.add(o==null?"Template "+(i+1):o.optString("name","Template "+(i+1)));}templatePicker=new Spinner(this);templatePicker.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,templateNames));final Spinner picker=templatePicker;picker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){if(pos>0){JSONObject o=listTemplates.optJSONObject(pos-1);if(o!=null)message.setText(o.optString("body",""));}}public void onNothingSelected(android.widget.AdapterView<?> p){}});}
         directSendPreview=new ImageView(this);directSendPreview.setAdjustViewBounds(true);directSendPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);directSendPreview.setVisibility(View.GONE);
-        directSendImageButton=button("CHOOSE & EDIT IMAGE");directSendImageButton.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("image/*");startActivityForResult(Intent.createChooser(i,"Choose image"),PICK_DIRECT_IMAGE);});
-        TextView help=new TextView(this);help.setText("Image optional hai. Editor me photo ke upar text, sticker/emoji, color, size aur position set kar sakte hain.");help.setTextSize(12);help.setPadding(0,dp(7),0,0);
-        box.addView(count);box.addView(message);box.addView(directSendPreview,new LinearLayout.LayoutParams(-1,dp(190)));box.addView(directSendImageButton,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(help);
+        directSendImageButton=button("SELECT IMAGE FROM PHONE GALLERY");directSendImageButton.setOnClickListener(v->openPhoneGallery(PICK_DIRECT_IMAGE));
+        TextView help=new TextView(this);help.setText("Phone Gallery / Albums se image select karein. Select hone ke baad editor open hoga; text, sticker/emoji, color, size aur position optional hain.");help.setTextSize(12);help.setPadding(0,dp(7),0,0);
+        box.addView(count);if(templatePicker!=null)box.addView(templatePicker,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(message);box.addView(directSendPreview,new LinearLayout.LayoutParams(-1,dp(190)));box.addView(directSendImageButton,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(help);
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Send from Recipient List").setView(box).setPositiveButton("START AUTO SEND",null).setNegativeButton("Cancel",null).create();
         d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String text=message.getText().toString().trim();if(numbers.isEmpty()){toast("Recipient list empty");return;}if(text.isEmpty()&&directSendImageUri==null){message.setError("Type message or choose image");return;}if(!isAccessibilityServiceEnabled()){toast("Pehle Accessibility ON karein");try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}return;}startRecipientMediaQueue(listName,numbers,text,directSendImageUri);d.dismiss();}));d.show();
     }
 
     private void startRecipientMediaQueue(String listName,List<String> numbers,String message,Uri image){
-        JSONArray nums=new JSONArray(),names=new JSONArray();for(String n:numbers){nums.put(n);names.put(findName(n));}
-        SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);SharedPreferences.Editor ed=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message).putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7)).putBoolean(AUTO_RUNNING,true);
+        List<String> safeNumbers=new ArrayList<>();Set<String> seen=new LinkedHashSet<>();for(String raw:numbers){String n=normalize(raw);if(!n.isEmpty()&&!isDoNotSend(n)&&seen.add(n))safeNumbers.add(n);}if(safeNumbers.isEmpty()){toast("All contacts invalid or in Do Not Send List");return;}int skipped=numbers.size()-safeNumbers.size();
+        JSONArray nums=new JSONArray(),names=new JSONArray();for(String n:safeNumbers){nums.put(n);names.put(findName(n));}
+        SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);SharedPreferences.Editor ed=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message).remove(AUTO_MESSAGES).putString(AUTO_QUEUE_TOKEN,String.valueOf(System.currentTimeMillis())).putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7)).putBoolean(AUTO_RUNNING,true);
         if(image==null)ed.remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE);else ed.putString(AUTO_IMAGE_URI,image.toString()).putString(AUTO_IMAGE_TYPE,"image/jpeg");ed.apply();
-        selectedNumbers.clear();selectedNumbers.addAll(numbers);activeGroup=listName;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(sendButton!=null)sendButton.setText("STOP AUTO SENDING");if(miniProgress!=null)miniProgress.setText((image==null?"Text":"Image + Text")+" • Starting 1 / "+numbers.size());showProgressNotification(0,numbers.size(),listName+" • "+(image==null?"Text":"Image + Text"));WhatsAppAccessibilityService.openCurrentChat(this);
+        selectedNumbers.clear();selectedNumbers.addAll(safeNumbers);activeGroup=listName;getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(sendButton!=null)sendButton.setText("STOP AUTO SENDING");if(miniProgress!=null)miniProgress.setText((image==null?"Text":"Image + Text")+" • Starting 1 / "+safeNumbers.size()+(skipped>0?" • "+skipped+" blocked/skipped":""));showProgressNotification(0,safeNumbers.size(),listName+" • "+(image==null?"Text":"Image + Text"));WhatsAppAccessibilityService.openCurrentChat(this);
     }
 
     private void showDirectImageEditor(Uri source){
@@ -655,7 +722,35 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    private void startOrStopAutoSend(){
+    private void startOrStopAutoSend(){startOrStopAutoSend(true);}
+
+    private void testSendOneContact(){
+        hideKeyboard();
+        if(getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false)){toast("Auto Send already running");return;}
+        if(!isAccessibilityServiceEnabled()){
+            toast("Pehle Accessibility ON karein");
+            try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}
+            return;
+        }
+        String body=messageBox.getText().toString().trim();
+        if(body.isEmpty()){toast("Type a message first");return;}
+        String testNumber="";
+        for(String raw:selectedNumbers){String n=normalize(raw);if(!n.isEmpty()&&!isDoNotSend(n)){testNumber=n;break;}}
+        if(testNumber.isEmpty()){toast("Select at least one valid contact");return;}
+        String finalNumber=testNumber;
+        String message=buildFinalMessage();
+        String name=findName(finalNumber);
+        new AlertDialog.Builder(this).setTitle("Test Send • 1 Contact")
+                .setMessage("Only this contact will receive the test:\n\n"+name+"\n+"+finalNumber+"\n\nBulk queue will not start.")
+                .setPositiveButton("SEND TEST",(d,w)->{
+                    List<String> one=new ArrayList<>();one.add(finalNumber);
+                    beginTextAutoSend(one,message,0);
+                    miniProgress.setText("TEST SEND • "+name);
+                })
+                .setNegativeButton("Cancel",null).show();
+    }
+
+    private void startOrStopAutoSend(boolean askConfirmation){
         hideKeyboard();
         boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
         if(running){
@@ -671,26 +766,56 @@ public class MainActivity extends Activity {
         String message=buildFinalMessage();
         if(selectedNumbers.isEmpty()){toast("Select contacts or open Recipient List");return;}
         if(body.isEmpty()){toast("Type a message first");return;}
+        LinkedHashSet<String> validSet=new LinkedHashSet<>();
+        for(String raw:selectedNumbers){String n=normalize(raw);if(!n.isEmpty()&&!isDoNotSend(n))validSet.add(n);}
+        List<String> validNumbers=new ArrayList<>(validSet);
+        int skipped=selectedNumbers.size()-validNumbers.size();
+        if(validNumbers.isEmpty()){toast("No valid mobile numbers selected");return;}
+        if(askConfirmation){showSendConfirmation(validNumbers,message,skipped);return;}
+        beginTextAutoSend(validNumbers,message,skipped);
+    }
+
+    private void showSendConfirmation(List<String> validNumbers,String message,int skipped){
+        StringBuilder preview=new StringBuilder();
+        preview.append("Recipients: ").append(validNumbers.size());
+        if(skipped>0)preview.append("\nInvalid / duplicate / Do Not Send skipped: ").append(skipped);
+        preview.append("\n\nSending to:\n");
+        int limit=Math.min(5,validNumbers.size());
+        for(int i=0;i<limit;i++)preview.append("• ").append(findName(validNumbers.get(i))).append("  +").append(validNumbers.get(i)).append("\n");
+        if(validNumbers.size()>limit)preview.append("• +").append(validNumbers.size()-limit).append(" more contacts\n");
+        String clean=message.trim();
+        if(clean.length()>240)clean=clean.substring(0,240)+"…";
+        preview.append("\nMessage preview:\n").append(clean);
+        new AlertDialog.Builder(this).setTitle("Confirm Auto Send")
+                .setMessage(preview.toString())
+                .setPositiveButton("START SEND",(d,w)->beginTextAutoSend(validNumbers,message,skipped))
+                .setNeutralButton("Review Contacts",(d,w)->showSelectedContactsDialog())
+                .setNegativeButton("Cancel",null).show();
+    }
+
+    private void beginTextAutoSend(List<String> validNumbers,String message,int skipped){
         JSONArray nums=new JSONArray();
         JSONArray names=new JSONArray();
-        for(String n:selectedNumbers){
+        for(String n:validNumbers){
             nums.put(n);
             names.put(findName(n));
         }
         SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);
         getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit()
                 .putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message)
+                .remove(AUTO_MESSAGES)
+                .putString(AUTO_QUEUE_TOKEN,String.valueOf(System.currentTimeMillis()))
                 .putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7))
                 .putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE).putBoolean(AUTO_RUNNING,true).apply();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sendButton.setText("STOP AUTO SENDING");
-        miniProgress.setText("Screen awake ON • Starting 1 / "+selectedNumbers.size());
-        showProgressNotification(0,selectedNumbers.size(),"Starting");
+        miniProgress.setText("Screen awake ON • Starting 1 / "+validNumbers.size()+(skipped>0?" • "+skipped+" skipped":""));
+        showProgressNotification(0,validNumbers.size(),"Starting");
         WhatsAppAccessibilityService.openCurrentChat(this);
     }
 
     private void stopAutoSend(String label){
-        getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(AUTO_RUNNING,false).remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE).apply();
+        getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(AUTO_RUNNING,false).remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE).remove(AUTO_MESSAGES).remove(AUTO_QUEUE_TOKEN).apply();
         WhatsAppAccessibilityService.releaseQueueWakeLock();
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sendButton.setText("AUTO SEND TO SELECTED CONTACTS");
@@ -718,11 +843,12 @@ public class MainActivity extends Activity {
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,buildFinalMessage());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
     private void createNotificationChannel(){if(Build.VERSION.SDK_INT>=26){NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Sending progress",NotificationManager.IMPORTANCE_LOW);c.setDescription("Compact queue progress");c.setSound(null,null);getSystemService(NotificationManager.class).createNotificationChannel(c);}}
-    private void showProgressNotification(int current,int total,String contact){Intent launch=new Intent(this,MainActivity.class);PendingIntent p=PendingIntent.getActivity(this,0,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        Intent cancelIntent=new Intent(this,AutoSendCancelReceiver.class).setAction(AutoSendCancelReceiver.ACTION_CANCEL);PendingIntent cancel=PendingIntent.getBroadcast(this,511,cancelIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        NotificationCompat.Builder b=new NotificationCompat.Builder(this,CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_upload).setContentTitle(current>=total?"Latha Bulk completed":"Sending "+current+"/"+total).setContentText(contact).setOnlyAlertOnce(true).setOngoing(current<total).setPriority(NotificationCompat.PRIORITY_LOW).setProgress(total,Math.min(current,total),false).setContentIntent(p);
+    private void showProgressNotification(int current,int total,String contact){updateProgressNotification(this,current,total,contact,current>=total);}
+    static void updateProgressNotification(Context context,int current,int total,String contact,boolean completed){Intent launch=new Intent(context,MainActivity.class);PendingIntent p=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Intent cancelIntent=new Intent(context,AutoSendCancelReceiver.class).setAction(AutoSendCancelReceiver.ACTION_CANCEL);PendingIntent cancel=PendingIntent.getBroadcast(context,511,cancelIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        int safeTotal=Math.max(1,total),safeCurrent=Math.max(0,Math.min(current,safeTotal));NotificationCompat.Builder b=new NotificationCompat.Builder(context,CHANNEL_ID).setSmallIcon(completed?android.R.drawable.stat_sys_upload_done:android.R.drawable.stat_sys_upload).setContentTitle(completed?"Completed "+total+"/"+total:"Sending "+safeCurrent+"/"+total).setContentText(contact).setOnlyAlertOnce(true).setOngoing(!completed).setPriority(NotificationCompat.PRIORITY_LOW).setProgress(safeTotal,safeCurrent,false).setContentIntent(p).setAutoCancel(completed);
         if(current<total)b.addAction(android.R.drawable.ic_menu_close_clear_cancel,"CANCEL AUTO SEND",cancel);
-        ((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID,b.build());}
+        NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);if(nm!=null)nm.notify(NOTIFICATION_ID,b.build());}
     private void cancelProgressNotification(){((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);}
 
     private boolean isDark(){return getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(DARK_KEY,false);}
@@ -802,6 +928,7 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
         addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS").setPositiveButton("OK",null).show());
+        addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
         addSettingsButton(list,"☀  Screen-off Auto Send","Keeps screen awake while bulk sending",v->showScreenOffHelp());
         addSettingsButton(list,"✉  Contact Us","lathaeps@gmail.com",v->contactSupport());
         addSettingsButton(list,"🔒  Login & Forgot PIN","Change PIN, recovery word, login ON/OFF",v->showLoginSettings());
@@ -814,7 +941,74 @@ public class MainActivity extends Activity {
     }
 
     private void addSettingsButton(LinearLayout parent,String title,String subtitle,View.OnClickListener click){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(18),dp(13),dp(14),dp(12));card.setBackground(rounded(isDark()?Color.rgb(45,50,54):Color.WHITE,18));TextView a=new TextView(this);a.setText(title);a.setTextSize(18);a.setTypeface(Typeface.DEFAULT_BOLD);a.setTextColor(isDark()?Color.WHITE:Color.rgb(10,65,59));TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(isDark()?Color.LTGRAY:Color.DKGRAY);b.setPadding(0,dp(4),0,0);card.addView(a);card.addView(b);card.setOnClickListener(click);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.16.8";}}
+
+    private void showContactSettingsScreen(){
+        Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(16),dp(12),dp(16),dp(16));page.setBackgroundColor(isDark()?Color.rgb(25,28,31):Color.rgb(241,248,247));
+        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Contact Settings");title.setTextColor(Color.WHITE);title.setTextSize(23);title.setTypeface(Typeface.DEFAULT_BOLD);head.setPadding(dp(6),0,dp(8),0);head.setBackground(rounded(Color.rgb(25,83,155),18));head.addView(back,new LinearLayout.LayoutParams(dp(48),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);back.setOnClickListener(v->{d.dismiss();showSettingsScreen();});
+        LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(16),0,0);page.addView(list,new LinearLayout.LayoutParams(-1,0,1f));
+        addSettingsButton(list,"1  Pause / Resume / Skip","Control the saved Auto Send queue",v->showQueueControls());
+        addSettingsButton(list,"2  Do Not Send List",readDoNotSendNumbers().size()+" blocked numbers",v->showDoNotSendScreen());
+        addSettingsButton(list,"3  Recipient List Templates","Separate message templates for every list",v->showRecipientListTemplatesScreen());
+        d.setContentView(page);d.show();
+    }
+
+    private String queueStatusText(){
+        try{SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);JSONArray nums=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));JSONArray names=new JSONArray(p.getString(AUTO_NAMES,"[]"));int index=p.getInt(AUTO_INDEX,0);boolean running=p.getBoolean(AUTO_RUNNING,false);if(nums.length()==0||index>=nums.length())return "No saved sending queue";String number=nums.optString(index,"");String name=index<names.length()?names.optString(index,findName(number)):findName(number);return (running?"RUNNING":"PAUSED")+"\nCurrent: "+(index+1)+" / "+nums.length()+"\n"+name+"  +"+number;}catch(Exception e){return "No saved sending queue";}
+    }
+
+    private void showQueueControls(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);TextView status=new TextView(this);status.setTextSize(17);status.setTypeface(Typeface.DEFAULT_BOLD);status.setPadding(dp(8),dp(12),dp(8),dp(16));box.addView(status);
+        LinearLayout row=row();Button pause=button("PAUSE");Button resume=button("RESUME");pause.setTextColor(Color.rgb(180,80,0));resume.setTextColor(Color.rgb(0,120,60));row.addView(pause,weighted(1f,48));row.addView(resume,weighted(1f,48));box.addView(row);Button skip=button("SKIP CURRENT CONTACT");skip.setTextColor(Color.rgb(175,35,35));box.addView(skip,new LinearLayout.LayoutParams(-1,dp(48)));
+        Runnable refresh=()->status.setText(queueStatusText());refresh.run();
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Sending Queue Controls").setView(box).setNegativeButton("Close",null).create();
+        pause.setOnClickListener(v->{pauseCurrentQueue();refresh.run();});resume.setOnClickListener(v->{resumeQueue();refresh.run();});skip.setOnClickListener(v->{skipCurrentQueueContact();refresh.run();});d.show();
+    }
+
+    private void pauseCurrentQueue(){
+        SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);if(!p.getBoolean(AUTO_RUNNING,false)){toast("Queue already paused");return;}p.edit().putBoolean(AUTO_RUNNING,false).apply();WhatsAppAccessibilityService.releaseQueueWakeLock();getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(sendButton!=null)sendButton.setText("AUTO SEND TO SELECTED CONTACTS");if(miniProgress!=null)miniProgress.setText("Queue paused • Resume from Contact Settings");cancelProgressNotification();toast("Sending queue paused");
+    }
+
+    private void skipCurrentQueueContact(){
+        try{SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);JSONArray nums=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int index=p.getInt(AUTO_INDEX,0);if(nums.length()==0||index>=nums.length()){toast("No current contact to skip");return;}boolean running=p.getBoolean(AUTO_RUNNING,false);String skipped=nums.optString(index,"");int next=index+1;if(next>=nums.length()){p.edit().putInt(AUTO_INDEX,next).putBoolean(AUTO_RUNNING,false).apply();WhatsAppAccessibilityService.releaseQueueWakeLock();cancelProgressNotification();toast("Skipped +"+skipped+" • Queue finished");return;}p.edit().putInt(AUTO_INDEX,next).apply();toast("Skipped +"+skipped);if(running)WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("Queue skip failed");}
+    }
+
+    private Set<String> readDoNotSendNumbers(){
+        Set<String> out=new LinkedHashSet<>();try{JSONArray a=new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(DO_NOT_SEND_KEY,"[]"));for(int i=0;i<a.length();i++){String n=normalize(a.optString(i,""));if(!n.isEmpty())out.add(n);}}catch(Exception ignored){}return out;
+    }
+    private void writeDoNotSendNumbers(Set<String> numbers){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(DO_NOT_SEND_KEY,new JSONArray(numbers).toString()).apply();}
+    private boolean isDoNotSend(String number){String n=normalize(number);return !n.isEmpty()&&readDoNotSendNumbers().contains(n);}
+
+    private void showDoNotSendScreen(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),0,dp(14),0);EditText phone=new EditText(this);phone.setHint("10-digit mobile number");phone.setInputType(InputType.TYPE_CLASS_PHONE);box.addView(phone);LinearLayout actions=row();Button add=button("ADD NUMBER");Button selected=button("BLOCK SELECTED");actions.addView(add,weighted(1f,45));actions.addView(selected,weighted(1f,45));box.addView(actions);TextView count=new TextView(this);count.setTypeface(Typeface.DEFAULT_BOLD);count.setPadding(dp(4),dp(8),dp(4),dp(5));box.addView(count);ListView list=new ListView(this);box.addView(list,new LinearLayout.LayoutParams(-1,dp(330)));
+        List<String> rows=new ArrayList<>();List<String> values=new ArrayList<>();Runnable[] refresh={null};refresh[0]=()->{rows.clear();values.clear();for(String n:readDoNotSendNumbers()){values.add(n);rows.add(findName(n)+"\n+"+n);}list.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,rows));count.setText("Blocked contacts: "+values.size()+" • Tap to remove");};refresh[0].run();
+        add.setOnClickListener(v->{String n=normalize(phone.getText().toString());if(n.isEmpty()){phone.setError("Valid mobile number required");return;}Set<String>s=readDoNotSendNumbers();s.add(n);writeDoNotSendNumbers(s);phone.setText("");refresh[0].run();toast("Added to Do Not Send");});
+        selected.setOnClickListener(v->{if(selectedNumbers.isEmpty()){toast("No contacts selected");return;}Set<String>s=readDoNotSendNumbers();int before=s.size();for(String n:selectedNumbers){String x=normalize(n);if(!x.isEmpty())s.add(x);}writeDoNotSendNumbers(s);refresh[0].run();toast((s.size()-before)+" selected contacts blocked");});
+        list.setOnItemClickListener((p,v,pos,id)->{String n=values.get(pos);new AlertDialog.Builder(this).setTitle("Remove from Do Not Send?").setMessage(findName(n)+"\n+"+n).setPositiveButton("Remove",(d,w)->{Set<String>s=readDoNotSendNumbers();s.remove(n);writeDoNotSendNumbers(s);refresh[0].run();}).setNegativeButton("Cancel",null).show();});
+        new AlertDialog.Builder(this).setTitle("Do Not Send List").setView(box).setNegativeButton("Close",null).show();
+    }
+
+    private JSONObject readRecipientListTemplates(){try{return new JSONObject(getSharedPreferences(PREFS,MODE_PRIVATE).getString(LIST_TEMPLATES_KEY,"{}"));}catch(Exception e){return new JSONObject();}}
+    private JSONArray templatesForList(String listName){JSONObject root=readRecipientListTemplates();JSONArray a=root.optJSONArray(listName);return a==null?new JSONArray():a;}
+    private void writeTemplatesForList(String listName,JSONArray templates){try{JSONObject root=readRecipientListTemplates();root.put(listName,templates);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(LIST_TEMPLATES_KEY,root.toString()).apply();}catch(Exception e){toast("Template save failed");}}
+
+    private void showRecipientListTemplatesScreen(){
+        Map<String,List<String>> groups=readGroups();if(groups.isEmpty()){toast("Create a Recipient List first");return;}List<String> groupNames=new ArrayList<>(groups.keySet());LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),0,dp(14),0);Spinner group=new Spinner(this);group.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,groupNames));EditText name=new EditText(this);name.setHint("Template name");EditText body=new EditText(this);body.setHint("Message for this Recipient List");body.setMinLines(3);body.setGravity(Gravity.TOP);Button save=button("SAVE LIST TEMPLATE");save.setTextColor(Color.rgb(0,110,60));TextView help=new TextView(this);help.setText("Saved template Recipient List ke SEND window me available hoga.");help.setTextSize(12);ListView list=new ListView(this);box.addView(group);box.addView(name);box.addView(body);box.addView(save,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(help);box.addView(list,new LinearLayout.LayoutParams(-1,dp(250)));
+        List<String> rows=new ArrayList<>();Runnable[] refresh={null};refresh[0]=()->{String g=groupNames.get(group.getSelectedItemPosition());JSONArray a=templatesForList(g);rows.clear();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)rows.add(o.optString("name","Template "+(i+1))+"\n"+o.optString("body",""));}list.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,rows));};refresh[0].run();
+        group.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refresh[0].run();}public void onNothingSelected(android.widget.AdapterView<?> p){}});
+        save.setOnClickListener(v->{String g=groupNames.get(group.getSelectedItemPosition());String n=name.getText().toString().trim();String b=body.getText().toString().trim();if(b.isEmpty()){body.setError("Message required");return;}if(n.isEmpty())n="Template "+(templatesForList(g).length()+1);try{JSONArray a=templatesForList(g);JSONObject o=new JSONObject();o.put("name",n);o.put("body",b);a.put(o);writeTemplatesForList(g,a);name.setText("");body.setText("");refresh[0].run();toast("Template saved for "+g);}catch(Exception e){toast("Template save failed");}});
+        list.setOnItemClickListener((p,v,pos,id)->{String g=groupNames.get(group.getSelectedItemPosition());JSONArray a=templatesForList(g);JSONObject o=a.optJSONObject(pos);if(o==null)return;String[] options={"Load on main message box","Delete template"};new AlertDialog.Builder(this).setTitle(o.optString("name","Template")).setItems(options,(d,which)->{if(which==0){messageBox.setText(o.optString("body",""));messageBox.setSelection(messageBox.length());toast("Template loaded");}else{JSONArray out=new JSONArray();for(int i=0;i<a.length();i++)if(i!=pos)out.put(a.opt(i));writeTemplatesForList(g,out);refresh[0].run();}}).setNegativeButton("Cancel",null).show();});
+        new AlertDialog.Builder(this).setTitle("Recipient List Templates").setView(box).setNegativeButton("Close",null).show();
+    }
+
+    private void showCatalogSearchFilterScreen(){
+        Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(14),dp(12),dp(14),dp(12));page.setBackgroundColor(Color.rgb(20,20,22));LinearLayout head=row();Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Catalog Search & Filter");title.setTextSize(22);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);head.addView(back,new LinearLayout.LayoutParams(dp(50),dp(56)));head.addView(title,new LinearLayout.LayoutParams(0,dp(56),1f));page.addView(head);EditText search=new EditText(this);search.setHint("Search name, type or auto-reply word");search.setTextColor(Color.WHITE);search.setHintTextColor(Color.GRAY);page.addView(search,new LinearLayout.LayoutParams(-1,dp(50)));
+        JSONArray catalogs=readCatalogs();List<String> categories=new ArrayList<>();categories.add("All Types");for(int i=0;i<catalogs.length();i++){JSONObject o=catalogs.optJSONObject(i);if(o!=null&&!categories.contains(o.optString("category","Other")))categories.add(o.optString("category","Other"));}Spinner filter=new Spinner(this);filter.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,categories));page.addView(filter,new LinearLayout.LayoutParams(-1,dp(48)));ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(0,dp(10),0,dp(30));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));Runnable refresh=()->renderCatalogSearchResults(cards,search.getText().toString(),categories.get(filter.getSelectedItemPosition()));refresh.run();search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});filter.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refresh.run();}public void onNothingSelected(android.widget.AdapterView<?> p){}});back.setOnClickListener(v->d.dismiss());d.setContentView(page);d.show();
+    }
+
+    private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
+        parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
+    }
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.19.1";}}
     private void showScreenOffHelp(){
         new AlertDialog.Builder(this).setTitle("Screen-off Auto Send")
             .setMessage("Auto Send screen ko awake rakhega. Phone pehle se lock ho to screen ON hogi. Swipe lock automatically dismiss hoga.\n\nPIN, pattern ya fingerprint lock par Android unlock prompt dikhayega; unlock karte hi pending Bulk/Catalog queue automatically continue hogi. Security lock ko app bypass nahi kar sakta.")
@@ -888,7 +1082,7 @@ public class MainActivity extends Activity {
                 if(scheduleButton!=null)scheduleButton.setText("Schedule");
                 if(miniProgress!=null)miniProgress.setText("Timer complete • Starting Auto Send");
                 scheduleTicker=null;
-                if(!getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false))startOrStopAutoSend();
+                if(!getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false))startOrStopAutoSend(false);
                 return;
             }
             String time=formatCountdown(left);
@@ -912,26 +1106,71 @@ public class MainActivity extends Activity {
     private void resumeQueue(){SharedPreferences p=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE);try{JSONArray a=new JSONArray(p.getString(AUTO_NUMBERS,"[]"));int i=p.getInt(AUTO_INDEX,0);if(a.length()==0||i>=a.length()){toast("No paused queue");return;}p.edit().putBoolean(AUTO_RUNNING,true).apply();sendButton.setText("STOP AUTO SENDING");miniProgress.setText("Resuming "+(i+1)+" / "+a.length());WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("No paused queue");}}
 
 
-    private void openPhoneGalleryFirst(){
+    private void openPhoneGalleryFirst(){openPhoneGallery(PICK_REPLY_IMAGE);}
+
+    private void openPhoneGallery(int requestCode){
+        try{
+            // ACTION_PICK opens the phone manufacturer's Gallery / Albums app first
+            // (including Vivo Albums) and grants temporary read access to the result.
+            Intent i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            i.setType("image/*");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(i,requestCode);
+        }catch(Exception first){
+            try{
+                Intent fallback;
+                if(Build.VERSION.SDK_INT>=33){
+                    fallback=new Intent(MediaStore.ACTION_PICK_IMAGES);
+                    fallback.setType("image/*");
+                }else{
+                    fallback=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    fallback.setType("image/*");
+                    fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                }
+                fallback.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivityForResult(fallback,requestCode);
+            }catch(Exception second){
+                try{
+                    Intent files=new Intent(Intent.ACTION_GET_CONTENT);
+                    files.setType("image/*");
+                    files.addCategory(Intent.CATEGORY_OPENABLE);
+                    files.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivityForResult(Intent.createChooser(files,"Select image from Phone Gallery / Albums"),requestCode);
+                }catch(Exception e){toast("Phone Gallery open nahi hui");}
+            }
+        }
+    }
+
+    private void openCatalogPhoneGallery(){
         try{
             Intent i;
             if(Build.VERSION.SDK_INT>=33){
                 i=new Intent(MediaStore.ACTION_PICK_IMAGES);
                 i.setType("image/*");
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+                i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX,Math.min(50,MediaStore.getPickImagesMaxLimit()));
             }else{
-                i=new Intent(Intent.ACTION_GET_CONTENT);
+                i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
                 i.setType("image/*");
-                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
             }
-            startActivityForResult(Intent.createChooser(i,"Select image from Phone Gallery"),PICK_REPLY_IMAGE);
+            startActivityForResult(i,PICK_CATALOG_FILE);
         }catch(Exception first){
             try{
-                Intent fallback=new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                Intent fallback=new Intent(Intent.ACTION_GET_CONTENT);
                 fallback.setType("image/*");
-                startActivityForResult(fallback,PICK_REPLY_IMAGE);
+                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                fallback.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+                startActivityForResult(Intent.createChooser(fallback,"Select Catalog pictures from Phone Gallery"),PICK_CATALOG_FILE);
             }catch(Exception e){toast("Phone Gallery open nahi hui");}
         }
+    }
+
+    private void chooseCatalogSource(){
+        String[] choices={"Phone Gallery Images","PDF / Files"};
+        new AlertDialog.Builder(this).setTitle("Add Catalog Files").setItems(choices,(d,which)->{
+            if(which==0)openCatalogPhoneGallery();else pickBusinessFile(PICK_CATALOG_FILE);
+        }).setNegativeButton("Cancel",null).show();
     }
 
     private void saveReplyImagePermanently(Uri source){
@@ -1020,8 +1259,10 @@ public class MainActivity extends Activity {
     private void showCatalogScreen(){
         Dialog dialog=new Dialog(this,android.R.style.Theme_Material_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(Color.BLACK);
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(10),0,dp(12),0);head.setBackgroundColor(Color.rgb(28,26,27));Button back=button("‹");back.setTextSize(36);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Catalog");title.setTextSize(25);title.setTypeface(Typeface.DEFAULT_BOLD);title.setTextColor(Color.WHITE);head.addView(back,new LinearLayout.LayoutParams(dp(56),dp(72)));head.addView(title,new LinearLayout.LayoutParams(0,dp(72),1f));page.addView(head);
+        EditText search=new EditText(this);search.setHint("Search Catalog name, type or auto-reply word");search.setSingleLine(true);search.setTextColor(Color.WHITE);search.setHintTextColor(Color.GRAY);search.setPadding(dp(16),0,dp(16),0);page.addView(search,new LinearLayout.LayoutParams(-1,dp(50)));
+        JSONArray saved=readCatalogs();List<String> categories=new ArrayList<>();categories.add("All Types");for(int i=0;i<saved.length();i++){JSONObject o=saved.optJSONObject(i);if(o!=null&&!categories.contains(o.optString("category","Other")))categories.add(o.optString("category","Other"));}Spinner filter=new Spinner(this);filter.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,categories));page.addView(filter,new LinearLayout.LayoutParams(-1,dp(46)));
         ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(dp(16),dp(16),dp(16),dp(100));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));Button plus=button("+");plus.setTextSize(34);plus.setTextColor(Color.WHITE);plus.setBackground(rounded(Color.rgb(20,112,210),60));LinearLayout foot=row();foot.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);foot.setPadding(0,0,dp(18),dp(14));foot.addView(plus,new LinearLayout.LayoutParams(dp(70),dp(70)));page.addView(foot,new LinearLayout.LayoutParams(-1,dp(88)));
-        renderCatalogCards(cards,dialog);back.setOnClickListener(v->dialog.dismiss());plus.setOnClickListener(v->{dialog.dismiss();showAddCatalogDialog();});dialog.setContentView(page);dialog.show();
+        Runnable refresh=()->{String q=search.getText().toString().trim();String c=categories.get(filter.getSelectedItemPosition());if(q.isEmpty()&&"All Types".equals(c))renderCatalogCards(cards,dialog);else renderCatalogSearchResults(cards,q,c);};refresh.run();search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});filter.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refresh.run();}public void onNothingSelected(android.widget.AdapterView<?> p){}});back.setOnClickListener(v->dialog.dismiss());plus.setOnClickListener(v->{dialog.dismiss();showAddCatalogDialog();});dialog.setContentView(page);dialog.show();
     }
     private void showAddCatalogDialog(){
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
@@ -1030,8 +1271,12 @@ public class MainActivity extends Activity {
         EditText words=new EditText(this);words.setHint("Auto reply words • wires, cable");words.setSingleLine(true);
         TextView help=new TextView(this);help.setText("Ek saath multiple pictures aur PDFs select kar sakte hain. Sab files isi type ki list me save hongi.");help.setTextSize(13);help.setPadding(0,dp(8),0,0);
         box.addView(category);box.addView(name);box.addView(words);box.addView(help);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Add Catalog Type").setView(box).setPositiveButton("Select PDFs / Pictures",null).setNegativeButton("Cancel",null).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String c=category.getText().toString().trim();String n=name.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Enter Wires, Switch, DB or another type");return;}if(n.isEmpty()){name.setError("Enter catalog name");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);pendingCatalogCategory=c;pendingCatalogName=n;pendingCatalogKeywords=k;d.dismiss();pickBusinessFile(PICK_CATALOG_FILE);}));d.show();
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Add Catalog Type").setView(box).setPositiveButton("PDF / FILES",null).setNeutralButton("PHONE GALLERY",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->{
+            View.OnClickListener select=v->{String c=category.getText().toString().trim();String n=name.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Enter Wires, Switch, DB or another type");return;}if(n.isEmpty()){name.setError("Enter catalog name");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);pendingCatalogCategory=c;pendingCatalogName=n;pendingCatalogKeywords=k;boolean gallery=v==d.getButton(AlertDialog.BUTTON_NEUTRAL);d.dismiss();if(gallery)openCatalogPhoneGallery();else pickBusinessFile(PICK_CATALOG_FILE);};
+            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(select);
+            d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(select);
+        });d.show();
     }
     private void renderCatalogCards(LinearLayout parent,Dialog dialog){
         parent.removeAllViews();JSONArray a=readCatalogs();if(a.length()==0){TextView empty=new TextView(this);empty.setText("No Catalog saved\nTap + to add PDF or image");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(160)));return;}
@@ -1063,7 +1308,7 @@ public class MainActivity extends Activity {
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Edit Catalog Type").setView(box).setPositiveButton("Save Changes",null).setNeutralButton("Add More Files",null).setNegativeButton("Cancel",null).create();
         d.setOnShowListener(x->{
             d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String c=category.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Catalog type required");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);if(updateCatalogType(oldCategory,c,k)){toast("Catalog type updated ✓");d.dismiss();showCatalogScreen();}});
-            d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{String c=category.getText().toString().trim();String k=words.getText().toString().trim();String n=addName.getText().toString().trim();if(c.isEmpty()){category.setError("Catalog type required");return;}if(n.isEmpty()){addName.setError("New files name required");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);if(!updateCatalogType(oldCategory,c,k))return;pendingCatalogCategory=c;pendingCatalogKeywords=k;pendingCatalogName=n;d.dismiss();pickBusinessFile(PICK_CATALOG_FILE);});
+            d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{String c=category.getText().toString().trim();String k=words.getText().toString().trim();String n=addName.getText().toString().trim();if(c.isEmpty()){category.setError("Catalog type required");return;}if(n.isEmpty()){addName.setError("New files name required");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);if(!updateCatalogType(oldCategory,c,k))return;pendingCatalogCategory=c;pendingCatalogKeywords=k;pendingCatalogName=n;d.dismiss();chooseCatalogSource();});
         });d.show();
     }
     private boolean updateCatalogType(String oldCategory,String newCategory,String keywords){
@@ -1088,6 +1333,7 @@ public class MainActivity extends Activity {
         Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"UPLOAD & PREPARE MASTER LEDGER PDF":"UPDATE & PREPARE MASTER LEDGER PDF ✓");
         Button customers=button("Manage Ledger Customers ("+ledgerCustomerCount()+")");
         Button convertPdf=button("MASTER PDF → PHONE + BALANCE EXCEL");
+        Button paymentReminder=button("PAYMENT REMINDER");
         Button importCsv=button("IMPORT CUSTOMER EXCEL (OPTIONAL)");
         Button history=button("View updated files history");
         EditText ledgerKey=new EditText(this);ledgerKey.setHint("Ledger keyword");ledgerKey.setText(p.getString(AutoReplyNotificationService.LEDGER_KEY,"ledger"));
@@ -1095,9 +1341,10 @@ public class MainActivity extends Activity {
         TextView fileLabel=new TextView(this);fileLabel.setText("SAVED LEDGER FILE");fileLabel.setTextSize(13);fileLabel.setTypeface(Typeface.DEFAULT_BOLD);fileLabel.setTextColor(Color.DKGRAY);fileLabel.setPadding(dp(4),dp(9),dp(4),dp(4));
         ledgerFileNameText=new TextView(this);ledgerFileNameText.setText(savedLedgerName.isEmpty()?"No Ledger file saved":savedLedgerName);ledgerFileNameText.setTextSize(17);ledgerFileNameText.setTypeface(Typeface.DEFAULT_BOLD);ledgerFileNameText.setTextColor(savedLedgerName.isEmpty()?Color.rgb(190,45,45):Color.rgb(0,125,70));ledgerFileNameText.setBackground(rounded(savedLedgerName.isEmpty()?Color.rgb(255,235,235):Color.rgb(225,248,235),12));ledgerFileNameText.setPadding(dp(12),dp(10),dp(12),dp(10));
         TextView current=new TextView(this);current.setPadding(dp(4),dp(8),dp(4),dp(8));current.setText("Customers: "+ledgerCustomerCount()+"\nLast status: "+p.getString("last_business_status","No send attempt yet"));
-        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
+        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
         box.addView(history,new LinearLayout.LayoutParams(-1,dp(42)));
         ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));
+        paymentReminder.setOnClickListener(v->showPaymentReminderScreen());
         customers.setOnClickListener(v->showLedgerCustomersDialog());
         convertPdf.setOnClickListener(v->chooseMasterPdfForExcel());
         importCsv.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select optional customer Excel"),PICK_LEDGER_CUSTOMERS_XLSX);});
@@ -1107,6 +1354,48 @@ public class MainActivity extends Activity {
             .setPositiveButton("Save & Turn ON",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast("Ledger settings saved • Auto Reply ON");})
             .setNegativeButton("Close",null).show();
     }
+
+    private JSONArray readPaymentReminders(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(PAYMENT_REMINDERS_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
+    private void writePaymentReminders(JSONArray items){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(PAYMENT_REMINDERS_KEY,items.toString()).apply();}
+    private String defaultPaymentTemplate(){return "Dear {Name}, your pending balance is ₹{Balance}. Please pay before {DueDate}. Thank you — LATHA EPS.";}
+
+    private void showPaymentReminderScreen(){
+        Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(12),dp(10),dp(12),dp(12));page.setBackgroundColor(Color.rgb(242,248,247));LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);Button back=button("‹");back.setTextSize(31);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Payment Reminder");title.setTextSize(23);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);head.setBackground(rounded(Color.rgb(0,105,82),17));head.addView(back,new LinearLayout.LayoutParams(dp(50),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);
+        LinearLayout first=row();Button importLedger=button("IMPORT MASTER LEDGER");Button add=button("+ ADD CUSTOMER");first.addView(importLedger,weighted(1.2f,44));first.addView(add,weighted(1f,44));page.addView(first);LinearLayout second=row();Button selectVisible=button("SELECT FILTERED");Button clear=button("CLEAR SELECTION");second.addView(selectVisible,weighted(1f,42));second.addView(clear,weighted(1f,42));page.addView(second);LinearLayout third=row();Button template=button("MESSAGE TEMPLATE");Button history=button("REMINDER HISTORY");third.addView(template,weighted(1f,42));third.addView(history,weighted(1f,42));page.addView(third);
+        String[] filters={"All Customers","Overdue","Due Today","Upcoming","No Due Date"};Spinner filter=new Spinner(this);filter.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,filters));page.addView(filter,new LinearLayout.LayoutParams(-1,dp(48)));TextView summary=new TextView(this);summary.setTypeface(Typeface.DEFAULT_BOLD);summary.setPadding(dp(5),dp(5),dp(5),dp(5));page.addView(summary,new LinearLayout.LayoutParams(-1,dp(30)));ListView list=new ListView(this);list.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);page.addView(list,new LinearLayout.LayoutParams(-1,0,1f));LinearLayout sendRow=row();Button test=button("TEST FIRST");Button send=button("SEND SELECTED");test.setTextColor(Color.rgb(25,75,155));send.setTextColor(Color.WHITE);send.setBackgroundColor(Color.rgb(20,125,70));sendRow.addView(test,weighted(1f,50));sendRow.addView(send,weighted(1.3f,50));page.addView(sendRow);
+        Set<String> chosen=new LinkedHashSet<>();List<JSONObject> visible=new ArrayList<>();List<String> rows=new ArrayList<>();Runnable[] refresh={null};refresh[0]=()->{visible.clear();rows.clear();JSONArray a=readPaymentReminders();String selectedFilter=filters[filter.getSelectedItemPosition()];for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null||!paymentMatchesFilter(o,selectedFilter))continue;visible.add(o);String due=o.optString("due","");rows.add(o.optString("name","Customer")+"  •  ₹"+o.optString("balance","0")+"\n+"+o.optString("phone","")+"  •  "+(due.isEmpty()?"No due date":"Due "+due));}list.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_multiple_choice,rows));for(int i=0;i<visible.size();i++)list.setItemChecked(i,chosen.contains(normalize(visible.get(i).optString("phone",""))));summary.setText("Showing "+visible.size()+" • Selected "+chosen.size()+" • Long press to edit");};refresh[0].run();
+        filter.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refresh[0].run();}public void onNothingSelected(android.widget.AdapterView<?> p){}});list.setOnItemClickListener((p,v,pos,id)->{String n=normalize(visible.get(pos).optString("phone",""));if(chosen.contains(n))chosen.remove(n);else chosen.add(n);summary.setText("Showing "+visible.size()+" • Selected "+chosen.size()+" • Long press to edit");});list.setOnItemLongClickListener((p,v,pos,id)->{showEditPaymentReminder(visible.get(pos),refresh[0]);return true;});
+        importLedger.setOnClickListener(v->{importPaymentCustomersFromLedger();refresh[0].run();});add.setOnClickListener(v->showEditPaymentReminder(null,refresh[0]));selectVisible.setOnClickListener(v->{for(JSONObject o:visible){String n=normalize(o.optString("phone",""));if(!n.isEmpty())chosen.add(n);}refresh[0].run();});clear.setOnClickListener(v->{chosen.clear();refresh[0].run();});template.setOnClickListener(v->showPaymentTemplateDialog());history.setOnClickListener(v->showPaymentReminderHistory());test.setOnClickListener(v->previewPaymentReminders(chosen,true));send.setOnClickListener(v->previewPaymentReminders(chosen,false));back.setOnClickListener(v->d.dismiss());d.setContentView(page);d.show();
+    }
+
+    private boolean paymentMatchesFilter(JSONObject item,String filter){
+        String due=item.optString("due","").trim();if("All Customers".equals(filter))return true;if(due.isEmpty())return "No Due Date".equals(filter);long at=parsePaymentDate(due);if(at<0)return "No Due Date".equals(filter);java.util.Calendar now=java.util.Calendar.getInstance();now.set(java.util.Calendar.HOUR_OF_DAY,0);now.set(java.util.Calendar.MINUTE,0);now.set(java.util.Calendar.SECOND,0);now.set(java.util.Calendar.MILLISECOND,0);long today=now.getTimeInMillis();if("Overdue".equals(filter))return at<today;if("Due Today".equals(filter))return at==today;if("Upcoming".equals(filter))return at>today;return false;
+    }
+    private long parsePaymentDate(String value){try{java.text.SimpleDateFormat f=new java.text.SimpleDateFormat("dd-MM-yyyy",Locale.US);f.setLenient(false);return f.parse(value).getTime();}catch(Exception e){return -1;}}
+
+    private void showEditPaymentReminder(JSONObject existing,Runnable after){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);EditText name=new EditText(this);name.setHint("Customer name");EditText phone=new EditText(this);phone.setHint("10-digit mobile number");phone.setInputType(InputType.TYPE_CLASS_PHONE);EditText balance=new EditText(this);balance.setHint("Pending balance • example 12500");balance.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);EditText due=new EditText(this);due.setHint("Due date • DD-MM-YYYY");String original="";if(existing!=null){original=normalize(existing.optString("phone",""));name.setText(existing.optString("name",""));phone.setText(last10Digits(original));balance.setText(existing.optString("balance",""));due.setText(existing.optString("due",""));}final String oldPhone=original;box.addView(name);box.addView(phone);box.addView(balance);box.addView(due);
+        AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle(existing==null?"Add Payment Customer":"Edit Payment Customer").setView(box).setPositiveButton("Save",(d,w)->{String n=normalize(phone.getText().toString());String date=due.getText().toString().trim();if(n.isEmpty()){toast("Valid mobile number required");return;}if(!date.isEmpty()&&parsePaymentDate(date)<0){toast("Due date DD-MM-YYYY format me enter karein");return;}try{JSONArray a=readPaymentReminders(),out=new JSONArray();String lastSent="";for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;String p=normalize(o.optString("phone",""));if(p.equals(oldPhone)||p.equals(n)){if(lastSent.isEmpty())lastSent=o.optString("last_sent","");continue;}out.put(o);}JSONObject item=new JSONObject();item.put("name",name.getText().toString().trim().isEmpty()?"Customer":name.getText().toString().trim());item.put("phone",n);item.put("balance",balance.getText().toString().trim());item.put("due",date);item.put("last_sent",lastSent);out.put(item);writePaymentReminders(out);after.run();toast("Payment reminder saved");}catch(Exception e){toast("Save failed");}}).setNegativeButton("Cancel",null);if(existing!=null)b.setNeutralButton("Delete",(d,w)->{JSONArray a=readPaymentReminders(),out=new JSONArray();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null&&!normalize(o.optString("phone","")).equals(oldPhone))out.put(o);}writePaymentReminders(out);after.run();toast("Payment customer deleted");});b.show();
+    }
+
+    private void importPaymentCustomersFromLedger(){
+        try{SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);JSONArray source=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));if(source.length()==0){toast("Pehle Master Ledger prepare/import karein");return;}JSONArray existing=readPaymentReminders();Map<String,JSONObject> map=new LinkedHashMap<>();for(int i=0;i<existing.length();i++){JSONObject o=existing.optJSONObject(i);if(o!=null)map.put(normalize(o.optString("phone","")),o);}int added=0;for(int i=0;i<source.length();i++){JSONObject s=source.optJSONObject(i);if(s==null)continue;String phone=normalize(s.optString("phone",""));if(phone.isEmpty())continue;JSONObject old=map.get(phone);if(old==null){old=new JSONObject();old.put("phone",phone);old.put("due","");old.put("last_sent","");added++;}if(!s.optString("name","").isEmpty())old.put("name",s.optString("name","Customer"));if(!s.optString("balance","").isEmpty())old.put("balance",s.optString("balance",""));map.put(phone,old);}JSONArray out=new JSONArray();for(JSONObject o:map.values())out.put(o);writePaymentReminders(out);toast(added+" new customers imported • "+out.length()+" total");}catch(Exception e){toast("Ledger customer import failed");}
+    }
+
+    private void showPaymentTemplateDialog(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);EditText text=new EditText(this);text.setMinLines(5);text.setGravity(Gravity.TOP);text.setText(p.getString(PAYMENT_TEMPLATE_KEY,defaultPaymentTemplate()));new AlertDialog.Builder(this).setTitle("Payment Reminder Template").setMessage("Available: {Name}, {Balance}, {DueDate}").setView(text).setPositiveButton("Save",(d,w)->{String value=text.getText().toString().trim();if(value.isEmpty())value=defaultPaymentTemplate();p.edit().putString(PAYMENT_TEMPLATE_KEY,value).apply();toast("Payment template saved");}).setNeutralButton("Reset",(d,w)->p.edit().putString(PAYMENT_TEMPLATE_KEY,defaultPaymentTemplate()).apply()).setNegativeButton("Cancel",null).show();
+    }
+    private String buildPaymentMessage(JSONObject item){String template=getSharedPreferences(PREFS,MODE_PRIVATE).getString(PAYMENT_TEMPLATE_KEY,defaultPaymentTemplate());String due=item.optString("due","").trim();if(due.isEmpty())due="at the earliest";String balance=item.optString("balance","0").trim();if(balance.isEmpty())balance="0";return template.replace("{Name}",item.optString("name","Customer")).replace("{name}",item.optString("name","Customer")).replace("{Balance}",balance).replace("{balance}",balance).replace("{DueDate}",due).replace("{duedate}",due);}
+
+    private void previewPaymentReminders(Set<String> chosen,boolean testOnly){
+        if(chosen.isEmpty()){toast("Select payment customers first");return;}List<JSONObject> items=new ArrayList<>();JSONArray all=readPaymentReminders();int skipped=0;for(int i=0;i<all.length();i++){JSONObject o=all.optJSONObject(i);if(o==null)continue;String n=normalize(o.optString("phone",""));if(!chosen.contains(n))continue;if(n.isEmpty()||isDoNotSend(n)){skipped++;continue;}items.add(o);if(testOnly)break;}if(items.isEmpty()){toast("Selected customers invalid or in Do Not Send List");return;}if(!isAccessibilityServiceEnabled()){toast("Pehle Accessibility ON karein");try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}return;}JSONObject first=items.get(0);String preview="Recipients: "+items.size()+(skipped>0?"\nBlocked/skipped: "+skipped:"")+"\n\nFirst: "+first.optString("name","Customer")+"  +"+first.optString("phone","")+"\n\n"+buildPaymentMessage(first);new AlertDialog.Builder(this).setTitle(testOnly?"Test Payment Reminder":"Confirm Payment Reminders").setMessage(preview).setPositiveButton(testOnly?"SEND TEST":"START SEND",(d,w)->startPaymentReminderQueue(items,testOnly)).setNegativeButton("Cancel",null).show();
+    }
+
+    private void startPaymentReminderQueue(List<JSONObject> items,boolean testOnly){
+        try{JSONArray nums=new JSONArray(),names=new JSONArray(),messages=new JSONArray();for(JSONObject o:items){nums.put(normalize(o.optString("phone","")));names.put(o.optString("name","Customer"));messages.put(buildPaymentMessage(o));o.put("last_sent",System.currentTimeMillis());}JSONArray all=readPaymentReminders();Map<String,JSONObject> sent=new LinkedHashMap<>();for(JSONObject o:items)sent.put(normalize(o.optString("phone","")),o);JSONArray updated=new JSONArray();for(int i=0;i<all.length();i++){JSONObject o=all.optJSONObject(i);if(o==null)continue;JSONObject replacement=sent.get(normalize(o.optString("phone","")));updated.put(replacement==null?o:replacement);}writePaymentReminders(updated);SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGES,messages.toString()).putString(AUTO_MESSAGE,"").putString(AUTO_QUEUE_TOKEN,String.valueOf(System.currentTimeMillis())).putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7)).remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE).putBoolean(AUTO_RUNNING,true).apply();String stamp=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date());String old=settings.getString(PAYMENT_HISTORY_KEY,"");settings.edit().putString(PAYMENT_HISTORY_KEY,stamp+" • "+(testOnly?"Test":"Sent")+" • "+items.size()+" reminder"+(old.isEmpty()?"":"\n"+old)).apply();getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(sendButton!=null)sendButton.setText("STOP AUTO SENDING");if(miniProgress!=null)miniProgress.setText("Payment Reminder • Starting 1 / "+items.size());showProgressNotification(0,items.size(),"Payment reminders starting");WhatsAppAccessibilityService.openCurrentChat(this);}catch(Exception e){toast("Payment reminder queue failed");}
+    }
+
+    private void showPaymentReminderHistory(){String h=getSharedPreferences(PREFS,MODE_PRIVATE).getString(PAYMENT_HISTORY_KEY,"No payment reminder history");new AlertDialog.Builder(this).setTitle("Payment Reminder History").setMessage(h).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(PAYMENT_HISTORY_KEY).apply()).show();}
 
     private void chooseMasterPdfForExcel(){
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/pdf");

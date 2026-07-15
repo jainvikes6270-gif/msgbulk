@@ -1,4 +1,56 @@
-# LathaBulk v3.16.8 – Recipient List Image Composer
+# LathaBulk v3.19.0 – Payment Reminder + Live Progress
+
+## v3.19.0 changes
+
+- **Business Files → Payment Reminder** is a separate full-screen reminder manager.
+- Import customers and pending balances from the prepared Master Ledger or add/edit customers manually.
+- Save due dates, filter Overdue/Today/Upcoming/No Due Date, select filtered customers and send reminders.
+- Custom reminder template supports `{Name}`, `{Balance}` and `{DueDate}`.
+- Test First, Send Selected, Do Not Send filtering and reminder history are included.
+- Every recipient receives their own balance and due-date message through one Auto Send queue.
+- Sending notification now updates live as **1/10, 2/10, 3/10...** with the current contact instead of remaining at 0/10.
+- Main-screen mini progress also shows current/total and completion notification shows the final total.
+
+## v3.18.0 changes
+
+- Settings now includes one separate **Contact Settings** menu; the main screen stays uncluttered.
+- **Pause / Resume / Skip Contact** controls preserve the current Auto Send queue.
+- **Do Not Send List** supports manual numbers and all currently selected contacts; blocked numbers are automatically skipped in Test, Text and Image sends.
+- **Recipient List Templates** saves different messages for every recipient list and shows them in that list's Send window.
+- The **Catalog screen itself** now includes search and a type filter for filename, category and auto-reply words.
+- Contact Settings data is included automatically in Local/Drive backup and restore.
+
+## v3.17.2 changes
+
+- Catalog Add screen now has separate **PHONE GALLERY** and **PDF / FILES** buttons.
+- Multiple Catalog pictures can be selected directly from phone Gallery/Albums.
+- Existing Catalog types offer the same Gallery or PDF/file choice through **Add More Files**.
+- Gallery pictures keep the selected Catalog type, name and auto-reply keywords.
+
+## v3.17.1 changes
+
+- Recipient List image button now opens the phone Gallery/Albums directly.
+- Selected gallery image continues into the built-in text and sticker editor.
+- Auto Reply image selection uses the same phone Gallery-first picker.
+- Android 13+ uses the secure system Photo Picker; older phones use the device Gallery with a file-picker fallback.
+
+## v3.17.0 changes
+
+- Main screen includes **TEST SEND • 1 CONTACT** beside the normal Auto Send button.
+- Test Send uses only the first valid selected contact and never starts the full recipient queue.
+- A confirmation shows the exact test recipient before WhatsApp opens.
+- Existing message, header/footer and `{Name}` replacement are included in the test.
+
+## v3.16.9 changes
+
+- Main screen now shows **Review Selected (count)** after contacts are selected.
+- Review screen lets you uncheck and remove individual contacts selected by mistake.
+- A separate **Clear Selection** button cancels all selected contacts after confirmation.
+- Cancel inside the review screen closes it without changing the current selection.
+- Selected-contact changes are saved immediately and reflected in the contact list.
+- Manual Auto Send now shows recipient count, the first selected contacts and a message preview before starting.
+- Confirmation screen includes **Review Contacts** and **Cancel**, preventing accidental sends.
+- Invalid or duplicate mobile numbers are skipped automatically and the skipped count is shown.
 
 ## v3.16.8 changes
 
@@ -109,3 +161,10 @@ Text-based Tally PDF required hai. Ek phone number multiple ledger pages me ho t
 
 ## Build APK
 Upload the extracted project to GitHub. GitHub Actions workflow is included under `.github/workflows/build-apk.yml`.
+# LathaBulk v3.19.1
+
+## Recipient image sending update
+
+- Recipient List > Send Text / Image now opens the phone Gallery / Albums app first.
+- Works with Android system Photo Picker and Files as automatic fallbacks.
+- The chosen image opens in the built-in image editor and is saved as an app-safe copy before auto sending.
