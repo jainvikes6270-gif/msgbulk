@@ -1,3 +1,16 @@
+# LathaBulk v3.20.0 – WhatsApp Broadcast + Scheduled Payment Reminder
+
+## v3.20.0 changes
+
+- New separate **WHATSAPP BROADCAST** menu on the main screen.
+- Opens one already-created WhatsApp / WhatsApp Business Broadcast List by its exact name and sends the message once, instead of opening every customer chat.
+- Supports one common text message with an optional Gallery image or PDF attachment.
+- Main-screen **PHONE CONTACT LISTS** keeps phone-contact search, multiple selection and saved recipient lists easy to access.
+- Payment Reminder now has a direct **PHONE CONTACTS** picker with name/number search, multi-select and automatic duplicate skipping.
+- Payment Reminder includes **SCHEDULE TIME** with calendar + clock selection, a persistent Android alarm, scheduled notification, status and cancel option.
+- Scheduled payment messages keep each customer’s own `{Name}`, `{Balance}` and `{DueDate}` values.
+- WhatsApp Broadcast delivery still requires the customer to have saved the business number, as required by WhatsApp.
+
 # LathaBulk v3.19.0 – Payment Reminder + Live Progress
 
 ## v3.19.0 changes

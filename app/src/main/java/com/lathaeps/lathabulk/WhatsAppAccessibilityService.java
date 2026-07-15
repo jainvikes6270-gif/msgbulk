@@ -39,6 +39,13 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             pendingShare=false;
         }
         SharedPreferences p = getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE);
+        boolean broadcastRunning=p.getBoolean(MainActivity.BROADCAST_RUNNING,false);
+        if(broadcastRunning){
+            if(clickLocked)return;
+            AccessibilityNodeInfo broadcastRoot=getRootInActiveWindow();
+            if(broadcastRoot!=null)handleBroadcast(broadcastRoot,p,pkg);
+            return;
+        }
         boolean bulkRunning=p.getBoolean(MainActivity.AUTO_RUNNING, false);
         if ((!bulkRunning && !pendingShare) || clickLocked) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
@@ -69,6 +76,29 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         if (found != null) return found;
         return null;
     }
+
+    private void handleBroadcast(AccessibilityNodeInfo root,SharedPreferences p,String pkg){
+        int stage=p.getInt(MainActivity.BROADCAST_STAGE,0);String mode=p.getString(MainActivity.BROADCAST_MODE,"text");String listName=p.getString(MainActivity.BROADCAST_LIST_NAME,"").trim();
+        if(listName.isEmpty()){finishBroadcast(false,"Broadcast list name missing");return;}
+        if(stage==0){AccessibilityNodeInfo editable="share".equals(mode)?findFirstEditable(root):null;if(editable!=null){setNodeText(editable,listName);lockBroadcastStep(p,2,650);return;}AccessibilityNodeInfo search=findActionNode(root,new String[]{"search","खोज","தேடு"});if(search!=null){clickLocked=true;search.performAction(AccessibilityNodeInfo.ACTION_CLICK);p.edit().putInt(MainActivity.BROADCAST_STAGE,1).apply();handler.postDelayed(()->clickLocked=false,650);}return;}
+        if(stage==1){AccessibilityNodeInfo editable=findFirstEditable(root);if(editable!=null){setNodeText(editable,listName);lockBroadcastStep(p,2,800);}return;}
+        if(stage==2){AccessibilityNodeInfo result=findExactResult(root,listName);if(result!=null){clickLocked=true;clickNodeOrParent(result);p.edit().putInt(MainActivity.BROADCAST_STAGE,3).apply();handler.postDelayed(()->clickLocked=false,900);}return;}
+        if(stage==3){
+            if("text".equals(mode)){AccessibilityNodeInfo input=findFirstEditable(root);if(input!=null){String message=p.getString(MainActivity.BROADCAST_MESSAGE,"");setNodeText(input,message);lockBroadcastStep(p,4,600);}}
+            else{AccessibilityNodeInfo next=findActionNode(root,new String[]{"next","continue","आगे","send","भेजें"});if(next!=null){clickLocked=true;clickNodeOrParent(next);p.edit().putInt(MainActivity.BROADCAST_STAGE,4).apply();handler.postDelayed(()->clickLocked=false,1000);}}
+            return;
+        }
+        if(stage==4){AccessibilityNodeInfo send=findSendButton(root,pkg);if(send==null)send=findActionNode(root,new String[]{"send","भेजें"});if(send!=null&&send.isEnabled()){clickLocked=true;clickNodeOrParent(send);handler.postDelayed(()->finishBroadcast(true,"Broadcast sent once"),900);}}
+    }
+
+    private void lockBroadcastStep(SharedPreferences p,int nextStage,long delay){clickLocked=true;p.edit().putInt(MainActivity.BROADCAST_STAGE,nextStage).apply();handler.postDelayed(()->clickLocked=false,delay);}
+    private void setNodeText(AccessibilityNodeInfo node,String value){if(node==null)return;android.os.Bundle args=new android.os.Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,value);node.performAction(AccessibilityNodeInfo.ACTION_FOCUS);node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args);}
+    private AccessibilityNodeInfo findFirstEditable(AccessibilityNodeInfo node){if(node==null)return null;if(node.isEditable()&&node.isEnabled())return node;for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo r=findFirstEditable(node.getChild(i));if(r!=null)return r;}return null;}
+    private AccessibilityNodeInfo findExactResult(AccessibilityNodeInfo root,String value){List<AccessibilityNodeInfo> nodes=root.findAccessibilityNodeInfosByText(value);if(nodes==null)return null;for(AccessibilityNodeInfo n:nodes){if(n==null||n.isEditable())continue;CharSequence text=n.getText();if(text!=null&&text.toString().trim().equalsIgnoreCase(value))return n;}return null;}
+    private AccessibilityNodeInfo findActionNode(AccessibilityNodeInfo node,String[] words){if(node==null)return null;String text=node.getText()==null?"":node.getText().toString().trim().toLowerCase(Locale.ROOT);String desc=node.getContentDescription()==null?"":node.getContentDescription().toString().trim().toLowerCase(Locale.ROOT);for(String word:words){String w=word.toLowerCase(Locale.ROOT);if((text.equals(w)||desc.equals(w)||desc.contains(w))&&(node.isClickable()||clickableParent(node)!=null))return node;}for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo r=findActionNode(node.getChild(i),words);if(r!=null)return r;}return null;}
+    private AccessibilityNodeInfo clickableParent(AccessibilityNodeInfo node){AccessibilityNodeInfo p=node==null?null:node.getParent();for(int i=0;p!=null&&i<4;i++){if(p.isClickable())return p;p=p.getParent();}return null;}
+    private void clickNodeOrParent(AccessibilityNodeInfo node){if(node==null)return;if(node.isClickable())node.performAction(AccessibilityNodeInfo.ACTION_CLICK);else{AccessibilityNodeInfo p=clickableParent(node);if(p!=null)p.performAction(AccessibilityNodeInfo.ACTION_CLICK);}}
+    private void finishBroadcast(boolean success,String label){SharedPreferences p=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);p.edit().putBoolean(MainActivity.BROADCAST_RUNNING,false).remove(MainActivity.BROADCAST_STAGE).remove(MainActivity.BROADCAST_FILE_URI).remove(MainActivity.BROADCAST_FILE_TYPE).apply();MainActivity.updateProgressNotification(this,success?1:0,1,label,success);clickLocked=false;if(success){Intent done=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);startActivity(done);}}
 
     private AccessibilityNodeInfo findByDescription(AccessibilityNodeInfo node) {
         if (node == null) return null;
