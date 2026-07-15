@@ -41,7 +41,8 @@ public class LockScreenSendActivity extends Activity {
     @Override protected void onResume(){
         super.onResume();KeyguardManager km=(KeyguardManager)getSystemService(KEYGUARD_SERVICE);
         if(km==null||!km.isKeyguardLocked()){continueQueue();return;}
-        if(!requested&&Build.VERSION.SDK_INT>=26){
+        boolean autoUnlock=getSharedPreferences(MainActivity.PREFS,MODE_PRIVATE).getBoolean(MainActivity.AUTO_UNLOCK_DEVICE,false);
+        if(autoUnlock&&!requested&&Build.VERSION.SDK_INT>=26){
             requested=true;km.requestDismissKeyguard(this,new KeyguardManager.KeyguardDismissCallback(){
                 @Override public void onDismissSucceeded(){continueQueue();}
                 @Override public void onDismissCancelled(){requested=false;}

@@ -124,6 +124,8 @@ public class MainActivity extends Activity {
     static final String AUTO_IMAGE_URI = "send_image_uri";
     static final String AUTO_IMAGE_TYPE = "send_image_type";
     static final String AUTO_QUEUE_TOKEN = "queue_token";
+    static final String AUTO_UNLOCK_DEVICE = "auto_unlock_device";
+    static final String AUTO_LOCK_DEVICE = "auto_lock_device";
     static final String BROADCAST_RUNNING = "whatsapp_broadcast_running";
     static final String BROADCAST_LIST_NAME = "whatsapp_broadcast_list_name";
     static final String BROADCAST_MESSAGE = "whatsapp_broadcast_message";
@@ -1037,6 +1039,7 @@ public class MainActivity extends Activity {
         addSettingsButton(list,"⬇  Check for App Update","Current v"+appVersion()+" • Check latest version",v->checkForAppUpdate());
         addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
         addSettingsButton(list,"☀  Screen-off Auto Send","Keeps screen awake while bulk sending",v->showScreenOffHelp());
+        addSettingsButton(list,"🔐  Device Auto Unlock / Lock",deviceAutomationStatus(),v->showDeviceAutomationSettings());
         addSettingsButton(list,"✉  Contact Us","lathaeps@gmail.com",v->contactSupport());
         addSettingsButton(list,"🔒  Login & Forgot PIN","Change PIN, recovery word, login ON/OFF",v->showLoginSettings());
         addSettingsButton(list,"▣  Local Backup","Save contacts, rules, images, templates & ledger to phone",v->createBackupFile());
@@ -1048,6 +1051,22 @@ public class MainActivity extends Activity {
     }
 
     private void addSettingsButton(LinearLayout parent,String title,String subtitle,View.OnClickListener click){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(18),dp(13),dp(14),dp(12));card.setBackground(rounded(isDark()?Color.rgb(45,50,54):Color.WHITE,18));TextView a=new TextView(this);a.setText(title);a.setTextSize(18);a.setTypeface(Typeface.DEFAULT_BOLD);a.setTextColor(isDark()?Color.WHITE:Color.rgb(10,65,59));TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(isDark()?Color.LTGRAY:Color.DKGRAY);b.setPadding(0,dp(4),0,0);card.addView(a);card.addView(b);card.setOnClickListener(click);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}
+
+    private String deviceAutomationStatus(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        return "Auto-Unlock "+(p.getBoolean(AUTO_UNLOCK_DEVICE,false)?"ON":"OFF")+" • Auto-Lock "+(p.getBoolean(AUTO_LOCK_DEVICE,false)?"ON":"OFF");
+    }
+
+    private void showDeviceAutomationSettings(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(20),dp(8),dp(20),0);
+        Switch unlock=new Switch(this);unlock.setText("Auto-Unlock Device");unlock.setTextSize(18);unlock.setTypeface(Typeface.DEFAULT_BOLD);unlock.setChecked(p.getBoolean(AUTO_UNLOCK_DEVICE,false));unlock.setPadding(0,dp(10),0,dp(6));
+        TextView unlockInfo=new TextView(this);unlockInfo.setText("Scheduled task ke time screen ON karke swipe/trusted lock dismiss karega. Secure PIN, pattern ya fingerprint par Android confirmation zaroori hai.");unlockInfo.setTextSize(13);unlockInfo.setTextColor(Color.DKGRAY);unlockInfo.setPadding(0,0,0,dp(16));
+        Switch lock=new Switch(this);lock.setText("Auto-Lock after task complete");lock.setTextSize(18);lock.setTypeface(Typeface.DEFAULT_BOLD);lock.setChecked(p.getBoolean(AUTO_LOCK_DEVICE,false));lock.setPadding(0,dp(8),0,dp(6));
+        TextView lockInfo=new TextView(this);lockInfo.setText("Sab selected WhatsApp messages send hone ke baad device automatically lock hoga. Accessibility ON rehna chahiye.");lockInfo.setTextSize(13);lockInfo.setTextColor(Color.DKGRAY);
+        box.addView(unlock);box.addView(unlockInfo);box.addView(lock);box.addView(lockInfo);
+        new AlertDialog.Builder(this).setTitle("Device Automation").setView(box).setPositiveButton("SAVE",(d,w)->{p.edit().putBoolean(AUTO_UNLOCK_DEVICE,unlock.isChecked()).putBoolean(AUTO_LOCK_DEVICE,lock.isChecked()).apply();toast("Device automation saved");}).setNegativeButton("Cancel",null).show();
+    }
 
     private void showContactSettingsScreen(){
         Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(16),dp(12),dp(16),dp(16));page.setBackgroundColor(isDark()?Color.rgb(25,28,31):Color.rgb(241,248,247));
@@ -1115,7 +1134,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.21.2";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.21.3";}}
     private void checkForAppUpdate(){
         toast("Checking latest version…");new Thread(()->{String latest="";String[] branches={"main","master"};for(String branch:branches){try{URL url=new URL("https://raw.githubusercontent.com/jainvikes6270-gif/msgbulk/"+branch+"/latest-version.json");HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setConnectTimeout(7000);c.setReadTimeout(7000);try(BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()))){StringBuilder s=new StringBuilder();String line;while((line=r.readLine())!=null)s.append(line);latest=new JSONObject(s.toString()).optString("version","");}c.disconnect();if(!latest.isEmpty())break;}catch(Exception ignored){}}final String found=latest;runOnUiThread(()->{if(found.isEmpty()){new AlertDialog.Builder(this).setTitle("App Update").setMessage("Automatic version file abhi available nahi hai. GitHub Releases check karein.").setPositiveButton("OPEN UPDATES",(d,w)->openUpdatePage()).setNegativeButton("Close",null).show();}else if(found.equals(appVersion()))toast("App is up to date • v"+appVersion());else new AlertDialog.Builder(this).setTitle("New Update Available").setMessage("Current: v"+appVersion()+"\nLatest: v"+found).setPositiveButton("DOWNLOAD UPDATE",(d,w)->openUpdatePage()).setNegativeButton("Later",null).show();});}).start();
     }
