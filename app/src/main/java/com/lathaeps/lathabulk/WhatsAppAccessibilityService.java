@@ -39,7 +39,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         SharedPreferences autoReply = getSharedPreferences(AutoReplyNotificationService.PREFS, MODE_PRIVATE);
         boolean pendingShare = autoReply.getBoolean(AutoReplyNotificationService.PENDING_SHARE, false);
         long pendingAt = autoReply.getLong(AutoReplyNotificationService.PENDING_SHARE_AT, 0L);
-        if (pendingShare && System.currentTimeMillis()-pendingAt > 30000L) {
+        if (pendingShare && System.currentTimeMillis()-pendingAt > 120000L) {
             autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
             pendingShare=false;
         }
@@ -71,7 +71,44 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             int sentIndex=p.getInt(MainActivity.AUTO_INDEX,0);
             String queueToken=p.getString(MainActivity.AUTO_QUEUE_TOKEN,"");
             handler.postDelayed(()->advanceQueue(sentIndex,queueToken), delay);
+            return;
         }
+        if(pendingShare)handlePendingShareSelector(root,autoReply);
+    }
+
+    private void handlePendingShareSelector(AccessibilityNodeInfo root,SharedPreferences prefs){
+        if(clickLocked||root==null)return;
+        int stage=prefs.getInt(AutoReplyNotificationService.PENDING_PICK_STAGE,0);
+        String target=prefs.getString(AutoReplyNotificationService.PENDING_TARGET,"").trim();
+        String phone=prefs.getString(AutoReplyNotificationService.PENDING_PHONE,"").replaceAll("[^0-9]","");
+        String query=!target.isEmpty()?target:(phone.length()>10?phone.substring(phone.length()-10):phone);
+        AccessibilityNodeInfo editable=findFirstEditable(root);
+        if(editable!=null&&stage<=1&&!query.isEmpty()){
+            setNodeText(editable,query);prefs.edit().putInt(AutoReplyNotificationService.PENDING_PICK_STAGE,2).apply();
+            clickLocked=true;handler.postDelayed(()->clickLocked=false,700);return;
+        }
+        if(stage==0){
+            AccessibilityNodeInfo search=findActionNode(root,new String[]{"search","खोज","தேடு"});
+            if(search!=null){clickLocked=true;clickNodeOrParent(search);prefs.edit().putInt(AutoReplyNotificationService.PENDING_PICK_STAGE,1).apply();handler.postDelayed(()->clickLocked=false,650);return;}
+        }
+        AccessibilityNodeInfo recipient=findBusinessRecipient(root,target,phone);
+        if(recipient!=null){clickLocked=true;clickNodeOrParent(recipient);prefs.edit().putInt(AutoReplyNotificationService.PENDING_PICK_STAGE,3).apply();handler.postDelayed(()->clickLocked=false,850);}
+    }
+
+    private AccessibilityNodeInfo findBusinessRecipient(AccessibilityNodeInfo node,String target,String phone){
+        if(node==null)return null;
+        String text=node.getText()==null?"":node.getText().toString().trim();
+        String desc=node.getContentDescription()==null?"":node.getContentDescription().toString().trim();
+        String combined=(text+" "+desc).trim();
+        String cleanTarget=target==null?"":target.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim();
+        String cleanCombined=combined.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim();
+        String digits=combined.replaceAll("[^0-9]","");
+        String lastPhone=phone==null?"":phone.replaceAll("[^0-9]","");if(lastPhone.length()>10)lastPhone=lastPhone.substring(lastPhone.length()-10);
+        boolean nameMatch=!cleanTarget.isEmpty()&&!cleanCombined.isEmpty()&&(cleanCombined.equals(cleanTarget)||cleanCombined.contains(cleanTarget)||cleanTarget.contains(cleanCombined));
+        boolean phoneMatch=lastPhone.length()==10&&digits.endsWith(lastPhone);
+        if(!node.isEditable()&&(nameMatch||phoneMatch)&&(node.isClickable()||clickableParent(node)!=null))return node;
+        for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo found=findBusinessRecipient(node.getChild(i),target,phone);if(found!=null)return found;}
+        return null;
     }
 
     private AccessibilityNodeInfo findSendButton(AccessibilityNodeInfo root, String pkg) {

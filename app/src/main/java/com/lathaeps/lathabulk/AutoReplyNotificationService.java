@@ -30,6 +30,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String PENDING_SHARE="pending_share", PENDING_SHARE_AT="pending_share_at";
     public static final String CATALOG_QUEUE="catalog_share_queue", CATALOG_QUEUE_INDEX="catalog_share_index";
     public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
+    public static final String PENDING_TARGET="pending_share_target", PENDING_PHONE="pending_share_phone", PENDING_PICK_STAGE="pending_share_pick_stage";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
     private final Map<String,Long> lastReply=new HashMap<>();
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -92,13 +93,13 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         if(now-lastReply.getOrDefault(replyKey,0L)<wait) return;
         lastReply.put(replyKey,now);
         if(!file.isEmpty()){
-            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,now).apply();
+            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,now).putString(PENDING_TARGET,title).putString(PENDING_PHONE,senderPhone).putInt(PENDING_PICK_STAGE,0).apply();
             if(n.contentIntent!=null){ try{n.contentIntent.send();}catch(Exception ignored){} }
             final String f=file,t=type,c=caption;
             final ArrayList<Uri> files=new ArrayList<>(catalogFiles);
             final String phone=senderPhone;
             handler.postDelayed(()->{
-                if(files.size()>1){prepareCatalogQueue(files,c,pkg,phone);shareNextCatalogFile(this);}
+                if(files.size()>1){prepareCatalogQueue(files,c,pkg,phone,title);shareNextCatalogFile(this);}
                 else shareFile(Uri.parse(f),t,c,pkg,phone);
             },1200);
         } else if(!caption.isEmpty()) {
@@ -266,13 +267,14 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }
     }
 
-    private void prepareCatalogQueue(ArrayList<Uri> uris,String caption,String pkg,String phone){
+    private void prepareCatalogQueue(ArrayList<Uri> uris,String caption,String pkg,String phone,String target){
         JSONArray queue=new JSONArray();for(Uri uri:uris)queue.put(uri.toString());
         getSharedPreferences(PREFS,MODE_PRIVATE).edit()
             .putString(CATALOG_QUEUE,queue.toString()).putInt(CATALOG_QUEUE_INDEX,0)
             .putString(CATALOG_QUEUE_CAPTION,caption==null?"":caption)
             .putString(CATALOG_QUEUE_PACKAGE,pkg==null?"com.whatsapp":pkg)
             .putString(CATALOG_QUEUE_PHONE,phone==null?"":phone)
+            .putString(PENDING_TARGET,target==null?"":target).putString(PENDING_PHONE,phone==null?"":phone).putInt(PENDING_PICK_STAGE,0)
             .putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();
     }
 
@@ -296,7 +298,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
             i.setPackage(pkg);if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
             context.grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.startActivity(i);
-            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
+            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putInt(PENDING_PICK_STAGE,0).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
             return true;
         }catch(Exception error){clearCatalogQueue(p);p.edit().putString("last_business_status","Catalog send failed • "+error.getClass().getSimpleName()).apply();return false;}
     }
@@ -311,7 +313,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     }
 
     private static void clearCatalogQueue(SharedPreferences p){
-        p.edit().putBoolean(PENDING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).apply();
+        p.edit().putBoolean(PENDING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).remove(PENDING_TARGET).remove(PENDING_PHONE).remove(PENDING_PICK_STAGE).apply();
     }
 
     @SuppressWarnings("deprecation") private static void wakeScreen(android.content.Context context){

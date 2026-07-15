@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView statusText, pdfText, miniProgress, ledgerFileNameText;
     private EditText messageBox, searchBox;
-    private Button sendButton, accessibilityButton, editGroupButton, contactsButton, scheduleButton, selectedReviewButton;
+    private Button sendButton, accessibilityButton, notificationAccessButton, editGroupButton, contactsButton, scheduleButton, selectedReviewButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
     private String pendingCatalogName = "";
@@ -304,6 +304,7 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         refreshAccessibilityButton();
+        refreshNotificationAccessButton();
         boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
         if(running)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -410,9 +411,16 @@ public class MainActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
             catch (Exception e) { toast("Accessibility settings open nahi hui"); }
         });
-        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(-1, dp(39));
-        alp.setMargins(dp(2), dp(1), dp(2), dp(1));
-        root.addView(accessibilityButton, alp);
+        notificationAccessButton = button("Notification: OFF");
+        notificationAccessButton.setTextSize(12);
+        notificationAccessButton.setOnClickListener(v -> {
+            try { startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
+            catch (Exception e) { try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch(Exception ignored){} }
+        });
+        LinearLayout accessRow=row();
+        accessRow.addView(accessibilityButton,weighted(1f,41));
+        accessRow.addView(notificationAccessButton,weighted(1f,41));
+        root.addView(accessRow,new LinearLayout.LayoutParams(-1,dp(43)));
 
         LinearLayout businessRow=row();
         Button businessFiles=button("BUSINESS FILES");
@@ -541,6 +549,24 @@ public class MainActivity extends Activity {
         boolean enabled=isAccessibilityServiceEnabled();
         accessibilityButton.setText(enabled?"Accessibility: ON":"Accessibility: OFF");
         accessibilityButton.setTextColor(enabled?Color.rgb(0,95,35):Color.rgb(150,35,35));
+    }
+
+    private void refreshNotificationAccessButton(){
+        if(notificationAccessButton==null)return;
+        boolean enabled=isNotificationListenerEnabled();
+        notificationAccessButton.setText(enabled?"Notification: ON":"Notification: OFF");
+        notificationAccessButton.setTextColor(enabled?Color.rgb(0,95,35):Color.rgb(150,35,35));
+    }
+
+    private boolean isNotificationListenerEnabled(){
+        String flat=Settings.Secure.getString(getContentResolver(),"enabled_notification_listeners");
+        if(flat==null||flat.trim().isEmpty())return false;
+        ComponentName expected=new ComponentName(this,AutoReplyNotificationService.class);
+        for(String name:flat.split(":")){
+            ComponentName enabled=ComponentName.unflattenFromString(name);
+            if(expected.equals(enabled))return true;
+        }
+        return false;
     }
 
     private void requestContacts(){
@@ -1118,7 +1144,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.21.4";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.21.5";}}
     private long appVersionCode(){try{if(Build.VERSION.SDK_INT>=28)return getPackageManager().getPackageInfo(getPackageName(),0).getLongVersionCode();return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception e){return 0;}}
     private void checkForAppUpdate(){checkForAppUpdate(false);}
     private void autoCheckForAppUpdate(){SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);long now=System.currentTimeMillis();if(now-p.getLong("last_auto_update_check",0)<24L*60L*60L*1000L)return;p.edit().putLong("last_auto_update_check",now).apply();checkForAppUpdate(true);}
@@ -1232,23 +1258,15 @@ public class MainActivity extends Activity {
 
     private void openPhoneGallery(int requestCode){
         try{
-            // ACTION_PICK opens the phone manufacturer's Gallery / Albums app first
-            // (including Vivo Albums) and grants temporary read access to the result.
-            Intent i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.setType("image/*");
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivityForResult(i,requestCode);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(Intent.createChooser(i,"Phone Gallery / Albums"),requestCode);
         }catch(Exception first){
             try{
-                Intent fallback;
-                if(Build.VERSION.SDK_INT>=33){
-                    fallback=new Intent(MediaStore.ACTION_PICK_IMAGES);
-                    fallback.setType("image/*");
-                }else{
-                    fallback=new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                    fallback.setType("image/*");
-                    fallback.addCategory(Intent.CATEGORY_OPENABLE);
-                }
+                Intent fallback=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                fallback.setType("image/*");
                 fallback.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 startActivityForResult(fallback,requestCode);
             }catch(Exception second){
@@ -1265,18 +1283,12 @@ public class MainActivity extends Activity {
 
     private void openCatalogPhoneGallery(){
         try{
-            Intent i;
-            if(Build.VERSION.SDK_INT>=33){
-                i=new Intent(MediaStore.ACTION_PICK_IMAGES);
-                i.setType("image/*");
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-                i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX,Math.min(50,MediaStore.getPickImagesMaxLimit()));
-            }else{
-                i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-                i.setType("image/*");
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-            }
-            startActivityForResult(i,PICK_CATALOG_FILE);
+            Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.setType("image/*");
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(Intent.createChooser(i,"Select pictures from Phone Gallery / Albums"),PICK_CATALOG_FILE);
         }catch(Exception first){
             try{
                 Intent fallback=new Intent(Intent.ACTION_GET_CONTENT);
@@ -1346,7 +1358,9 @@ public class MainActivity extends Activity {
     private void pickBusinessFile(int code){
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/jpeg","image/png","image/webp"});
         if(code==PICK_CATALOG_FILE)i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-        startActivityForResult(Intent.createChooser(i,code==PICK_CATALOG_FILE?"Select one or multiple PDFs / pictures":"Select PDF or image"),code);
+        if(code==PICK_LEDGER_FILE)i.setType("application/pdf");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(Intent.createChooser(i,code==PICK_CATALOG_FILE?"Phone Gallery / Files • PDFs and pictures":"Phone Gallery / Files • Select PDF"),code);
     }
 
     private JSONArray readCatalogs(){
@@ -1363,6 +1377,7 @@ public class MainActivity extends Activity {
         if(clips!=null){for(int i=0;i<clips.getItemCount();i++){Uri uri=clips.getItemAt(i).getUri();if(uri!=null)selected.add(uri);}}
         else if(data.getData()!=null)selected.add(data.getData());
         if(selected.isEmpty()){toast("No Catalog file selected");return;}
+        for(Uri uri:selected)try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
         int saved=0;
         for(int i=0;i<selected.size();i++)if(saveCatalog(selected.get(i),i,selected.size()))saved++;
         String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();
@@ -1671,6 +1686,7 @@ public class MainActivity extends Activity {
             LedgerPageData item=new LedgerPageData(phone,extractLedgerName(text),extractClosingBalance(text),page-1);
             result.entries.add(item);byPhone.computeIfAbsent(phone,k->new ArrayList<>()).add(item);
         }
+        if(byPhone.isEmpty())throw new Exception("No labelled phone numbers found in ledger PDF");
         File dir=new File(getFilesDir(),"business_files/customer_ledgers");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Ledger folder create failed");
         File[] old=dir.listFiles();if(old!=null)for(File f:old)if(f.isFile())f.delete();
         JSONArray customers=new JSONArray();
@@ -1690,8 +1706,14 @@ public class MainActivity extends Activity {
 
     private String extractLedgerPhone(String text){
         for(String raw:text.split("\\r?\\n")){
-            String low=raw.toLowerCase(Locale.ROOT);if(!low.contains("tel")||!low.contains("no"))continue;
-            String digits=raw.replaceAll("[^0-9]","");if(digits.length()>=10){String last=digits.substring(digits.length()-10);if(last.matches("[6-9][0-9]{9}"))return "91"+last;}
+            String low=raw.toLowerCase(Locale.ROOT);
+            boolean labelled=low.matches(".*\\b(tel(?:ephone)?|mobile|mob|phone|whatsapp|contact)\\b.*");
+            if(!labelled)continue;
+            Matcher m=Pattern.compile("(?:\\+?91[\\s-]?)?([6-9][0-9\\s-]{8,13}[0-9])").matcher(raw);
+            while(m.find()){
+                String digits=m.group(1).replaceAll("[^0-9]","");
+                if(digits.length()>=10){String last=digits.substring(digits.length()-10);if(last.matches("[6-9][0-9]{9}"))return "91"+last;}
+            }
         }
         return "";
     }

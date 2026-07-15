@@ -1,4 +1,13 @@
-# LathaBulk v3.21.4 – Ledger Auto Reply Fix
+# LathaBulk v3.21.5 – Catalog, Gallery & Ledger Workflow Fix
+
+## v3.21.5 fixes
+
+- Accessibility and Notification Access buttons are now side-by-side on the main screen with live ON/OFF status.
+- Catalog PDF/image selection uses the phone Gallery/Albums/Files picker with multi-select and durable file access.
+- Catalog auto-reply can search and select the intended WhatsApp recipient when WhatsApp opens its "Send to" window.
+- Catalog workflow timeout increased so it does not stop while WhatsApp is opening or selecting a recipient.
+- Master Ledger parser now recognizes Tel, Telephone, Mobile, Mob, Phone, WhatsApp and Contact labels.
+- An invalid Master Ledger with no recognised customer phone numbers is rejected instead of silently replacing the working customer list.
 
 - App automatically checks for a newer version once every 24 hours.
 - **Settings → Check for App Update** is also available for a manual check.

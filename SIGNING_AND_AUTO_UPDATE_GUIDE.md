@@ -17,7 +17,7 @@ Never upload the JKS file or passwords as normal repository files.
 
 1. Increase `versionCode` and `versionName` in `app/build.gradle`.
 2. Put the same values in `latest-version.json`.
-3. Push the project, then create a Git tag such as `v3.21.4`.
+3. Push the project, then create a Git tag such as `v3.21.5`.
 4. GitHub Actions builds the signed APK and attaches it to the Release as `LathaEPS-Smart.apk`.
 
 Every future APK must use the same JKS key. Otherwise Android will reject the update over the installed app.
