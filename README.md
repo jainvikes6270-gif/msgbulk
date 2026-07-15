@@ -1,53 +1,12 @@
-# LathaBulk v3.21.6 – Ledger + Catalog Reliable Send Fix
+# LathaBulk v3.22.1 – Ledger + Catalog Fresh Workflow
 
-- Real WhatsApp notifications titled `Name (2 messages)` are no longer skipped.
-- Ledger mapping accepts one unambiguous Indian mobile number even when Tally omits the Mobile label.
-- A Catalog type now opens one WhatsApp preview with all selected images/PDFs instead of stopping between separate windows.
-- Catalog Gallery opens the Android/Vivo photo picker directly and supports multiple selection.
-- Accessibility and Notification Access are together on the main screen.
-- Large PDF previews get up to 3 minutes before the automatic send state expires.
+## v3.22.1 verified fixes
 
-# LathaBulk v3.21.5 – Ledger + CATLOG Workflow Fix
-
-- Ledger parser now recognises Mobile, Mob, Phone, Telephone, Tel, WhatsApp and Contact labels.
-- CATLOG resolves the notification sender through Contacts or the verified Ledger customer map, preventing the WhatsApp recipient-picker stop.
-- One and multiple CATLOG files share the same reliable send queue.
-- Phone Gallery/Albums multi-select is enabled for Catalog pictures.
-
-- App automatically checks for a newer version once every 24 hours.
-- **Settings → Check for App Update** is also available for a manual check.
-- **DOWNLOAD & UPDATE** downloads `LathaEPS-Smart.apk` inside the app and opens Android's install confirmation.
-- Update source corrected to `jainvikes6270-gif/lathabulk`.
-- GitHub Actions now supports a permanently signed Release APK from private repository secrets.
-- Package name remains `com.lathaeps.lathabulk`; existing app data stays safe during an update.
-
-# LathaBulk v3.21.2 – Mobile Business Tools
-
-- **Owner Licence Register** saves customer name, WhatsApp number, Device ID, paid/free plan, activation code and expiry status.
-- Owner can copy a saved code, send it to the customer on WhatsApp or delete a register record.
-- **Send Payment Proof** collects UTR and a screenshot, adds the Device ID automatically and shares it to `+91 90251 56444`.
-- **Business Files → Create Payment Receipt PDF** creates a branded receipt and shares it to the customer's WhatsApp number.
-- **Settings → Check for App Update** compares the installed version with `latest-version.json` and opens the latest GitHub release.
-- Owner Licence Register is included in backup and remains safe when Clear All Data is used.
-
-# LathaBulk v3.21.1 – ₹700 UPI Payment
-
-- **Plan & Licence** now includes a prominent **PAY ₹700 VIA UPI** button.
-- Opens any installed UPI app with ₹700, `LATHAEPS` and `jainvikes6270@oksbi` filled automatically.
-- If no UPI app is available, the UPI ID is copied for manual payment.
-- Payment remains owner-verified; customer shares payment screenshot and Device ID before receiving a yearly activation code.
-
-# LathaBulk v3.21.0 – Owner-Controlled Paid Licence
-
-- New users receive a **7-day free trial**.
-- Standard plan is **₹700 per year**, locked to one Android Device ID.
-- **Settings → Plan & Licence** shows trial, yearly, expiry or Free Lifetime status.
-- Owner Tools can generate a 365-day paid code or a **Free Lifetime** code for any chosen user.
-- Customer only shares the Device ID; the private Owner PIN is not shared.
-- Expired plans stop bulk sending, scheduled payment reminders and auto reply while keeping local app data safe.
-- Offline clock rollback protection and device-bound validation are included.
-
-# LathaBulk v3.20.5 – LATHAEPS SMART Header
+- Ledger parser rebuilt for Mobile, Mob, Phone, Telephone, Tel, WhatsApp and Contact labels.
+- Indian numbers normalize to strict last-10-digit matching before a customer PDF is sent.
+- Catalog Phone Gallery and multi-PDF/image selections are copied into permanent app storage.
+- Ledger and Catalog use one wake/unlock/send flow; tasks that began locked re-lock after completion.
+- Accessibility and Notification Access show live green ON / red OFF buttons on the main screen.
 
 - Main app header and Android app label now show **LATHAEPS SMART**.
 - Version remains visible only inside Settings.
@@ -180,7 +139,7 @@
 ## v3.16.3 changes
 
 - Fixed GitHub Actions Java compilation failure caused by duplicate `last10Digits()` method.
-- Android `versionCode` is 52 for clean update installation over v3.21.4.
+- Increased Android `versionCode` to 28 for clean update installation.
 
 ## v3.16.2 changes
 

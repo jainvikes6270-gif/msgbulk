@@ -28,21 +28,15 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     private static PowerManager.WakeLock queueWakeLock;
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (!LicenseManager.isEntitled(this)) {
-            getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_RUNNING,false).putBoolean(MainActivity.BROADCAST_RUNNING,false).apply();
-            releaseQueueWakeLock();
-            return;
-        }
         if (event == null || event.getPackageName() == null) return;
         String pkg = event.getPackageName().toString();
         if (!pkg.equals("com.whatsapp") && !pkg.equals("com.whatsapp.w4b")) return;
         SharedPreferences autoReply = getSharedPreferences(AutoReplyNotificationService.PREFS, MODE_PRIVATE);
         boolean pendingShare = autoReply.getBoolean(AutoReplyNotificationService.PENDING_SHARE, false);
         long pendingAt = autoReply.getLong(AutoReplyNotificationService.PENDING_SHARE_AT, 0L);
-        // Large PDF Catalogs and slower phones can need more than 30 seconds
-        // to build the WhatsApp preview. Keep the approved share alive longer.
-        if (pendingShare && System.currentTimeMillis()-pendingAt > 180000L) {
+        if (pendingShare && System.currentTimeMillis()-pendingAt > 120000L) {
             autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
+            TaskDeviceController.cancel(this);
             pendingShare=false;
         }
         SharedPreferences p = getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE);
@@ -64,8 +58,8 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             if(pendingShare){
                 boolean more=AutoReplyNotificationService.advanceCatalogQueue(this);
                 if(more){
-                    handler.postDelayed(()->{clickLocked=false;AutoReplyNotificationService.shareNextCatalogFile(this);},2200);
-                }else handler.postDelayed(()->clickLocked=false,1200);
+                    handler.postDelayed(()->{clickLocked=false;AutoReplyNotificationService.shareNextCatalogFile(this);},1500);
+                }else handler.postDelayed(()->{clickLocked=false;completeDeviceCycle();},1200);
                 return;
             }
             int min=p.getInt(MainActivity.AUTO_MIN_DELAY,3);int max=p.getInt(MainActivity.AUTO_MAX_DELAY,7);if(max<min)max=min;
@@ -140,11 +134,13 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 clickLocked = false;
                 Intent done = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(done);
+                handler.postDelayed(this::completeDeviceCycle,1000L);
                 return;
             }
         } catch (Exception e) {
             p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).apply();
             releaseQueueWakeLock();
+            TaskDeviceController.cancel(this);
             clickLocked = false;
             return;
         }
@@ -155,10 +151,10 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     static void openCurrentChat(Context context) {
         SharedPreferences p = context.getSharedPreferences(MainActivity.AUTO_PREFS, Context.MODE_PRIVATE);
         if (!p.getBoolean(MainActivity.AUTO_RUNNING, false)) return;
-        wakeForQueue(context);
+        TaskDeviceController.begin(context);wakeForQueue(context);
         android.app.KeyguardManager keyguard=(android.app.KeyguardManager)context.getSystemService(Context.KEYGUARD_SERVICE);
         if(keyguard!=null&&keyguard.isKeyguardLocked()){
-            LockScreenSendActivity.open(context,LockScreenSendActivity.MODE_BULK);
+            if(TaskDeviceController.shouldRequestUnlock(context))LockScreenSendActivity.open(context,LockScreenSendActivity.MODE_BULK);
             return;
         }
         openCurrentChatAfterUnlock(context);
@@ -173,6 +169,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             if (index < 0 || index >= a.length()) {
                 p.edit().putBoolean(MainActivity.AUTO_RUNNING, false).apply();
                 releaseQueueWakeLock();
+                TaskDeviceController.cancel(context);
                 return;
             }
             String number = a.getString(index);
@@ -192,6 +189,17 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         } catch (Exception e) {
             try { JSONArray failed=new JSONArray(p.getString(MainActivity.AUTO_FAILED,"[]")); JSONArray nums=new JSONArray(p.getString(MainActivity.AUTO_NUMBERS,"[]")); int idx=p.getInt(MainActivity.AUTO_INDEX,0); if(idx<nums.length())failed.put(nums.getString(idx)); p.edit().putString(MainActivity.AUTO_FAILED,failed.toString()).putBoolean(MainActivity.AUTO_RUNNING,false).apply(); } catch(Exception ignored) { p.edit().putBoolean(MainActivity.AUTO_RUNNING,false).apply(); }
             releaseQueueWakeLock();
+            TaskDeviceController.cancel(context);
+        }
+    }
+
+    private void completeDeviceCycle(){
+        boolean relock=TaskDeviceController.consumeRelockRequest(this);
+        if(!relock)return;
+        if(android.os.Build.VERSION.SDK_INT>=28){
+            boolean locked=performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+            getSharedPreferences(TaskDeviceController.PREFS,MODE_PRIVATE).edit()
+                    .putString(TaskDeviceController.LAST_STATUS,locked?"Task completed • device locked again":"Task completed • lock action unavailable").apply();
         }
     }
 

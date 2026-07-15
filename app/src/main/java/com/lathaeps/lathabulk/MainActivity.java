@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
-import android.app.DownloadManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -12,8 +11,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.ComponentName;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.text.TextUtils;
 import android.database.Cursor;
 import android.graphics.Color;
@@ -22,7 +19,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Typeface;
-import android.graphics.pdf.PdfDocument;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -30,10 +26,10 @@ import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.provider.Settings;
 import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Environment;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -76,8 +72,6 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument;
 import com.tom_roush.pdfbox.text.PDFTextStripper;
 
 import java.net.URLEncoder;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -106,12 +100,14 @@ public class MainActivity extends Activity {
     private static final int CREATE_MASTER_LEDGER_XLSX = 113;
     private static final int PICK_DIRECT_IMAGE = 114;
     private static final int PICK_BROADCAST_FILE = 115;
-    private static final int PICK_PAYMENT_PROOF = 116;
     static final String CHANNEL_ID = "latha_bulk_progress";
     static final int NOTIFICATION_ID = 511;
     static final String PREFS = "latha_bulk_prefs";
     static final String GROUPS_KEY = "saved_groups";
     static final String CATALOG_ITEMS_KEY = "catalog_items";
+    private static final String PENDING_CATALOG_NAME_KEY="pending_catalog_name";
+    private static final String PENDING_CATALOG_CATEGORY_KEY="pending_catalog_category";
+    private static final String PENDING_CATALOG_KEYWORDS_KEY="pending_catalog_keywords";
     static final String AUTO_PREFS = "latha_auto_send";
     static final String AUTO_NUMBERS = "numbers";
     static final String AUTO_MESSAGE = "message";
@@ -146,8 +142,6 @@ public class MainActivity extends Activity {
     private static final String DO_NOT_SEND_KEY = "do_not_send_numbers";
     private static final String LIST_TEMPLATES_KEY = "recipient_list_templates";
     private static final String PAYMENT_REMINDERS_KEY = "payment_reminders";
-    private static final String LICENCE_REGISTER_KEY = "owner_licence_register";
-    private static final String OWNER_WHATSAPP = "919025156444";
     private static final String PAYMENT_TEMPLATE_KEY = "payment_reminder_template";
     static final String PAYMENT_HISTORY_KEY = "payment_reminder_history";
     static final String PAYMENT_SCHEDULE_AT = "payment_schedule_at";
@@ -167,7 +161,7 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView statusText, pdfText, miniProgress, ledgerFileNameText;
     private EditText messageBox, searchBox;
-    private Button sendButton, accessibilityButton, editGroupButton, contactsButton, scheduleButton, selectedReviewButton;
+    private Button sendButton, accessibilityButton, notificationAccessButton, automaticLockButton, editGroupButton, contactsButton, scheduleButton, selectedReviewButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
     private String pendingCatalogName = "";
@@ -187,89 +181,13 @@ public class MainActivity extends Activity {
     private ImageView directSendPreview;
     private Button directSendImageButton;
     private Runnable scheduleTicker;
-    private String pendingPaymentProofUtr = "";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         PDFBoxResourceLoader.init(getApplicationContext());
         createNotificationChannel();
         requestNotificationPermissionIfNeeded();
-        LicenseManager.ensureTrialStarted(this);
-        if(LicenseManager.isEntitled(this))showLoginOrApp();
-        else showExpiredLicenceGate();
-        uiHandler.postDelayed(this::autoCheckForAppUpdate,2000);
-    }
-
-    private void showExpiredLicenceGate(){
-        TextView locked=new TextView(this);locked.setText("LATHAEPS SMART\n\nPlan expired");locked.setGravity(Gravity.CENTER);locked.setTextSize(24);locked.setTypeface(Typeface.DEFAULT_BOLD);locked.setTextColor(Color.rgb(0,91,78));locked.setBackgroundColor(Color.rgb(241,248,247));setContentView(locked);uiHandler.postDelayed(()->showLicenceCenter(true),180);
-    }
-
-    private void showLicenceCenter(boolean blocking){
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
-        TextView status=new TextView(this);status.setText(LicenseManager.status(this));status.setTextSize(18);status.setTypeface(Typeface.DEFAULT_BOLD);status.setTextColor(Color.rgb(0,110,80));status.setPadding(0,dp(8),0,dp(8));
-        TextView id=new TextView(this);id.setText("Device ID: "+LicenseManager.deviceId(this));id.setTextIsSelectable(true);id.setTextSize(16);id.setPadding(0,dp(8),0,dp(8));
-        Button pay=button("PAY ₹700 VIA UPI");pay.setTextColor(Color.WHITE);pay.setTypeface(Typeface.DEFAULT_BOLD);pay.setBackground(rounded(Color.rgb(20,125,75),14));
-        Button proof=button("SEND PAYMENT PROOF");proof.setTextColor(Color.rgb(0,91,78));proof.setTypeface(Typeface.DEFAULT_BOLD);
-        EditText code=new EditText(this);code.setHint("Enter activation code");code.setSingleLine(true);code.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        TextView help=new TextView(this);help.setText("UPI: jainvikes6270@oksbi\nPayment ke baad Device ID aur payment screenshot share karke activation code lein.\nOwner kisi user ko Free Lifetime bhi de sakta hai.");help.setTextSize(14);help.setTextIsSelectable(true);help.setPadding(0,dp(10),0,0);
-        box.addView(status);box.addView(id);box.addView(pay,new LinearLayout.LayoutParams(-1,dp(50)));box.addView(proof,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(code);box.addView(help);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Plan & Licence").setView(box).setCancelable(!blocking).setPositiveButton("ACTIVATE",null).setNeutralButton("OWNER TOOLS",null).setNegativeButton(blocking?"EXIT":"CLOSE",null).create();
-        pay.setOnClickListener(v->openYearlyUpiPayment());
-        proof.setOnClickListener(v->showPaymentProofDialog());
-        d.setOnShowListener(x->{d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(LicenseManager.activate(this,code.getText().toString())){toast("Licence activated successfully");d.dismiss();if(blocking)showLoginOrApp();}else code.setError("Invalid, expired, or another device code");});d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->showOwnerPinDialog());if(blocking)d.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v->finish());});d.show();
-    }
-
-    private void openYearlyUpiPayment(){
-        Uri payment=new Uri.Builder().scheme("upi").authority("pay").appendQueryParameter("pa","jainvikes6270@oksbi").appendQueryParameter("pn","LATHAEPS").appendQueryParameter("am","700.00").appendQueryParameter("cu","INR").appendQueryParameter("tn","LATHAEPS SMART Yearly Plan").build();
-        Intent intent=new Intent(Intent.ACTION_VIEW,payment);try{startActivity(Intent.createChooser(intent,"Pay ₹700 using UPI"));}catch(Exception e){ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);if(cm!=null)cm.setPrimaryClip(ClipData.newPlainText("LATHAEPS UPI","jainvikes6270@oksbi"));toast("UPI app nahi mila • UPI ID copied");}
-    }
-
-    private void showPaymentProofDialog(){
-        EditText utr=new EditText(this);utr.setHint("Enter UTR / transaction number");utr.setSingleLine(true);utr.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Send Payment Proof").setMessage("Payment screenshot choose karein. Device ID automatically message me add hoga.").setView(utr).setPositiveButton("CHOOSE SCREENSHOT",null).setNegativeButton("CANCEL",null).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String value=utr.getText().toString().trim();if(value.length()<6){utr.setError("Valid UTR enter karein");return;}pendingPaymentProofUtr=value;Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);pick.addCategory(Intent.CATEGORY_OPENABLE);pick.setType("image/*");startActivityForResult(Intent.createChooser(pick,"Choose payment screenshot"),PICK_PAYMENT_PROOF);d.dismiss();}));d.show();
-    }
-
-    private void sendPaymentProof(Uri screenshot){
-        String text="LATHAEPS SMART • ₹700 Yearly Plan Payment Proof\nUTR: "+pendingPaymentProofUtr+"\nDevice ID: "+LicenseManager.deviceId(this)+"\nPlease verify and send activation code.";
-        shareToWhatsAppNumber(OWNER_WHATSAPP,"image/*",screenshot,text,"Send payment proof");pendingPaymentProofUtr="";
-    }
-
-    private void showOwnerPinDialog(){
-        EditText pin=new EditText(this);pin.setHint("Owner PIN");pin.setSingleLine(true);pin.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Owner Verification").setView(pin).setPositiveButton("OPEN",null).setNegativeButton("CANCEL",null).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(!LicenseManager.OWNER_PIN.equalsIgnoreCase(pin.getText().toString().trim())){pin.setError("Wrong owner PIN");return;}d.dismiss();showOwnerLicenceTools();}));d.show();
-    }
-
-    private void showOwnerLicenceTools(){
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
-        EditText customer=new EditText(this);customer.setHint("Customer name");customer.setSingleLine(true);
-        EditText phone=new EditText(this);phone.setHint("Customer WhatsApp number");phone.setInputType(InputType.TYPE_CLASS_PHONE);phone.setSingleLine(true);
-        EditText device=new EditText(this);device.setHint("Customer Device ID");device.setSingleLine(true);device.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        Spinner plan=new Spinner(this);String[] plans={"Yearly ₹700 • 365 days","Free Lifetime"};plan.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,plans));
-        TextView output=new TextView(this);output.setText("Activation code yahan dikhega");output.setTextIsSelectable(true);output.setTextSize(16);output.setPadding(0,dp(18),0,dp(12));
-        Button register=button("VIEW LICENCE REGISTER");register.setTypeface(Typeface.DEFAULT_BOLD);register.setTextColor(Color.rgb(0,91,78));
-        box.addView(customer);box.addView(phone);box.addView(device);box.addView(plan,new LinearLayout.LayoutParams(-1,dp(52)));box.addView(output);box.addView(register,new LinearLayout.LayoutParams(-1,dp(46)));
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Owner Licence Tools").setMessage("Customer ka Device ID paste karein aur plan choose karein.").setView(box).setPositiveButton("GENERATE",null).setNeutralButton("COPY CODE",null).setNegativeButton("CLOSE",null).create();
-        register.setOnClickListener(v->showLicenceRegister());
-        d.setOnShowListener(x->{d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String generated=LicenseManager.generateCode(device.getText().toString(),plan.getSelectedItemPosition()==1);if(generated.isEmpty()){device.setError("Valid 12-character Device ID enter karein");return;}output.setText(generated);saveLicenceRecord(customer.getText().toString(),phone.getText().toString(),device.getText().toString(),plan.getSelectedItemPosition()==1,generated);toast("Code generated & register me saved");});d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{String value=output.getText().toString();if(!value.startsWith("Y-")&&!value.startsWith("F-")){toast("Pehle code generate karein");return;}ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);if(cm!=null)cm.setPrimaryClip(ClipData.newPlainText("LATHAEPS activation",value));toast("Activation code copied");});});d.show();
-    }
-
-    private JSONArray readLicenceRegister(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(LICENCE_REGISTER_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
-    private void saveLicenceRecord(String name,String phone,String device,boolean free,String code){
-        try{JSONArray old=readLicenceRegister(),fresh=new JSONArray();String cleanDevice=device.trim().toUpperCase(Locale.ROOT);for(int i=0;i<old.length();i++){JSONObject item=old.optJSONObject(i);if(item!=null&&!cleanDevice.equalsIgnoreCase(item.optString("device")))fresh.put(item);}JSONObject item=new JSONObject();item.put("name",name.trim().isEmpty()?"Customer":name.trim());item.put("phone",normalize(phone));item.put("device",cleanDevice);item.put("plan",free?"Free Lifetime":"Yearly ₹700");item.put("code",code);item.put("created",System.currentTimeMillis());String[] parts=code.split("-");item.put("expiry",free?0L:(parts.length>1?Long.parseLong(parts[1])*24L*60L*60L*1000L:0L));fresh.put(item);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(LICENCE_REGISTER_KEY,fresh.toString()).apply();}catch(Exception e){toast("Licence register save failed");}
-    }
-    private void showLicenceRegister(){
-        JSONArray a=readLicenceRegister();if(a.length()==0){new AlertDialog.Builder(this).setTitle("Licence Register").setMessage("No licence generated yet").setPositiveButton("Close",null).show();return;}String[] rows=new String[a.length()];for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);long expiry=o==null?0:o.optLong("expiry",0L);String status=expiry==0?"Lifetime":(expiry>=System.currentTimeMillis()?"Active":"Expired");rows[i]=(o==null?"Customer":o.optString("name","Customer"))+"\n"+(o==null?"":o.optString("phone",""))+" • "+(o==null?"":o.optString("plan",""))+" • "+status+"\n"+(o==null?"":o.optString("device",""));}
-        new AlertDialog.Builder(this).setTitle("Owner Licence Register • "+a.length()).setItems(rows,(d,which)->showLicenceRecordActions(which)).setNegativeButton("Close",null).show();
-    }
-    private void showLicenceRecordActions(int index){
-        JSONArray a=readLicenceRegister();JSONObject o=a.optJSONObject(index);if(o==null)return;String[] actions={"Copy activation code","Send code on WhatsApp","Delete record"};new AlertDialog.Builder(this).setTitle(o.optString("name","Customer")).setMessage(o.optString("plan","")+"\nDevice: "+o.optString("device","")).setItems(actions,(d,which)->{if(which==0){ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);if(cm!=null)cm.setPrimaryClip(ClipData.newPlainText("Activation code",o.optString("code","")));toast("Activation code copied");}else if(which==1){String phone=normalize(o.optString("phone",""));if(phone.isEmpty()){toast("Customer WhatsApp number missing");return;}String text="LATHAEPS SMART activation\nPlan: "+o.optString("plan","")+"\nDevice ID: "+o.optString("device","")+"\nActivation code: "+o.optString("code","");shareToWhatsAppNumber(phone,"text/plain",null,text,"Send activation code");}else deleteLicenceRecord(index);}).setNegativeButton("Back",(d,w)->showLicenceRegister()).show();
-    }
-    private void deleteLicenceRecord(int index){JSONArray old=readLicenceRegister(),fresh=new JSONArray();for(int i=0;i<old.length();i++)if(i!=index)fresh.put(old.opt(i));getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(LICENCE_REGISTER_KEY,fresh.toString()).apply();toast("Licence record deleted");}
-
-    private void shareToWhatsAppNumber(String phone,String type,Uri attachment,String text,String chooserTitle){
-        String target=normalize(phone);if(target.isEmpty())target=phone.replaceAll("[^0-9]","");Intent i=new Intent(Intent.ACTION_SEND);i.setType(type);i.putExtra(Intent.EXTRA_TEXT,text);if(attachment!=null){i.putExtra(Intent.EXTRA_STREAM,attachment);i.setClipData(ClipData.newRawUri("attachment",attachment));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);grantUriPermission("com.whatsapp",attachment,Intent.FLAG_GRANT_READ_URI_PERMISSION);grantUriPermission("com.whatsapp.w4b",attachment,Intent.FLAG_GRANT_READ_URI_PERMISSION);}i.putExtra("jid",target+"@s.whatsapp.net");String pkg=getPackageManager().getLaunchIntentForPackage("com.whatsapp.w4b")!=null?"com.whatsapp.w4b":"com.whatsapp";try{i.setPackage(pkg);startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,chooserTitle));}
+        showLoginOrApp();
     }
 
     private void showLoginOrApp(){
@@ -303,7 +221,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        refreshAccessibilityButton();
+        refreshAccessButtons();
         boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
         if(running)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -411,15 +329,28 @@ public class MainActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
             catch (Exception e) { toast("Accessibility settings open nahi hui"); }
         });
-        Button notificationAccess=button("Notification Access");
-        notificationAccess.setTextSize(13);
-        notificationAccess.setOnClickListener(v->{
+        notificationAccessButton=button("Notification Access: OFF");
+        notificationAccessButton.setTextSize(12);
+        notificationAccessButton.setOnClickListener(v->{
             try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}
             catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}
         });
-        accessRow.addView(accessibilityButton,weighted(1f,41));
-        accessRow.addView(notificationAccess,weighted(1f,41));
+        accessRow.addView(accessibilityButton,weighted(1f,42));
+        accessRow.addView(notificationAccessButton,weighted(1f,42));
         root.addView(accessRow);
+
+        automaticLockButton=button("AUTO UNLOCK + LOCK: ON");
+        automaticLockButton.setTextSize(13);
+        automaticLockButton.setTypeface(Typeface.DEFAULT_BOLD);
+        automaticLockButton.setOnClickListener(v->{
+            boolean enabled=!TaskDeviceController.autoUnlockEnabled(this);
+            TaskDeviceController.setAutomaticCycle(this,enabled);
+            refreshAccessButtons();
+            toast(enabled?"Task start par screen open, complete par lock ✓":"Automatic unlock + lock OFF");
+        });
+        LinearLayout.LayoutParams autoLockLp=new LinearLayout.LayoutParams(-1,dp(40));
+        autoLockLp.setMargins(dp(2),dp(1),dp(2),dp(2));root.addView(automaticLockButton,autoLockLp);
+        uiHandler.post(this::refreshAccessButtons);
 
         LinearLayout businessRow=row();
         Button businessFiles=button("BUSINESS FILES");
@@ -543,11 +474,36 @@ public class MainActivity extends Activity {
     private LinearLayout.LayoutParams weighted(float w,int h){ LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(h),w); lp.setMargins(dp(1),dp(1),dp(1),dp(1)); return lp; }
     private int dp(int n){ return Math.round(n*getResources().getDisplayMetrics().density); }
 
-    private void refreshAccessibilityButton(){
-        if(accessibilityButton==null)return;
-        boolean enabled=isAccessibilityServiceEnabled();
-        accessibilityButton.setText(enabled?"Accessibility: ON":"Accessibility: OFF");
-        accessibilityButton.setTextColor(enabled?Color.rgb(0,95,35):Color.rgb(150,35,35));
+    private void refreshAccessibilityButton(){refreshAccessButtons();}
+    private void refreshAccessButtons(){
+        boolean accessibility=isAccessibilityServiceEnabled();
+        if(accessibilityButton!=null){
+            accessibilityButton.setText(accessibility?"Accessibility: ON":"Accessibility: OFF");
+            styleLiveStatus(accessibilityButton,accessibility);
+        }
+        boolean notification=isNotificationAccessEnabled();
+        if(notificationAccessButton!=null){
+            notificationAccessButton.setText(notification?"Notification Access: ON":"Notification Access: OFF");
+            styleLiveStatus(notificationAccessButton,notification);
+        }
+        if(automaticLockButton!=null){
+            boolean enabled=TaskDeviceController.autoUnlockEnabled(this)&&TaskDeviceController.autoRelockEnabled(this);
+            automaticLockButton.setText(enabled?"AUTO UNLOCK + LOCK: ON":"AUTO UNLOCK + LOCK: OFF");
+            styleLiveStatus(automaticLockButton,enabled);
+        }
+    }
+    private void styleLiveStatus(Button button,boolean enabled){
+        button.setTextColor(Color.WHITE);
+        button.setBackground(rounded(enabled?Color.rgb(18,135,70):Color.rgb(190,45,45),12));
+    }
+    private boolean isNotificationAccessEnabled(){
+        try{
+            String flat=Settings.Secure.getString(getContentResolver(),"enabled_notification_listeners");
+            if(flat==null||flat.trim().isEmpty())return false;
+            String expected=new ComponentName(this,AutoReplyNotificationService.class).flattenToString();
+            for(String item:flat.split(":")){ComponentName c=ComponentName.unflattenFromString(item);if(c!=null&&(c.flattenToString().equals(expected)||c.getPackageName().equals(getPackageName())))return true;}
+        }catch(Exception ignored){}
+        return false;
     }
 
     private void requestContacts(){
@@ -930,6 +886,7 @@ public class MainActivity extends Activity {
     private void stopAutoSend(String label){
         getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(AUTO_RUNNING,false).remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE).remove(AUTO_MESSAGES).remove(AUTO_QUEUE_TOKEN).apply();
         WhatsAppAccessibilityService.releaseQueueWakeLock();
+        TaskDeviceController.cancel(this);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sendButton.setText("AUTO SEND TO SELECTED CONTACTS");
         miniProgress.setText(label);
@@ -953,7 +910,6 @@ public class MainActivity extends Activity {
         if(requestCode==CREATE_MASTER_LEDGER_XLSX&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null&&pendingMasterPdfUri!=null) convertMasterPdfToExcel(pendingMasterPdfUri,data.getData());
         if(requestCode==PICK_DIRECT_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)showDirectImageEditor(data.getData());
         if(requestCode==PICK_BROADCAST_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){broadcastFileUri=data.getData();broadcastFileType=getContentResolver().getType(broadcastFileUri);try{getContentResolver().takePersistableUriPermission(broadcastFileUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}if(broadcastFileLabel!=null)broadcastFileLabel.setText("Selected: "+(broadcastFileUri.getLastPathSegment()==null?"Attachment ready ✓":broadcastFileUri.getLastPathSegment()));}
-        if(requestCode==PICK_PAYMENT_PROOF&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)sendPaymentProof(data.getData());
     }
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,buildFinalMessage());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
@@ -1043,8 +999,6 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
         addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS SMART").setPositiveButton("OK",null).show());
-        addSettingsButton(list,"₹  Plan & Licence",LicenseManager.status(this),v->showLicenceCenter(false));
-        addSettingsButton(list,"⬇  Check for App Update","Current v"+appVersion()+" • Check latest version",v->checkForAppUpdate());
         addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
         addSettingsButton(list,"☀  Screen-off Auto Send","Keeps screen awake while bulk sending",v->showScreenOffHelp());
         addSettingsButton(list,"✉  Contact Us","lathaeps@gmail.com",v->contactSupport());
@@ -1124,19 +1078,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.21.6";}}
-    private long appVersionCode(){try{if(Build.VERSION.SDK_INT>=28)return getPackageManager().getPackageInfo(getPackageName(),0).getLongVersionCode();return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception e){return 0;}}
-    private void checkForAppUpdate(){checkForAppUpdate(false);}
-    private void autoCheckForAppUpdate(){SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);long now=System.currentTimeMillis();if(now-p.getLong("last_auto_update_check",0)<24L*60L*60L*1000L)return;p.edit().putLong("last_auto_update_check",now).apply();checkForAppUpdate(true);}
-    private void checkForAppUpdate(boolean silent){
-        if(!silent)toast("Checking latest version…");new Thread(()->{JSONObject info=null;String[] branches={"main","master"};for(String branch:branches){try{URL url=new URL("https://raw.githubusercontent.com/jainvikes6270-gif/lathabulk/"+branch+"/latest-version.json?time="+System.currentTimeMillis());HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setConnectTimeout(10000);c.setReadTimeout(10000);c.setRequestProperty("Cache-Control","no-cache");try(BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()))){StringBuilder s=new StringBuilder();String line;while((line=r.readLine())!=null)s.append(line);info=new JSONObject(s.toString());}c.disconnect();if(info!=null)break;}catch(Exception ignored){}}final JSONObject found=info;runOnUiThread(()->{if(found==null){if(!silent)new AlertDialog.Builder(this).setTitle("App Update").setMessage("Update check nahi ho paya. Internet check karke retry karein.").setPositiveButton("RETRY",(d,w)->checkForAppUpdate()).setNeutralButton("OPEN UPDATES",(d,w)->openUpdatePage()).setNegativeButton("Close",null).show();return;}String latest=found.optString("version","");long code=found.optLong("versionCode",0);String apk=found.optString("downloadUrl","");boolean newer=code>0?code>appVersionCode():!latest.isEmpty()&&!latest.equals(appVersion());if(!newer){if(!silent)toast("App is up to date • v"+appVersion());return;}new AlertDialog.Builder(this).setTitle("New Update Available").setMessage("Current: v"+appVersion()+"\nLatest: v"+latest+"\n\nUpdate download ke baad Android install confirmation dikhayega. App data safe rahega.").setPositiveButton("DOWNLOAD & UPDATE",(d,w)->downloadUpdate(apk,latest)).setNegativeButton("Later",null).show();});}).start();
-    }
-    private void downloadUpdate(String apkUrl,String version){
-        if(apkUrl==null||apkUrl.trim().isEmpty()){openUpdatePage();return;}
-        if(Build.VERSION.SDK_INT>=26&&!getPackageManager().canRequestPackageInstalls()){new AlertDialog.Builder(this).setTitle("Allow App Updates").setMessage("LATHAEPS SMART ko downloaded update install karne ki permission ON karein, phir Check for App Update dobara dabayein.").setPositiveButton("OPEN SETTING",(d,w)->{try{startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())));}catch(Exception e){openUpdatePage();}}).setNegativeButton("Cancel",null).show();return;}
-        try{DownloadManager dm=(DownloadManager)getSystemService(DOWNLOAD_SERVICE);if(dm==null){openUpdatePage();return;}String file="LathaEPS-Smart-v"+(version==null?"latest":version)+".apk";DownloadManager.Request req=new DownloadManager.Request(Uri.parse(apkUrl));req.setTitle("LATHAEPS SMART update");req.setDescription("Downloading version "+version);req.setMimeType("application/vnd.android.package-archive");req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);req.setDestinationInExternalFilesDir(this,Environment.DIRECTORY_DOWNLOADS,file);long id=dm.enqueue(req);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putLong("app_update_download_id",id).putString("app_update_file",file).apply();toast("Update downloading • notification check karein");}catch(Exception e){toast("Download start nahi hua");openUpdatePage();}
-    }
-    private void openUpdatePage(){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/jainvikes6270-gif/lathabulk/releases/latest")));}catch(Exception e){toast("Update page open nahi hui");}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.20.5";}}
     private void showScreenOffHelp(){
         new AlertDialog.Builder(this).setTitle("Screen-off Auto Send")
             .setMessage("Auto Send screen ko awake rakhega. Phone pehle se lock ho to screen ON hogi. Swipe lock automatically dismiss hoga.\n\nPIN, pattern ya fingerprint lock par Android unlock prompt dikhayega; unlock karte hi pending Bulk/Catalog queue automatically continue hogi. Security lock ko app bypass nahi kar sakta.")
@@ -1152,7 +1094,7 @@ public class MainActivity extends Activity {
     }
     private void createDriveBackupFile(){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Drive_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(Intent.createChooser(i,"Choose Google Drive and save backup"),CREATE_BACKUP);}
     private void confirmClearAllData(Dialog settings){new AlertDialog.Builder(this).setTitle("Clear all app data?").setMessage("Contacts, recipient lists, catalogs, auto-reply rules, images, templates, ledgers and history delete honge. Login PIN aur recovery word safe rahenge.").setPositiveButton("Clear All",(d,w)->{clearAllUserData();settings.dismiss();recreate();}).setNegativeButton("Cancel",null).show();}
-    private void clearAllUserData(){SharedPreferences main=getSharedPreferences(PREFS,MODE_PRIVATE);String pin=main.getString(PIN_KEY,"");String recovery=main.getString(RECOVERY_KEY,"");String licenceRegister=main.getString(LICENCE_REGISTER_KEY,"[]");boolean login=main.getBoolean(LOGIN_ENABLED_KEY,true);boolean dark=main.getBoolean(DARK_KEY,false);main.edit().clear().putString(PIN_KEY,pin).putString(RECOVERY_KEY,recovery).putString(LICENCE_REGISTER_KEY,licenceRegister).putBoolean(LOGIN_ENABLED_KEY,login).putBoolean(DARK_KEY,dark).apply();getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();deleteAppFiles(getFilesDir());selectedNumbers.clear();allContacts.clear();visibleContacts.clear();toast("All data cleared • PIN & licence register kept safe");}
+    private void clearAllUserData(){SharedPreferences main=getSharedPreferences(PREFS,MODE_PRIVATE);String pin=main.getString(PIN_KEY,"");String recovery=main.getString(RECOVERY_KEY,"");boolean login=main.getBoolean(LOGIN_ENABLED_KEY,true);boolean dark=main.getBoolean(DARK_KEY,false);main.edit().clear().putString(PIN_KEY,pin).putString(RECOVERY_KEY,recovery).putBoolean(LOGIN_ENABLED_KEY,login).putBoolean(DARK_KEY,dark).apply();getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();deleteAppFiles(getFilesDir());selectedNumbers.clear();allContacts.clear();visibleContacts.clear();toast("All data cleared • PIN kept safe");}
     private void deleteAppFiles(File dir){File[] files=dir.listFiles();if(files==null)return;for(File f:files){if(f.isDirectory())deleteAppFiles(f);f.delete();}}
 
     private void createBackupFile(){
@@ -1270,6 +1212,7 @@ public class MainActivity extends Activity {
     }
 
     private void openCatalogPhoneGallery(){
+        persistPendingCatalog();
         try{
             Intent i;
             if(Build.VERSION.SDK_INT>=33){
@@ -1278,25 +1221,20 @@ public class MainActivity extends Activity {
                 i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
                 i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX,Math.min(50,MediaStore.getPickImagesMaxLimit()));
             }else{
-                // ACTION_PICK is single-select on many Vivo/Oppo Gallery apps.
-                // GET_CONTENT keeps Gallery/Albums available and returns ClipData.
-                i=new Intent(Intent.ACTION_GET_CONTENT);
+                i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
                 i.setType("image/*");
-                i.addCategory(Intent.CATEGORY_OPENABLE);
                 i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
             }
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            // Do not wrap the Android photo picker in a chooser: this opens the
-            // phone's Gallery/Albums surface directly instead of the Files app.
-            if(Build.VERSION.SDK_INT>=33)startActivityForResult(i,PICK_CATALOG_FILE);
-            else startActivityForResult(Intent.createChooser(i,"Select Catalog pictures from Phone Gallery"),PICK_CATALOG_FILE);
+            startActivityForResult(i,PICK_CATALOG_FILE);
         }catch(Exception first){
             try{
-                Intent fallback=new Intent(Intent.ACTION_GET_CONTENT);
+                Intent fallback=new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 fallback.setType("image/*");
                 fallback.addCategory(Intent.CATEGORY_OPENABLE);
                 fallback.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-                startActivityForResult(Intent.createChooser(fallback,"Select Catalog pictures from Phone Gallery"),PICK_CATALOG_FILE);
+                fallback.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                startActivityForResult(Intent.createChooser(fallback,"Phone Gallery / Albums • select pictures"),PICK_CATALOG_FILE);
             }catch(Exception e){toast("Phone Gallery open nahi hui");}
         }
     }
@@ -1357,9 +1295,30 @@ public class MainActivity extends Activity {
     }
 
     private void pickBusinessFile(int code){
-        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/jpeg","image/png","image/webp"});
+        if(code==PICK_CATALOG_FILE)persistPendingCatalog();
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);
+        if(code==PICK_LEDGER_FILE)i.setType("application/pdf");else{i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/jpeg","image/png","image/webp"});}
         if(code==PICK_CATALOG_FILE)i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         startActivityForResult(Intent.createChooser(i,code==PICK_CATALOG_FILE?"Select one or multiple PDFs / pictures":"Select PDF or image"),code);
+    }
+
+    private void persistPendingCatalog(){
+        getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                .putString(PENDING_CATALOG_NAME_KEY,pendingCatalogName)
+                .putString(PENDING_CATALOG_CATEGORY_KEY,pendingCatalogCategory)
+                .putString(PENDING_CATALOG_KEYWORDS_KEY,pendingCatalogKeywords).apply();
+    }
+    private void restorePendingCatalog(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(pendingCatalogName.trim().isEmpty())pendingCatalogName=p.getString(PENDING_CATALOG_NAME_KEY,"");
+        if(pendingCatalogCategory.trim().isEmpty())pendingCatalogCategory=p.getString(PENDING_CATALOG_CATEGORY_KEY,"");
+        if(pendingCatalogKeywords.trim().isEmpty())pendingCatalogKeywords=p.getString(PENDING_CATALOG_KEYWORDS_KEY,"");
+    }
+    private void clearPendingCatalog(){
+        pendingCatalogName="";pendingCatalogCategory="";pendingCatalogKeywords="";
+        getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(PENDING_CATALOG_NAME_KEY)
+                .remove(PENDING_CATALOG_CATEGORY_KEY).remove(PENDING_CATALOG_KEYWORDS_KEY).apply();
     }
 
     private JSONArray readCatalogs(){
@@ -1371,6 +1330,7 @@ public class MainActivity extends Activity {
     }
     private void writeCatalogs(JSONArray items){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(CATALOG_ITEMS_KEY,items.toString()).apply();}
     private void saveCatalogSelections(Intent data){
+        restorePendingCatalog();
         List<Uri> selected=new ArrayList<>();
         android.content.ClipData clips=data.getClipData();
         if(clips!=null){for(int i=0;i<clips.getItemCount();i++){Uri uri=clips.getItemAt(i).getUri();if(uri!=null)selected.add(uri);}}
@@ -1379,17 +1339,22 @@ public class MainActivity extends Activity {
         int saved=0;
         for(int i=0;i<selected.size();i++)if(saveCatalog(selected.get(i),i,selected.size()))saved++;
         String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();
-        pendingCatalogName="";pendingCatalogCategory="";pendingCatalogKeywords="";
+        clearPendingCatalog();
         toast(saved+" / "+selected.size()+" "+category+" files saved ✓");
         uiHandler.postDelayed(this::showCatalogScreen,250);
     }
     private boolean saveCatalog(Uri source,int selectedIndex,int selectedTotal){
         try{
-            String type=getContentResolver().getType(source);String ext=(type!=null&&type.contains("pdf"))?"pdf":(type!=null&&type.contains("png"))?"png":(type!=null&&type.contains("webp"))?"webp":"jpg";
+            String type=resolveCatalogMime(source);String ext=type.contains("pdf")?"pdf":type.contains("png")?"png":type.contains("webp")?"webp":"jpg";
             File dir=new File(getFilesDir(),"catalogs");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder create failed");File target=new File(dir,"catalog_"+System.currentTimeMillis()+"_"+selectedIndex+"."+ext);
             try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){if(in==null)throw new Exception("File read failed");byte[] buf=new byte[16*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}
-            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);String original=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();String baseName=pendingCatalogName.trim().isEmpty()?original:pendingCatalogName.trim();String display=selectedTotal>1?baseName+" • "+(selectedIndex+1):baseName;String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();String keywords=pendingCatalogKeywords.trim();JSONArray a=readCatalogs();JSONObject item=new JSONObject();item.put("name",display);item.put("category",category);item.put("keywords",keywords);item.put("original_name",original);item.put("uri",safe.toString());item.put("type",type==null?"application/octet-stream":type);item.put("updated",System.currentTimeMillis());item.put("path",target.getAbsolutePath());a.put(item);writeCatalogs(a);getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putBoolean(AutoReplyNotificationService.ENABLED,true).apply();return true;
+            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);String original=source.getLastPathSegment()==null?target.getName():source.getLastPathSegment();String baseName=pendingCatalogName.trim().isEmpty()?original:pendingCatalogName.trim();String display=selectedTotal>1?baseName+" • "+(selectedIndex+1):baseName;String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();String keywords=pendingCatalogKeywords.trim();JSONArray a=readCatalogs();JSONObject item=new JSONObject();item.put("name",display);item.put("category",category);item.put("keywords",keywords);item.put("original_name",original);item.put("uri",safe.toString());item.put("type",type);item.put("updated",System.currentTimeMillis());item.put("path",target.getAbsolutePath());a.put(item);writeCatalogs(a);getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putBoolean(AutoReplyNotificationService.ENABLED,true).apply();return true;
         }catch(Exception e){return false;}
+    }
+    private String resolveCatalogMime(Uri source){
+        String type=getContentResolver().getType(source);if(type!=null&&!type.trim().isEmpty())return type;
+        String name=source.getLastPathSegment()==null?"":source.getLastPathSegment().toLowerCase(Locale.ROOT);
+        if(name.endsWith(".pdf"))return "application/pdf";if(name.endsWith(".png"))return "image/png";if(name.endsWith(".webp"))return "image/webp";return "image/jpeg";
     }
     private void showCatalogScreen(){
         Dialog dialog=new Dialog(this,android.R.style.Theme_Material_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(Color.BLACK);
@@ -1509,7 +1474,6 @@ public class MainActivity extends Activity {
         Button customers=button("Manage Ledger Customers ("+ledgerCustomerCount()+")");
         Button convertPdf=button("MASTER PDF → PHONE + BALANCE EXCEL");
         Button paymentReminder=button("PAYMENT REMINDER");
-        Button receipt=button("CREATE PAYMENT RECEIPT PDF");
         Button importCsv=button("IMPORT CUSTOMER EXCEL (OPTIONAL)");
         Button history=button("View updated files history");
         EditText ledgerKey=new EditText(this);ledgerKey.setHint("Ledger keyword");ledgerKey.setText(p.getString(AutoReplyNotificationService.LEDGER_KEY,"ledger"));
@@ -1517,11 +1481,10 @@ public class MainActivity extends Activity {
         TextView fileLabel=new TextView(this);fileLabel.setText("SAVED LEDGER FILE");fileLabel.setTextSize(13);fileLabel.setTypeface(Typeface.DEFAULT_BOLD);fileLabel.setTextColor(Color.DKGRAY);fileLabel.setPadding(dp(4),dp(9),dp(4),dp(4));
         ledgerFileNameText=new TextView(this);ledgerFileNameText.setText(savedLedgerName.isEmpty()?"No Ledger file saved":savedLedgerName);ledgerFileNameText.setTextSize(17);ledgerFileNameText.setTypeface(Typeface.DEFAULT_BOLD);ledgerFileNameText.setTextColor(savedLedgerName.isEmpty()?Color.rgb(190,45,45):Color.rgb(0,125,70));ledgerFileNameText.setBackground(rounded(savedLedgerName.isEmpty()?Color.rgb(255,235,235):Color.rgb(225,248,235),12));ledgerFileNameText.setPadding(dp(12),dp(10),dp(12),dp(10));
         TextView current=new TextView(this);current.setPadding(dp(4),dp(8),dp(4),dp(8));current.setText("Customers: "+ledgerCustomerCount()+"\nLast status: "+p.getString("last_business_status","No send attempt yet"));
-        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(receipt,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
+        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
         box.addView(history,new LinearLayout.LayoutParams(-1,dp(42)));
         ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));
         paymentReminder.setOnClickListener(v->showPaymentReminderScreen());
-        receipt.setOnClickListener(v->showPaymentReceiptDialog());
         customers.setOnClickListener(v->showLedgerCustomersDialog());
         convertPdf.setOnClickListener(v->chooseMasterPdfForExcel());
         importCsv.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select optional customer Excel"),PICK_LEDGER_CUSTOMERS_XLSX);});
@@ -1530,14 +1493,6 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Business Files • Ledger").setMessage("Catalog main screen par alag section mein hai. Ledger Auto Reply ke liye Notification Access ON rakhein.").setView(scroll)
             .setPositiveButton("Save & Turn ON",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast("Ledger settings saved • Auto Reply ON");})
             .setNegativeButton("Close",null).show();
-    }
-
-    private void showPaymentReceiptDialog(){
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);EditText name=new EditText(this);name.setHint("Customer name");EditText phone=new EditText(this);phone.setHint("Customer WhatsApp number");phone.setInputType(InputType.TYPE_CLASS_PHONE);EditText amount=new EditText(this);amount.setHint("Amount received ₹");amount.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);EditText utr=new EditText(this);utr.setHint("UTR / transaction number (optional)");EditText note=new EditText(this);note.setHint("Payment note (optional)");box.addView(name);box.addView(phone);box.addView(amount);box.addView(utr);box.addView(note);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Digital Payment Receipt").setView(box).setPositiveButton("CREATE & SEND",null).setNegativeButton("CANCEL",null).create();d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String n=name.getText().toString().trim(),p=normalize(phone.getText().toString()),a=amount.getText().toString().trim();if(n.isEmpty()){name.setError("Customer name required");return;}if(last10Digits(p).length()!=10){phone.setError("Valid WhatsApp number required");return;}if(a.isEmpty()){amount.setError("Amount required");return;}Uri pdf=createPaymentReceiptPdf(n,a,utr.getText().toString().trim(),note.getText().toString().trim());if(pdf==null)return;String text="Dear "+n+", payment of ₹"+a+" received successfully. Thank you — LATHAEPS.";shareToWhatsAppNumber(p,"application/pdf",pdf,text,"Send receipt");d.dismiss();}));d.show();
-    }
-    private Uri createPaymentReceiptPdf(String customer,String amount,String utr,String note){
-        PdfDocument document=new PdfDocument();try{PdfDocument.Page page=document.startPage(new PdfDocument.PageInfo.Builder(595,842,1).create());Canvas c=page.getCanvas();Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setColor(Color.rgb(0,91,78));c.drawRect(0,0,595,115,p);p.setColor(Color.WHITE);p.setTextSize(28);p.setTypeface(Typeface.DEFAULT_BOLD);c.drawText("LATHAEPS",40,52,p);p.setTextSize(15);p.setTypeface(Typeface.DEFAULT);c.drawText("PAYMENT RECEIPT",40,82,p);p.setColor(Color.rgb(25,25,25));p.setTextSize(18);p.setTypeface(Typeface.DEFAULT_BOLD);c.drawText("Payment Received",40,165,p);p.setTypeface(Typeface.DEFAULT);p.setTextSize(15);String date=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date());c.drawText("Receipt Date: "+date,40,205,p);c.drawText("Received From: "+customer,40,245,p);p.setTextSize(25);p.setTypeface(Typeface.DEFAULT_BOLD);p.setColor(Color.rgb(0,120,75));c.drawText("₹ "+amount,40,300,p);p.setColor(Color.DKGRAY);p.setTextSize(15);p.setTypeface(Typeface.DEFAULT);c.drawText("Payment Mode: UPI / Digital Payment",40,345,p);if(!utr.isEmpty())c.drawText("UTR: "+utr,40,380,p);if(!note.isEmpty())c.drawText("Note: "+note.substring(0,Math.min(note.length(),65)),40,420,p);p.setColor(Color.rgb(0,91,78));p.setTypeface(Typeface.DEFAULT_BOLD);c.drawText("Thank you for your payment.",40,505,p);p.setTypeface(Typeface.DEFAULT);p.setTextSize(13);p.setColor(Color.GRAY);c.drawText("Computer-generated receipt • LATHAEPS SMART",40,780,p);document.finishPage(page);File dir=new File(getFilesDir(),"receipts");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Receipt folder unavailable");File file=new File(dir,"LATHAEPS_Receipt_"+System.currentTimeMillis()+".pdf");try(FileOutputStream out=new FileOutputStream(file)){document.writeTo(out);}return FileProvider.getUriForFile(this,getPackageName()+".fileprovider",file);}catch(Exception e){toast("Receipt create failed");return null;}finally{document.close();}
     }
 
     private JSONArray readPaymentReminders(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(PAYMENT_REMINDERS_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
@@ -1666,7 +1621,7 @@ public class MainActivity extends Activity {
                 try(PDDocument document=PDDocument.load(target)){result=prepareCustomerLedgers(document);}
                 Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);
                 SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
-                String display="Master PDF";
+                String display=getDisplayName(source);if(display.isEmpty())display="Master Ledger PDF";
                 String history=p.getString("file_history","");String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • Master Ledger prepared • "+display;
                 p.edit().putString(AutoReplyNotificationService.LEDGER_URI,safe.toString()).putString(AutoReplyNotificationService.LEDGER_URI+"_type","application/pdf").putString(AutoReplyNotificationService.LEDGER_URI+"_name",display).putLong(AutoReplyNotificationService.LEDGER_URI+"_updated",System.currentTimeMillis()).putString("file_history",line+(history.isEmpty()?"":"\n"+history)).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();
                 runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("Ledger ready • "+result.uniquePhones+" numbers");if(ledgerFileNameText!=null){ledgerFileNameText.setText(display);ledgerFileNameText.setTextColor(Color.rgb(0,125,70));ledgerFileNameText.setBackground(rounded(Color.rgb(225,248,235),12));}toast(result.entries.size()+" ledgers ready • "+result.skippedPages+" without number skipped");});
@@ -1676,6 +1631,7 @@ public class MainActivity extends Activity {
 
     private MasterLedgerResult prepareCustomerLedgers(PDDocument document) throws Exception{
         MasterLedgerResult result=new MasterLedgerResult();result.totalPages=document.getNumberOfPages();
+        if(result.totalPages<=0)throw new Exception("Empty PDF");
         PDFTextStripper stripper=new PDFTextStripper();stripper.setSortByPosition(true);
         LinkedHashMap<String,List<LedgerPageData>> byPhone=new LinkedHashMap<>();
         for(int page=1;page<=result.totalPages;page++){
@@ -1684,6 +1640,7 @@ public class MainActivity extends Activity {
             LedgerPageData item=new LedgerPageData(phone,extractLedgerName(text),extractClosingBalance(text),page-1);
             result.entries.add(item);byPhone.computeIfAbsent(phone,k->new ArrayList<>()).add(item);
         }
+        if(byPhone.isEmpty())throw new Exception("No labelled mobile numbers found");
         File dir=new File(getFilesDir(),"business_files/customer_ledgers");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Ledger folder create failed");
         File[] old=dir.listFiles();if(old!=null)for(File f:old)if(f.isFile())f.delete();
         JSONArray customers=new JSONArray();
@@ -1697,44 +1654,45 @@ public class MainActivity extends Activity {
             LedgerPageData first=group.getValue().get(0);JSONObject o=new JSONObject();o.put("phone",phone);o.put("name",first.name);o.put("balance",first.balance);o.put("ledger_uri",uri.toString());o.put("ledger_file",file.getName());o.put("pages",group.getValue().size());customers.put(o);
         }
         result.uniquePhones=byPhone.size();
-        getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,customers.toString()).putInt("ledger_source_pages",result.totalPages).putInt("ledger_skipped_pages",result.skippedPages).apply();
+        getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().putString(AutoReplyNotificationService.LEDGER_CUSTOMERS,customers.toString()).putInt("ledger_source_pages",result.totalPages).putInt("ledger_skipped_pages",result.skippedPages).putLong("ledger_index_updated",System.currentTimeMillis()).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();
         return result;
     }
 
     private String extractLedgerPhone(String text){
         if(text==null||text.trim().isEmpty())return "";
-        Pattern label=Pattern.compile("(?i)\\b(mobile|mob|phone|telephone|tel|whats\\s*app|contact)\\b");
-        for(String raw:text.split("\\r?\\n")){
-            if(!label.matcher(raw).find())continue;
-            String phone=extractIndianMobile(raw);if(!phone.isEmpty())return phone;
+        Pattern labelled=Pattern.compile("(?i)(?:mobile|mob(?:ile)?\\.?|phone|telephone|tel\\.?|whats\\s*app|contact)(?:\\s*(?:no|number|num|#))?\\s*[:.\\-]?\\s*([+0-9][0-9() .\\-]{8,25})");
+        Matcher labelledMatch=labelled.matcher(text);
+        while(labelledMatch.find()){
+            String phone=normaliseLedgerPhone(labelledMatch.group(1));if(!phone.isEmpty())return phone;
         }
-        // PDF extraction can place the label and number on adjacent lines.
+        // Tally layouts sometimes place the label and value in separate PDF text columns.
         String[] lines=text.split("\\r?\\n");
-        for(int i=0;i<lines.length-1;i++){
-            if(!label.matcher(lines[i]).find())continue;
-            String phone=extractIndianMobile(lines[i+1]);if(!phone.isEmpty())return phone;
+        for(int i=0;i<lines.length;i++){
+            String low=lines[i].toLowerCase(Locale.ROOT);
+            if(!low.matches(".*\\b(mobile|mob|phone|telephone|tel|whatsapp|contact)\\b.*"))continue;
+            String phone=normaliseLedgerPhone(lines[i]);if(!phone.isEmpty())return phone;
+            if(i+1<lines.length){phone=normaliseLedgerPhone(lines[i+1]);if(!phone.isEmpty())return phone;}
         }
-        // Some Tally print formats show the party mobile number without a
-        // "Mobile" label. Accept it when the page contains one unambiguous
-        // Indian mobile number; labelled values above always take priority.
-        LinkedHashSet<String> candidates=new LinkedHashSet<>();
-        Matcher all=Pattern.compile("(?<![0-9])(?:\\+?91[\\s().-]*)?([6-9](?:[\\s().-]*[0-9]){9})(?![0-9])").matcher(text);
-        while(all.find()){
-            String ten=all.group(1).replaceAll("[^0-9]","");
-            if(ten.length()==10)candidates.add("91"+ten);
+        // Last fallback: accept a clearly formatted Indian mobile, but never an amount/date/GST line.
+        Pattern mobile=Pattern.compile("(?<![0-9])(?:\\+?91[ .\\-]?)?[6-9](?:[ .\\-]?[0-9]){9}(?![0-9])");
+        for(String raw:lines){
+            String low=raw.toLowerCase(Locale.ROOT);
+            if(low.contains("balance")||low.contains("amount")||low.contains("gstin")||low.contains("invoice")||low.contains("date"))continue;
+            Matcher m=mobile.matcher(raw);if(m.find()){String phone=normaliseLedgerPhone(m.group());if(!phone.isEmpty())return phone;}
         }
-        if(candidates.size()==1)return candidates.iterator().next();
         return "";
     }
 
-    private String extractIndianMobile(String value){
-        if(value==null)return "";
-        Matcher m=Pattern.compile("(?<![0-9])(?:\\+?91[\\s().-]*)?([6-9](?:[\\s().-]*[0-9]){9})(?![0-9])").matcher(value);
-        while(m.find()){
-            String ten=m.group(1).replaceAll("[^0-9]","");
-            if(ten.length()==10)return "91"+ten;
-        }
-        return "";
+    private String normaliseLedgerPhone(String raw){
+        if(raw==null)return "";String digits=raw.replaceAll("[^0-9]","");
+        if(digits.startsWith("00")&&digits.length()>12)digits=digits.substring(2);
+        if(digits.startsWith("0")&&digits.length()==11)digits=digits.substring(1);
+        if(digits.length()>10)digits=digits.substring(digits.length()-10);
+        return digits.matches("[6-9][0-9]{9}")?"91"+digits:"";
+    }
+
+    private String getDisplayName(Uri uri){
+        Cursor cursor=null;try{cursor=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null);if(cursor!=null&&cursor.moveToFirst()){String name=cursor.getString(0);return name==null?"":name.trim();}}catch(Exception ignored){}finally{if(cursor!=null)cursor.close();}return "";
     }
 
     private String extractLedgerName(String text){
