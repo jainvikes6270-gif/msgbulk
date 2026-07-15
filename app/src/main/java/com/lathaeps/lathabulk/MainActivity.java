@@ -1621,7 +1621,7 @@ public class MainActivity extends Activity {
                 try(PDDocument document=PDDocument.load(target)){result=prepareCustomerLedgers(document);}
                 Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);
                 SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
-                String display=getDisplayName(source);if(display.isEmpty())display="Master Ledger PDF";
+                String selectedDisplay=getDisplayName(source);final String display=selectedDisplay.isEmpty()?"Master Ledger PDF":selectedDisplay;
                 String history=p.getString("file_history","");String line=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date())+" • Master Ledger prepared • "+display;
                 p.edit().putString(AutoReplyNotificationService.LEDGER_URI,safe.toString()).putString(AutoReplyNotificationService.LEDGER_URI+"_type","application/pdf").putString(AutoReplyNotificationService.LEDGER_URI+"_name",display).putLong(AutoReplyNotificationService.LEDGER_URI+"_updated",System.currentTimeMillis()).putString("file_history",line+(history.isEmpty()?"":"\n"+history)).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();
                 runOnUiThread(()->{if(miniProgress!=null)miniProgress.setText("Ledger ready • "+result.uniquePhones+" numbers");if(ledgerFileNameText!=null){ledgerFileNameText.setText(display);ledgerFileNameText.setTextColor(Color.rgb(0,125,70));ledgerFileNameText.setBackground(rounded(Color.rgb(225,248,235),12));}toast(result.entries.size()+" ledgers ready • "+result.skippedPages+" without number skipped");});
