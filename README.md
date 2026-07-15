@@ -1,8 +1,11 @@
-# LathaBulk v3.21.3 – Device Automation
+# LathaBulk v3.21.4 – Ledger Auto Reply Fix
 
-- **Settings → Device Auto Unlock / Lock** adds separate Auto-Unlock and Auto-Lock switches.
-- Auto-Unlock wakes the screen and dismisses swipe/trusted locks before a scheduled queue continues; Android still requires confirmation for a secure PIN, pattern or fingerprint.
-- Auto-Lock locks the device after a bulk, broadcast or catalog task completes when Accessibility is enabled.
+- App automatically checks for a newer version once every 24 hours.
+- **Settings → Check for App Update** is also available for a manual check.
+- **DOWNLOAD & UPDATE** downloads `LathaEPS-Smart.apk` inside the app and opens Android's install confirmation.
+- Update source corrected to `jainvikes6270-gif/lathabulk`.
+- GitHub Actions now supports a permanently signed Release APK from private repository secrets.
+- Package name remains `com.lathaeps.lathabulk`; existing app data stays safe during an update.
 
 # LathaBulk v3.21.2 – Mobile Business Tools
 

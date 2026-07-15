@@ -5,4 +5,5 @@
     <files-path name="catalogs" path="catalogs/" />
     <files-path name="edited_images" path="edited_images/" />
     <files-path name="receipts" path="receipts/" />
+    <external-files-path name="app_updates" path="Download/" />
 </paths>

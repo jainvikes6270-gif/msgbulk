@@ -63,7 +63,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 boolean more=AutoReplyNotificationService.advanceCatalogQueue(this);
                 if(more){
                     handler.postDelayed(()->{clickLocked=false;AutoReplyNotificationService.shareNextCatalogFile(this);},1500);
-                }else handler.postDelayed(()->{clickLocked=false;lockDeviceAfterCompletedTask();},1200);
+                }else handler.postDelayed(()->clickLocked=false,1200);
                 return;
             }
             int min=p.getInt(MainActivity.AUTO_MIN_DELAY,3);int max=p.getInt(MainActivity.AUTO_MAX_DELAY,7);if(max<min)max=min;
@@ -103,7 +103,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     private AccessibilityNodeInfo findActionNode(AccessibilityNodeInfo node,String[] words){if(node==null)return null;String text=node.getText()==null?"":node.getText().toString().trim().toLowerCase(Locale.ROOT);String desc=node.getContentDescription()==null?"":node.getContentDescription().toString().trim().toLowerCase(Locale.ROOT);for(String word:words){String w=word.toLowerCase(Locale.ROOT);if((text.equals(w)||desc.equals(w)||desc.contains(w))&&(node.isClickable()||clickableParent(node)!=null))return node;}for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo r=findActionNode(node.getChild(i),words);if(r!=null)return r;}return null;}
     private AccessibilityNodeInfo clickableParent(AccessibilityNodeInfo node){AccessibilityNodeInfo p=node==null?null:node.getParent();for(int i=0;p!=null&&i<4;i++){if(p.isClickable())return p;p=p.getParent();}return null;}
     private void clickNodeOrParent(AccessibilityNodeInfo node){if(node==null)return;if(node.isClickable())node.performAction(AccessibilityNodeInfo.ACTION_CLICK);else{AccessibilityNodeInfo p=clickableParent(node);if(p!=null)p.performAction(AccessibilityNodeInfo.ACTION_CLICK);}}
-    private void finishBroadcast(boolean success,String label){SharedPreferences p=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);p.edit().putBoolean(MainActivity.BROADCAST_RUNNING,false).remove(MainActivity.BROADCAST_STAGE).remove(MainActivity.BROADCAST_FILE_URI).remove(MainActivity.BROADCAST_FILE_TYPE).apply();MainActivity.updateProgressNotification(this,success?1:0,1,label,success);clickLocked=false;if(success){if(!lockDeviceAfterCompletedTask()){Intent done=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);startActivity(done);}}}
+    private void finishBroadcast(boolean success,String label){SharedPreferences p=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);p.edit().putBoolean(MainActivity.BROADCAST_RUNNING,false).remove(MainActivity.BROADCAST_STAGE).remove(MainActivity.BROADCAST_FILE_URI).remove(MainActivity.BROADCAST_FILE_TYPE).apply();MainActivity.updateProgressNotification(this,success?1:0,1,label,success);clickLocked=false;if(success){Intent done=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);startActivity(done);}}
 
     private AccessibilityNodeInfo findByDescription(AccessibilityNodeInfo node) {
         if (node == null) return null;
@@ -136,10 +136,8 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 MainActivity.updateProgressNotification(this,a.length(),a.length(),"All contacts completed",true);
                 releaseQueueWakeLock();
                 clickLocked = false;
-                if(!lockDeviceAfterCompletedTask()){
-                    Intent done = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                    startActivity(done);
-                }
+                Intent done = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(done);
                 return;
             }
         } catch (Exception e) {
@@ -211,17 +209,6 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
 
     static synchronized void releaseQueueWakeLock(){
         try{if(queueWakeLock!=null&&queueWakeLock.isHeld())queueWakeLock.release();}catch(Exception ignored){}
-    }
-
-    private boolean lockDeviceAfterCompletedTask(){
-        if(!getSharedPreferences(MainActivity.PREFS,MODE_PRIVATE).getBoolean(MainActivity.AUTO_LOCK_DEVICE,false))return false;
-        handler.postDelayed(()->{
-            try{
-                if(android.os.Build.VERSION.SDK_INT>=28)performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
-                else performGlobalAction(GLOBAL_ACTION_HOME);
-            }catch(Exception ignored){}
-        },700);
-        return true;
     }
 
     @Override public void onInterrupt() { }

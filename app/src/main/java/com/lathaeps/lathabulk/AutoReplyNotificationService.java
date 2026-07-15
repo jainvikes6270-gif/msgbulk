@@ -9,6 +9,7 @@ import android.database.Cursor;
 import android.provider.ContactsContract;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -45,7 +46,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String title=String.valueOf(e.getCharSequence(Notification.EXTRA_TITLE,""));
         String text=extractMessageText(e);
         String lower=text.toLowerCase(Locale.ROOT);
-        String senderPhone=resolvePhoneFromTitle(title);
+        String senderPhone=resolvePhoneFromNotification(sbn,n,e,title);
         if(title.toLowerCase(Locale.ROOT).contains("messages") || title.toLowerCase(Locale.ROOT).contains("whatsapp")) return;
         long now=System.currentTimeMillis();
         long wait=p.getInt(COOLDOWN,5)*60_000L;
@@ -55,7 +56,16 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         String command="rule";
-        if(!lk.isEmpty() && lower.contains(lk)){command="ledger";JSONObject customer=findLedgerCustomer(p,title,senderPhone);if(customer==null)return;file=customer.optString("ledger_uri","");if(file.isEmpty())return;type="application/pdf";caption="LATHA EPS Ledger";}
+        if(!lk.isEmpty() && lower.contains(lk)){
+            command="ledger";
+            JSONObject customer=findLedgerCustomer(p,title,senderPhone);
+            if(customer==null){saveStatus(p,"Ledger not sent • customer/phone not matched: "+title);return;}
+            file=customer.optString("ledger_uri","");
+            if(file.isEmpty()){saveStatus(p,"Ledger not sent • PDF missing for: "+customer.optString("name",title));return;}
+            String customerPhone=digits(customer.optString("phone",""));
+            if(!customerPhone.isEmpty())senderPhone=customerPhone.length()==10?"91"+customerPhone:customerPhone;
+            type="application/pdf";caption="LATHA EPS Ledger";
+        }
         else if(findCatalogsForMessage(lower,ck).length()>0||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){
             command="catalog";JSONArray catalogs=findCatalogsForMessage(lower,ck);
             if(catalogs.length()==0){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}
@@ -111,8 +121,23 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                 String ph=last10(o.optString("phone",""));
                 if(!ph.isEmpty()&&(ph.equals(td)||ph.equals(sp)))return o;
             }
+            String wanted=normalName(title);
+            if(!wanted.isEmpty())for(int i=0;i<a.length();i++){
+                JSONObject o=a.optJSONObject(i);if(o==null)continue;
+                String saved=normalName(o.optString("name",""));
+                if(!saved.isEmpty()&&(saved.equals(wanted)||saved.contains(wanted)||wanted.contains(saved)))return o;
+            }
         }catch(Exception ignored){}
         return null;
+    }
+
+    private static String normalName(String value){
+        if(value==null)return "";
+        return value.toLowerCase(Locale.ROOT).replaceAll("\\([0-9]+ messages?\\)","").replaceAll("[^a-z0-9]+"," ").trim();
+    }
+
+    private void saveStatus(SharedPreferences p,String status){
+        p.edit().putString("last_business_status",status).putLong("last_business_status_at",System.currentTimeMillis()).apply();
     }
 
     private JSONArray findCatalogsForMessage(String message,String genericKeyword){
@@ -156,12 +181,50 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return "";
     }
 
-    private String resolvePhoneFromTitle(String title){
-        String direct=last10(title);if(direct.length()==10)return "91"+direct;
+    private String resolvePhoneFromNotification(StatusBarNotification sbn,Notification n,Bundle extras,String title){
+        ArrayList<String> candidates=new ArrayList<>();
+        candidates.add(title);
+        if(n!=null){if(Build.VERSION.SDK_INT>=26)candidates.add(n.getShortcutId());if(n.getGroup()!=null)candidates.add(n.getGroup());}
+        if(sbn!=null){candidates.add(sbn.getKey());candidates.add(sbn.getTag());}
+        if(extras!=null){
+            try{
+                String[] people=extras.getStringArray(Notification.EXTRA_PEOPLE);if(people!=null)for(String person:people)candidates.add(person);
+            }catch(Exception ignored){}
+            if(Build.VERSION.SDK_INT>=28)try{
+                ArrayList<android.app.Person> people=extras.getParcelableArrayList(Notification.EXTRA_PEOPLE_LIST);
+                if(people!=null)for(android.app.Person person:people)if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}
+            }catch(Exception ignored){}
+            try{
+                android.os.Parcelable[] messages=extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+                if(messages!=null)for(int i=messages.length-1;i>=0;i--){
+                    if(!(messages[i] instanceof Bundle))continue;Bundle message=(Bundle)messages[i];
+                    candidates.add(String.valueOf(message.getCharSequence("sender","")));
+                    if(Build.VERSION.SDK_INT>=28){android.app.Person person=message.getParcelable("sender_person");if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}}
+                }
+            }catch(Exception ignored){}
+        }
+        for(String value:candidates){String phone=validIndianPhone(value);if(!phone.isEmpty())return phone;}
+        return resolvePhoneFromContacts(title);
+    }
+
+    private static String validIndianPhone(String value){
+        if(value==null)return "";
+        String compact=value.replaceAll("[\\s()\\-]","");
+        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:\\+?91)?([6-9][0-9]{9})(?![0-9])").matcher(compact);
+        return m.find()?"91"+m.group(1):"";
+    }
+
+    private String resolvePhoneFromContacts(String title){
         if(checkSelfPermission(android.Manifest.permission.READ_CONTACTS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return "";
         Cursor c=null;try{
-            c=getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,new String[]{ContactsContract.CommonDataKinds.Phone.NUMBER,ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME},ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME+" = ?",new String[]{title},null);
-            String found="";if(c!=null)while(c.moveToNext()){String d=digits(c.getString(0));if(d.startsWith("0")&&d.length()==11)d=d.substring(1);String ten=last10(d);if(ten.length()!=10)continue;if(!found.isEmpty()&&!last10(found).equals(ten))return "";found=d.length()==10?"91"+d:d;}return found;
+            c=getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,new String[]{ContactsContract.CommonDataKinds.Phone.NUMBER,ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME},null,null,null);
+            String wanted=normalName(title),found="";
+            if(c!=null)while(c.moveToNext()){
+                String name=normalName(c.getString(1));if(wanted.isEmpty()||!name.equals(wanted))continue;
+                String phone=validIndianPhone(c.getString(0));if(phone.isEmpty())continue;
+                if(!found.isEmpty()&&!last10(found).equals(last10(phone)))return "";found=phone;
+            }
+            return found;
         }catch(Exception ignored){}finally{if(c!=null)c.close();}
         return "";
     }
