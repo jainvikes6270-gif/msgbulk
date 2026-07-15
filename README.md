@@ -236,3 +236,20 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - Recipient List > Send Text / Image now opens the phone Gallery / Albums app first.
 - Works with Android system Photo Picker and Files as automatic fallbacks.
 - The chosen image opens in the built-in image editor and is saved as an app-safe copy before auto sending.
+# LathaBulk v3.23.3 – Ledger Phone Match Repair
+
+- Restores reliable WhatsApp sender-number detection from notification metadata and saved contacts.
+- Ledger still sends only after strict last-10-digit matching with the prepared customer ledger map.
+- Adds a visible Ledger failure status when the verified phone or customer PDF cannot be matched.
+- Direct APK sharing, Catalog, Auto Reply, subscriptions and all other v3.23.2 features remain unchanged.
+
+# LathaBulk v3.23.4 – Auto Reply Image Isolation
+
+- Every Auto Reply rule now keeps its own optional image selection.
+- A new text-only rule no longer reuses an old image selected for another rule.
+- Image is sent only when **Send image with this rule** is enabled for that rule.
+
+# LathaBulk v3.23.5 – Cleaner Subscription Settings
+
+- Settings list no longer displays Lifetime Free or the active plan status.
+- Plan status remains available only inside the Subscription & Payment screen.

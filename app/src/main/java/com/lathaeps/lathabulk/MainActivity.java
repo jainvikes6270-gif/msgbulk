@@ -181,6 +181,10 @@ public class MainActivity extends Activity {
     private ImageView directSendPreview;
     private Button directSendImageButton;
     private Runnable scheduleTicker;
+    private String pendingRuleImageUri = "";
+    private String pendingRuleImageType = "image/*";
+    private Button pendingRuleImageButton;
+    private CheckBox pendingRuleImageEnabled;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -1007,7 +1011,7 @@ public class MainActivity extends Activity {
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
         addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS SMART").setPositiveButton("OK",null).show());
         addSettingsButton(list,"↗  Share App APK","Direct APK share karein • GitHub username ya source code nahi dikhega",v->shareApp());
-        addSettingsButton(list,"₹  Subscription & Payment",SubscriptionManager.statusText(this),v->startActivity(new Intent(this,SubscriptionActivity.class)));
+        addSettingsButton(list,"₹  Subscription & Payment","Plan details, UPI payment & activation",v->startActivity(new Intent(this,SubscriptionActivity.class)));
         addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
         addSettingsButton(list,"☀  Screen-off Auto Send","Keeps screen awake while bulk sending",v->showScreenOffHelp());
         addSettingsButton(list,"✉  Contact Us","lathaeps@gmail.com",v->contactSupport());
@@ -1087,7 +1091,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.2";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.5";}}
 
     private void shareApp(){
         try{
@@ -1296,6 +1300,12 @@ public class MainActivity extends Activity {
                     .putString(AutoReplyNotificationService.IMAGE+"_type",mime==null?"image/*":mime)
                     .putString(AutoReplyNotificationService.IMAGE+"_name",target.getName())
                     .putLong(AutoReplyNotificationService.IMAGE+"_updated",System.currentTimeMillis()).apply();
+            if(pendingRuleImageEnabled!=null){
+                pendingRuleImageUri=safe.toString();
+                pendingRuleImageType=mime==null?"image/*":mime;
+                pendingRuleImageEnabled.setChecked(true);
+                if(pendingRuleImageButton!=null)pendingRuleImageButton.setText("Change this rule image ✓");
+            }
             toast("Gallery image saved ✓ Auto reply ke liye ready");
         }catch(Exception e){
             toast("Image save failed: phone Gallery se dobara select karein");
@@ -1891,7 +1901,8 @@ public class MainActivity extends Activity {
                 LinearLayout content=row();content.setGravity(Gravity.CENTER_VERTICAL);
                 TextView dot=new TextView(this);dot.setText("●");dot.setTextSize(25);dot.setTextColor(Color.rgb(0,166,125));dot.setGravity(Gravity.CENTER);
                 String key=rule.optString("keyword","");String reply=rule.optString("reply","");String mode=new String[]{"Contains","Exact","Starts with","Ends with"}[Math.max(0,Math.min(3,rule.optInt("match",0)))];
-                TextView summary=new TextView(this);summary.setText("Received Msg : "+key+"\nSend Msg : "+(reply.isEmpty()?(rule.optString("image","").isEmpty()?"—":"🖼 Image"):reply)+"\n"+mode+(rule.optBoolean("case",false)?" • Case sensitive":""));summary.setTextSize(15);summary.setTextColor(Color.rgb(28,28,28));summary.setMaxLines(4);summary.setEllipsize(TextUtils.TruncateAt.END);summary.setPadding(dp(5),0,dp(4),0);
+                boolean hasRuleImage=!rule.optString("image","").isEmpty();String sendSummary=reply.isEmpty()?(hasRuleImage?"🖼 Image":"—"):reply+(hasRuleImage?" + 🖼 Image":"");
+                TextView summary=new TextView(this);summary.setText("Received Msg : "+key+"\nSend Msg : "+sendSummary+"\n"+mode+(rule.optBoolean("case",false)?" • Case sensitive":""));summary.setTextSize(15);summary.setTextColor(Color.rgb(28,28,28));summary.setMaxLines(4);summary.setEllipsize(TextUtils.TruncateAt.END);summary.setPadding(dp(5),0,dp(4),0);
                 Button edit=button("✎");edit.setTextSize(20);edit.setTextColor(Color.rgb(0,91,78));edit.setBackground(rounded(Color.rgb(220,245,241),40));
                 Button move=button("↕");move.setTextSize(21);move.setTextColor(Color.rgb(0,91,78));move.setBackground(rounded(Color.rgb(220,245,241),40));
                 Button more=button("⋮");more.setTextSize(23);more.setTextColor(Color.rgb(0,91,78));more.setBackgroundColor(Color.TRANSPARENT);
@@ -1907,14 +1918,20 @@ public class MainActivity extends Activity {
     private void showRuleEditor(int editIndex,Runnable refresh){
         SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);JSONObject old=null;
         try{JSONArray a=new JSONArray(p.getString("rules","[]"));if(editIndex>=0&&editIndex<a.length())old=a.getJSONObject(editIndex);}catch(Exception ignored){}
+        pendingRuleImageUri=old==null?"":old.optString("image","");
+        pendingRuleImageType=old==null?"image/*":old.optString("type","image/*");
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
         EditText keyword=new EditText(this);keyword.setHint("Received message / keyword");Spinner match=new Spinner(this);String[] modes={"Contains","Exact match","Starts with","Ends with"};match.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,modes));
         EditText reply=new EditText(this);reply.setHint("Reply text / image caption");reply.setMinLines(2);CheckBox caseSensitive=new CheckBox(this);caseSensitive.setText("Case sensitive");
         EditText cool=new EditText(this);cool.setHint("Cooldown minutes");cool.setInputType(InputType.TYPE_CLASS_NUMBER);cool.setText(String.valueOf(p.getInt(AutoReplyNotificationService.COOLDOWN,5)));
         if(old!=null){keyword.setText(old.optString("keyword"));match.setSelection(old.optInt("match",0));reply.setText(old.optString("reply"));caseSensitive.setChecked(old.optBoolean("case",false));}
-        Button image=button(p.getString(AutoReplyNotificationService.IMAGE,"").isEmpty()?"Choose reply image from phone albums":"Change reply image ✓");box.addView(keyword);box.addView(match);box.addView(reply);box.addView(caseSensitive);box.addView(cool);box.addView(image,new LinearLayout.LayoutParams(-1,dp(46)));image.setOnClickListener(v->openPhoneGalleryFirst());
-        final JSONObject original=old;AlertDialog d=new AlertDialog.Builder(this).setTitle(editIndex<0?"Add Auto Reply Rule":"Edit Rule "+(editIndex+1)).setView(box).setPositiveButton("Save",null).setNegativeButton("Cancel",null).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String k=keyword.getText().toString().trim();if(k.isEmpty()){keyword.setError("Keyword required");return;}try{int cooldown=Math.max(1,Integer.parseInt(cool.getText().toString().trim()));JSONArray arr=new JSONArray(p.getString("rules","[]"));JSONObject o=new JSONObject();o.put("keyword",k);o.put("match",match.getSelectedItemPosition());o.put("case",caseSensitive.isChecked());o.put("reply",reply.getText().toString().trim());String img=p.getString(AutoReplyNotificationService.IMAGE,"");String typ=p.getString(AutoReplyNotificationService.IMAGE+"_type","image/*");if(editIndex>=0&&original!=null&&img.isEmpty()){img=original.optString("image","");typ=original.optString("type","image/*");}o.put("image",img);o.put("type",typ);if(editIndex>=0){JSONArray out=new JSONArray();for(int i=0;i<arr.length();i++)out.put(i==editIndex?o:arr.get(i));arr=out;}else arr.put(o);p.edit().putString("rules",arr.toString()).putInt(AutoReplyNotificationService.COOLDOWN,cooldown).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast(editIndex<0?"Rule added • Auto reply ON":"Rule updated");d.dismiss();refresh.run();}catch(Exception e){toast("Rule save failed");}}));d.show();
+        CheckBox sendImage=new CheckBox(this);sendImage.setText("Send image with this rule");sendImage.setChecked(!pendingRuleImageUri.isEmpty());
+        Button image=button(pendingRuleImageUri.isEmpty()?"Choose image for this rule (optional)":"Change this rule image ✓");
+        pendingRuleImageEnabled=sendImage;pendingRuleImageButton=image;
+        box.addView(keyword);box.addView(match);box.addView(reply);box.addView(caseSensitive);box.addView(cool);box.addView(sendImage);box.addView(image,new LinearLayout.LayoutParams(-1,dp(46)));image.setOnClickListener(v->openPhoneGalleryFirst());
+        AlertDialog d=new AlertDialog.Builder(this).setTitle(editIndex<0?"Add Auto Reply Rule":"Edit Rule "+(editIndex+1)).setView(box).setPositiveButton("Save",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String k=keyword.getText().toString().trim();if(k.isEmpty()){keyword.setError("Keyword required");return;}if(sendImage.isChecked()&&pendingRuleImageUri.isEmpty()){toast("Image choose karein ya Send image option OFF karein");return;}try{int cooldown=Math.max(1,Integer.parseInt(cool.getText().toString().trim()));JSONArray arr=new JSONArray(p.getString("rules","[]"));JSONObject o=new JSONObject();o.put("keyword",k);o.put("match",match.getSelectedItemPosition());o.put("case",caseSensitive.isChecked());o.put("reply",reply.getText().toString().trim());o.put("image",sendImage.isChecked()?pendingRuleImageUri:"");o.put("type",sendImage.isChecked()?pendingRuleImageType:"image/*");if(editIndex>=0){JSONArray out=new JSONArray();for(int i=0;i<arr.length();i++)out.put(i==editIndex?o:arr.get(i));arr=out;}else arr.put(o);p.edit().putString("rules",arr.toString()).putInt(AutoReplyNotificationService.COOLDOWN,cooldown).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast(editIndex<0?"Rule added • Auto reply ON":"Rule updated");d.dismiss();refresh.run();}catch(Exception e){toast("Rule save failed");}}));
+        d.setOnDismissListener(x->{pendingRuleImageEnabled=null;pendingRuleImageButton=null;pendingRuleImageUri="";pendingRuleImageType="image/*";});d.show();
     }
 
     private void showRuleMoveMenu(View anchor,int index,LinearLayout cards,Dialog parent){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("Move up");m.getMenu().add("Move down");m.setOnMenuItemClickListener(item->{moveRule(index,item.getTitle().toString().contains("up")?-1:1);renderAutoReplyRules(cards,parent);return true;});m.show();}
