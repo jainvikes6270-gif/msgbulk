@@ -1,3 +1,29 @@
+# LathaBulk v3.21.2 – Mobile Business Tools
+
+- **Owner Licence Register** saves customer name, WhatsApp number, Device ID, paid/free plan, activation code and expiry status.
+- Owner can copy a saved code, send it to the customer on WhatsApp or delete a register record.
+- **Send Payment Proof** collects UTR and a screenshot, adds the Device ID automatically and shares it to `+91 90251 56444`.
+- **Business Files → Create Payment Receipt PDF** creates a branded receipt and shares it to the customer's WhatsApp number.
+- **Settings → Check for App Update** compares the installed version with `latest-version.json` and opens the latest GitHub release.
+- Owner Licence Register is included in backup and remains safe when Clear All Data is used.
+
+# LathaBulk v3.21.1 – ₹700 UPI Payment
+
+- **Plan & Licence** now includes a prominent **PAY ₹700 VIA UPI** button.
+- Opens any installed UPI app with ₹700, `LATHAEPS` and `jainvikes6270@oksbi` filled automatically.
+- If no UPI app is available, the UPI ID is copied for manual payment.
+- Payment remains owner-verified; customer shares payment screenshot and Device ID before receiving a yearly activation code.
+
+# LathaBulk v3.21.0 – Owner-Controlled Paid Licence
+
+- New users receive a **7-day free trial**.
+- Standard plan is **₹700 per year**, locked to one Android Device ID.
+- **Settings → Plan & Licence** shows trial, yearly, expiry or Free Lifetime status.
+- Owner Tools can generate a 365-day paid code or a **Free Lifetime** code for any chosen user.
+- Customer only shares the Device ID; the private Owner PIN is not shared.
+- Expired plans stop bulk sending, scheduled payment reminders and auto reply while keeping local app data safe.
+- Offline clock rollback protection and device-bound validation are included.
+
 # LathaBulk v3.20.5 – LATHAEPS SMART Header
 
 - Main app header and Android app label now show **LATHAEPS SMART**.

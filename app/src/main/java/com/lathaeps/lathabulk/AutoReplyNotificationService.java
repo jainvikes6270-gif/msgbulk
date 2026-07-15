@@ -34,6 +34,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     private final Handler handler=new Handler(Looper.getMainLooper());
 
     @Override public void onNotificationPosted(StatusBarNotification sbn){
+        if(!LicenseManager.isEntitled(this)) return;
         if(sbn==null) return;
         String pkg=sbn.getPackageName();
         if(!"com.whatsapp".equals(pkg) && !"com.whatsapp.w4b".equals(pkg)) return;

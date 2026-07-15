@@ -28,6 +28,7 @@ public class LockScreenSendActivity extends Activity {
 
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        if(!LicenseManager.isEntitled(this)){finish();return;}
         if(Build.VERSION.SDK_INT>=27){setShowWhenLocked(true);setTurnScreenOn(true);}
         else getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED|WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON|WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

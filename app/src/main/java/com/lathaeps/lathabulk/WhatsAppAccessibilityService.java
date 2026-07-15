@@ -28,6 +28,11 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     private static PowerManager.WakeLock queueWakeLock;
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (!LicenseManager.isEntitled(this)) {
+            getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_RUNNING,false).putBoolean(MainActivity.BROADCAST_RUNNING,false).apply();
+            releaseQueueWakeLock();
+            return;
+        }
         if (event == null || event.getPackageName() == null) return;
         String pkg = event.getPackageName().toString();
         if (!pkg.equals("com.whatsapp") && !pkg.equals("com.whatsapp.w4b")) return;

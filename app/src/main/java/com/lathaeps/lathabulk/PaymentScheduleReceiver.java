@@ -23,6 +23,10 @@ public class PaymentScheduleReceiver extends BroadcastReceiver {
 
     @Override public void onReceive(Context context, Intent intent) {
         if (intent == null || !ACTION_SEND.equals(intent.getAction())) return;
+        if (!LicenseManager.isEntitled(context)) {
+            context.getSharedPreferences(MainActivity.AUTO_PREFS,Context.MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_RUNNING,false).apply();
+            return;
+        }
         SharedPreferences settings=context.getSharedPreferences(MainActivity.PREFS,Context.MODE_PRIVATE);
         String numbers=settings.getString(MainActivity.PAYMENT_SCHEDULE_NUMBERS,"[]");
         String names=settings.getString(MainActivity.PAYMENT_SCHEDULE_NAMES,"[]");
