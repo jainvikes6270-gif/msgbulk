@@ -36,6 +36,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
 
     @Override public void onNotificationPosted(StatusBarNotification sbn){
         if(sbn==null) return;
+        if(!SubscriptionManager.hasAccess(this)) return;
         String pkg=sbn.getPackageName();
         if(!"com.whatsapp".equals(pkg) && !"com.whatsapp.w4b".equals(pkg)) return;
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
@@ -247,6 +248,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
 
     public static boolean shareNextCatalogFile(android.content.Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(!SubscriptionManager.hasAccess(context)){clearCatalogQueue(p);TaskDeviceController.cancel(context);return false;}
         try{
             JSONArray queue=new JSONArray(p.getString(CATALOG_QUEUE,"[]"));int index=p.getInt(CATALOG_QUEUE_INDEX,0);
             if(index<0||index>=queue.length()){clearCatalogQueue(p);return false;}

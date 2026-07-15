@@ -1,3 +1,18 @@
+# LathaBulk v3.23.0 – Paid Plans + Admin Activation
+
+## v3.23.0 subscription system
+
+- 12-day free trial starts on first launch after install/update.
+- ₹800 yearly plan opens the installed UPI apps and pays to `jainvikes6270@oksbi`.
+- Payment is approved manually: user copies the 12-character Device ID and sends it to the admin.
+- Separate Admin Panel generates a one-year code or Lifetime Free code for that Device ID.
+- User pastes the code in Settings → Subscription & Payment.
+- Admin Panel is hidden from normal users. Long-press the **LATHAEPS SMART** title on the Subscription screen, then enter the private Admin PIN.
+- Offline activation: customer contacts, ledger, catalog, auto-reply and queue data are not uploaded.
+- Existing Ledger, Catalog, Auto Reply, recipient lists, backups and sending workflows are unchanged.
+- Payment Reminder alarms are restored automatically after phone restart or app update.
+- When trial/plan expires, Auto Reply, scheduled reminders, Catalog sharing and background sending queues are paused until activation.
+
 # LathaBulk v3.22.1 – Ledger + Catalog Fresh Workflow
 
 ## v3.22.1 verified fixes

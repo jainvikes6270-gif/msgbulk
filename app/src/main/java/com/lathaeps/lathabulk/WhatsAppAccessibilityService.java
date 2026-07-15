@@ -29,6 +29,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null || event.getPackageName() == null) return;
+        if(!SubscriptionManager.hasAccess(this)){stopExpiredQueues(this);return;}
         String pkg = event.getPackageName().toString();
         if (!pkg.equals("com.whatsapp") && !pkg.equals("com.whatsapp.w4b")) return;
         SharedPreferences autoReply = getSharedPreferences(AutoReplyNotificationService.PREFS, MODE_PRIVATE);
@@ -149,6 +150,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     }
 
     static void openCurrentChat(Context context) {
+        if(!SubscriptionManager.hasAccess(context)){stopExpiredQueues(context);return;}
         SharedPreferences p = context.getSharedPreferences(MainActivity.AUTO_PREFS, Context.MODE_PRIVATE);
         if (!p.getBoolean(MainActivity.AUTO_RUNNING, false)) return;
         TaskDeviceController.begin(context);wakeForQueue(context);
@@ -161,6 +163,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     }
 
     static void openCurrentChatAfterUnlock(Context context) {
+        if(!SubscriptionManager.hasAccess(context)){stopExpiredQueues(context);return;}
         SharedPreferences p = context.getSharedPreferences(MainActivity.AUTO_PREFS, Context.MODE_PRIVATE);
         if (!p.getBoolean(MainActivity.AUTO_RUNNING, false)) return;
         try {
@@ -219,6 +222,18 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
 
     static synchronized void releaseQueueWakeLock(){
         try{if(queueWakeLock!=null&&queueWakeLock.isHeld())queueWakeLock.release();}catch(Exception ignored){}
+    }
+
+    private static void stopExpiredQueues(Context context){
+        context.getSharedPreferences(MainActivity.AUTO_PREFS,Context.MODE_PRIVATE).edit()
+                .putBoolean(MainActivity.AUTO_RUNNING,false)
+                .putBoolean(MainActivity.BROADCAST_RUNNING,false).apply();
+        context.getSharedPreferences(AutoReplyNotificationService.PREFS,Context.MODE_PRIVATE).edit()
+                .putBoolean(AutoReplyNotificationService.PENDING_SHARE,false)
+                .remove(AutoReplyNotificationService.CATALOG_QUEUE)
+                .remove(AutoReplyNotificationService.CATALOG_QUEUE_INDEX).apply();
+        releaseQueueWakeLock();
+        TaskDeviceController.cancel(context);
     }
 
     @Override public void onInterrupt() { }

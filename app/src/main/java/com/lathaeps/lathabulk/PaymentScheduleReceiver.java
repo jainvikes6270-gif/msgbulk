@@ -23,6 +23,11 @@ public class PaymentScheduleReceiver extends BroadcastReceiver {
 
     @Override public void onReceive(Context context, Intent intent) {
         if (intent == null || !ACTION_SEND.equals(intent.getAction())) return;
+        if(!SubscriptionManager.hasAccess(context)){
+            context.getSharedPreferences(MainActivity.AUTO_PREFS,Context.MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_RUNNING,false).apply();
+            showPlanRequiredNotification(context);
+            return;
+        }
         SharedPreferences settings=context.getSharedPreferences(MainActivity.PREFS,Context.MODE_PRIVATE);
         String numbers=settings.getString(MainActivity.PAYMENT_SCHEDULE_NUMBERS,"[]");
         String names=settings.getString(MainActivity.PAYMENT_SCHEDULE_NAMES,"[]");
@@ -56,15 +61,25 @@ public class PaymentScheduleReceiver extends BroadcastReceiver {
         }
     }
 
-    private static long nextScheduleAt(long from,String repeat){
+    static long nextScheduleAt(long from,String repeat){
         if("One Time".equals(repeat))return 0L;
         java.util.Calendar c=java.util.Calendar.getInstance();c.setTimeInMillis(from);
         do{if("Daily".equals(repeat))c.add(java.util.Calendar.DAY_OF_YEAR,1);else if("Weekly".equals(repeat))c.add(java.util.Calendar.WEEK_OF_YEAR,1);else if("Monthly".equals(repeat))c.add(java.util.Calendar.MONTH,1);else return 0L;}while(c.getTimeInMillis()<=System.currentTimeMillis());
         return c.getTimeInMillis();
     }
 
-    private static void scheduleNext(Context context,long at){
-        try{AlarmManager manager=(AlarmManager)context.getSystemService(Context.ALARM_SERVICE);if(manager==null)return;Intent alarmIntent=new Intent(context,PaymentScheduleReceiver.class).setAction(ACTION_SEND);PendingIntent alarm=PendingIntent.getBroadcast(context,620,alarmIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);Intent showIntent=new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);PendingIntent show=PendingIntent.getActivity(context,621,showIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);if(Build.VERSION.SDK_INT<31||manager.canScheduleExactAlarms())manager.setAlarmClock(new AlarmManager.AlarmClockInfo(at,show),alarm);}catch(Exception ignored){}
+    static boolean scheduleNext(Context context,long at){
+        try{AlarmManager manager=(AlarmManager)context.getSystemService(Context.ALARM_SERVICE);if(manager==null)return false;Intent alarmIntent=new Intent(context,PaymentScheduleReceiver.class).setAction(ACTION_SEND);PendingIntent alarm=PendingIntent.getBroadcast(context,620,alarmIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);Intent showIntent=new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);PendingIntent show=PendingIntent.getActivity(context,621,showIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);if(Build.VERSION.SDK_INT>=31&&!manager.canScheduleExactAlarms())return false;manager.setAlarmClock(new AlarmManager.AlarmClockInfo(at,show),alarm);return true;}catch(Exception ignored){return false;}
+    }
+
+    static void restoreStoredSchedule(Context context){
+        if(!SubscriptionManager.hasAccess(context))return;
+        SharedPreferences p=context.getSharedPreferences(MainActivity.PREFS,Context.MODE_PRIVATE);
+        long at=p.getLong(MainActivity.PAYMENT_SCHEDULE_AT,0L);if(at<=0)return;
+        try{if(new JSONArray(p.getString(MainActivity.PAYMENT_SCHEDULE_NUMBERS,"[]")).length()==0)return;}catch(Exception e){return;}
+        String repeat=p.getString(MainActivity.PAYMENT_SCHEDULE_REPEAT,"One Time");
+        if(at<=System.currentTimeMillis())at="One Time".equals(repeat)?System.currentTimeMillis()+15000L:nextScheduleAt(at,repeat);
+        if(at>0&&scheduleNext(context,at)){p.edit().putLong(MainActivity.PAYMENT_SCHEDULE_AT,at).apply();int count=0;try{count=new JSONArray(p.getString(MainActivity.PAYMENT_SCHEDULE_NUMBERS,"[]")).length();}catch(Exception ignored){}showScheduledNotification(context,count,at,repeat);}
     }
 
     static void showScheduledNotification(Context context,int count,long at,String repeat){
@@ -75,6 +90,16 @@ public class PaymentScheduleReceiver extends BroadcastReceiver {
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("Payment Reminder scheduled")
                 .setContentText(repeat+" • "+count+" customers • Next "+when).setContentIntent(open).setAutoCancel(false)
                 .setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_LOW);
+        NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);if(nm!=null)nm.notify(SCHEDULE_NOTIFICATION_ID,b.build());
+    }
+
+    private static void showPlanRequiredNotification(Context context){
+        Intent launch=new Intent(context,SubscriptionActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent open=PendingIntent.getActivity(context,623,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        NotificationCompat.Builder b=new NotificationCompat.Builder(context,MainActivity.CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("Payment Reminder paused")
+                .setContentText("Plan expired • Activate subscription to continue").setContentIntent(open).setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
         NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);if(nm!=null)nm.notify(SCHEDULE_NOTIFICATION_ID,b.build());
     }
 }
