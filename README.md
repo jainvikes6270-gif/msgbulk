@@ -1,8 +1,36 @@
+# LathaBulk v3.20.5 – LATHAEPS SMART Header
+
+- Main app header and Android app label now show **LATHAEPS SMART**.
+- Version remains visible only inside Settings.
+
+# LathaBulk v3.20.4 – Recurring Payment Reminder
+
+- Schedule supports **One Time, Daily, Weekly and Monthly** repeat options.
+- The app remembers the last repeat option selected.
+- Schedule Status shows the repeat type and next send date/time.
+- Daily, weekly and monthly reminders automatically schedule their next run.
+
+# LathaBulk v3.20.3 – Simple Balance Payment Request
+
+- Payment Reminder messages no longer show the customer's balance amount.
+- The customer receives only a simple pending-balance payment request.
+- Balance amounts are also hidden from the Payment Reminder customer list.
+
+# LathaBulk v3.20.2 – Paid Broadcast Option Removed
+
+- Removed the **WhatsApp Broadcast** option from the app menus.
+- **Payment Reminder** remains available inside **Business Files** only.
+
+# LathaBulk v3.20.1 – Business Files Menu Placement
+
+- **WhatsApp Broadcast** and **Payment Reminder** are now available inside **Business Files** only.
+- Both shortcut buttons were removed from the main screen for a cleaner layout.
+
 # LathaBulk v3.20.0 – WhatsApp Broadcast + Scheduled Payment Reminder
 
 ## v3.20.0 changes
 
-- New separate **WHATSAPP BROADCAST** menu on the main screen.
+- **WHATSAPP BROADCAST** is available inside **Business Files**.
 - Opens one already-created WhatsApp / WhatsApp Business Broadcast List by its exact name and sends the message once, instead of opening every customer chat.
 - Supports one common text message with an optional Gallery image or PDF attachment.
 - Main-screen **PHONE CONTACT LISTS** keeps phone-contact search, multiple selection and saved recipient lists easy to access.

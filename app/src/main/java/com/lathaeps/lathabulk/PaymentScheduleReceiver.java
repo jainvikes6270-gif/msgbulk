@@ -1,11 +1,13 @@
 package com.lathaeps.lathabulk;
 
+import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 
 import androidx.core.app.NotificationCompat;
 
@@ -25,6 +27,8 @@ public class PaymentScheduleReceiver extends BroadcastReceiver {
         String numbers=settings.getString(MainActivity.PAYMENT_SCHEDULE_NUMBERS,"[]");
         String names=settings.getString(MainActivity.PAYMENT_SCHEDULE_NAMES,"[]");
         String messages=settings.getString(MainActivity.PAYMENT_SCHEDULE_MESSAGES,"[]");
+        String repeat=settings.getString(MainActivity.PAYMENT_SCHEDULE_REPEAT,"One Time");
+        long scheduledAt=settings.getLong(MainActivity.PAYMENT_SCHEDULE_AT,System.currentTimeMillis());
         try {
             JSONArray list=new JSONArray(numbers);
             if(list.length()==0)return;
@@ -42,8 +46,9 @@ public class PaymentScheduleReceiver extends BroadcastReceiver {
                     .putBoolean(MainActivity.AUTO_RUNNING,true).apply();
             String stamp=new SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new Date());
             String old=settings.getString(MainActivity.PAYMENT_HISTORY_KEY,"");
-            settings.edit().remove(MainActivity.PAYMENT_SCHEDULE_AT).remove(MainActivity.PAYMENT_SCHEDULE_NUMBERS).remove(MainActivity.PAYMENT_SCHEDULE_NAMES).remove(MainActivity.PAYMENT_SCHEDULE_MESSAGES).putString(MainActivity.PAYMENT_HISTORY_KEY,stamp+" • Scheduled started • "+list.length()+" reminders"+(old.isEmpty()?"":"\n"+old)).apply();
-            NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);if(nm!=null)nm.cancel(SCHEDULE_NOTIFICATION_ID);
+            long nextAt=nextScheduleAt(scheduledAt,repeat);
+            if(nextAt>0){settings.edit().putLong(MainActivity.PAYMENT_SCHEDULE_AT,nextAt).putString(MainActivity.PAYMENT_HISTORY_KEY,stamp+" • "+repeat+" reminder started • "+list.length()+" customers"+(old.isEmpty()?"":"\n"+old)).apply();scheduleNext(context,nextAt);showScheduledNotification(context,list.length(),nextAt,repeat);}
+            else{settings.edit().remove(MainActivity.PAYMENT_SCHEDULE_AT).remove(MainActivity.PAYMENT_SCHEDULE_NUMBERS).remove(MainActivity.PAYMENT_SCHEDULE_NAMES).remove(MainActivity.PAYMENT_SCHEDULE_MESSAGES).remove(MainActivity.PAYMENT_SCHEDULE_REPEAT).putString(MainActivity.PAYMENT_HISTORY_KEY,stamp+" • One Time reminder started • "+list.length()+" customers"+(old.isEmpty()?"":"\n"+old)).apply();NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);if(nm!=null)nm.cancel(SCHEDULE_NOTIFICATION_ID);}
             MainActivity.updateProgressNotification(context,0,list.length(),"Scheduled payment reminders starting",false);
             WhatsAppAccessibilityService.openCurrentChat(context);
         } catch (Exception ignored) {
@@ -51,13 +56,24 @@ public class PaymentScheduleReceiver extends BroadcastReceiver {
         }
     }
 
-    static void showScheduledNotification(Context context,int count,long at){
+    private static long nextScheduleAt(long from,String repeat){
+        if("One Time".equals(repeat))return 0L;
+        java.util.Calendar c=java.util.Calendar.getInstance();c.setTimeInMillis(from);
+        do{if("Daily".equals(repeat))c.add(java.util.Calendar.DAY_OF_YEAR,1);else if("Weekly".equals(repeat))c.add(java.util.Calendar.WEEK_OF_YEAR,1);else if("Monthly".equals(repeat))c.add(java.util.Calendar.MONTH,1);else return 0L;}while(c.getTimeInMillis()<=System.currentTimeMillis());
+        return c.getTimeInMillis();
+    }
+
+    private static void scheduleNext(Context context,long at){
+        try{AlarmManager manager=(AlarmManager)context.getSystemService(Context.ALARM_SERVICE);if(manager==null)return;Intent alarmIntent=new Intent(context,PaymentScheduleReceiver.class).setAction(ACTION_SEND);PendingIntent alarm=PendingIntent.getBroadcast(context,620,alarmIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);Intent showIntent=new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);PendingIntent show=PendingIntent.getActivity(context,621,showIntent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);if(Build.VERSION.SDK_INT<31||manager.canScheduleExactAlarms())manager.setAlarmClock(new AlarmManager.AlarmClockInfo(at,show),alarm);}catch(Exception ignored){}
+    }
+
+    static void showScheduledNotification(Context context,int count,long at,String repeat){
         Intent launch=new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent open=PendingIntent.getActivity(context,622,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         String when=new SimpleDateFormat("dd MMM, hh:mm a",Locale.getDefault()).format(new Date(at));
         NotificationCompat.Builder b=new NotificationCompat.Builder(context,MainActivity.CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("Payment Reminder scheduled")
-                .setContentText(count+" customers • "+when).setContentIntent(open).setAutoCancel(false)
+                .setContentText(repeat+" • "+count+" customers • Next "+when).setContentIntent(open).setAutoCancel(false)
                 .setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_LOW);
         NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);if(nm!=null)nm.notify(SCHEDULE_NOTIFICATION_ID,b.build());
     }
