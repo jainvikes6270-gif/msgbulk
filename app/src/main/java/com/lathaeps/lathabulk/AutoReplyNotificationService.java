@@ -137,12 +137,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                 String ph=last10(o.optString("phone",""));
                 if(!ph.isEmpty()&&(ph.equals(td)||ph.equals(sp)))return o;
             }
-            String wanted=normalName(title);
-            if(!wanted.isEmpty())for(int i=0;i<a.length();i++){
-                JSONObject o=a.optJSONObject(i);if(o==null)continue;
-                String saved=normalName(o.optString("name",""));
-                if(!saved.isEmpty()&&(saved.equals(wanted)||saved.contains(wanted)||wanted.contains(saved)))return o;
-            }
         }catch(Exception ignored){}
         return null;
     }
@@ -303,6 +297,11 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             wakeScreen(context);
             android.app.KeyguardManager keyguard=(android.app.KeyguardManager)context.getSystemService(android.content.Context.KEYGUARD_SERVICE);
             if(keyguard!=null&&keyguard.isKeyguardLocked()){
+                if(!context.getSharedPreferences(MainActivity.PREFS,MODE_PRIVATE).getBoolean(MainActivity.AUTO_UNLOCK_TASK_KEY,true)){
+                    p.edit().putString("last_business_status","Catalog waiting • Automatic Unlock for Task is OFF").putLong("last_business_status_at",System.currentTimeMillis()).apply();
+                    return true;
+                }
+                context.getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_TASK_UNLOCKED_BY_APP,true).apply();
                 LockScreenSendActivity.open(context,LockScreenSendActivity.MODE_CATALOG);
                 p.edit().putString("last_business_status","Screen awake • unlock to continue catalog").putLong("last_business_status_at",System.currentTimeMillis()).apply();
                 return true;
@@ -324,7 +323,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
         try{
             JSONArray queue=new JSONArray(p.getString(CATALOG_QUEUE,"[]"));int next=p.getInt(CATALOG_QUEUE_INDEX,0)+1;
-            if(next>=queue.length()){clearCatalogQueue(p);p.edit().putString("last_business_status","Catalog sent • "+queue.length()+" files").putLong("last_business_status_at",System.currentTimeMillis()).apply();return false;}
+            if(next>=queue.length()){clearCatalogQueue(p);p.edit().putString("last_business_status","Catalog sent • "+queue.length()+" files").putLong("last_business_status_at",System.currentTimeMillis()).apply();WhatsAppAccessibilityService.finishAutoUnlockTask(context);return false;}
             p.edit().putInt(CATALOG_QUEUE_INDEX,next).putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();return true;
         }catch(Exception e){clearCatalogQueue(p);return false;}
     }

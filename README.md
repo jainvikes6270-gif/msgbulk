@@ -1,4 +1,9 @@
-# LathaBulk v3.21.5 – Ledger + CATLOG Workflow Fix
+# LathaBulk v3.21.6 – Gallery + Task Unlock + Verified Ledger Mapping
+
+- CATLOG `PHONE GALLERY` now launches the device Gallery/Albums directly, with a system photo-picker fallback.
+- Accessibility and Notification Access are together on the main screen with live ON/OFF status; Notification Access was removed from Settings.
+- `Automatic Unlock for Task` wakes/unlocks only when an approved send task starts, resumes after Android security confirmation, and locks again after a task that started locked.
+- Ledger auto reply now requires a verified 10-digit phone match. Name-only fallback is blocked, and Business Files includes a phone-to-PDF mapping check.
 
 - Ledger parser now recognises Mobile, Mob, Phone, Telephone, Tel, WhatsApp and Contact labels.
 - CATLOG resolves the notification sender through Contacts or the verified Ledger customer map, preventing the WhatsApp recipient-picker stop.
@@ -171,7 +176,7 @@
 ## v3.16.3 changes
 
 - Fixed GitHub Actions Java compilation failure caused by duplicate `last10Digits()` method.
-- Android `versionCode` is 52 for clean update installation over v3.21.4.
+- Android `versionCode` is 53 for clean update installation over v3.21.5.
 
 ## v3.16.2 changes
 
