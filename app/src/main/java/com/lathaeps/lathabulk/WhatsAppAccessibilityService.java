@@ -6,7 +6,6 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -27,10 +26,6 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean clickLocked = false;
     private static PowerManager.WakeLock queueWakeLock;
-    private static WhatsAppAccessibilityService activeService;
-
-    @Override protected void onServiceConnected(){super.onServiceConnected();activeService=this;}
-    @Override public void onDestroy(){if(activeService==this)activeService=null;releaseQueueWakeLock();super.onDestroy();}
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if (!LicenseManager.isEntitled(this)) {
@@ -44,7 +39,9 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         SharedPreferences autoReply = getSharedPreferences(AutoReplyNotificationService.PREFS, MODE_PRIVATE);
         boolean pendingShare = autoReply.getBoolean(AutoReplyNotificationService.PENDING_SHARE, false);
         long pendingAt = autoReply.getLong(AutoReplyNotificationService.PENDING_SHARE_AT, 0L);
-        if (pendingShare && System.currentTimeMillis()-pendingAt > 30000L) {
+        // Large PDF Catalogs and slower phones can need more than 30 seconds
+        // to build the WhatsApp preview. Keep the approved share alive longer.
+        if (pendingShare && System.currentTimeMillis()-pendingAt > 180000L) {
             autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
             pendingShare=false;
         }
@@ -67,7 +64,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             if(pendingShare){
                 boolean more=AutoReplyNotificationService.advanceCatalogQueue(this);
                 if(more){
-                    handler.postDelayed(()->{clickLocked=false;AutoReplyNotificationService.shareNextCatalogFile(this);},1500);
+                    handler.postDelayed(()->{clickLocked=false;AutoReplyNotificationService.shareNextCatalogFile(this);},2200);
                 }else handler.postDelayed(()->clickLocked=false,1200);
                 return;
             }
@@ -143,7 +140,6 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 clickLocked = false;
                 Intent done = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(done);
-                handler.postDelayed(()->finishAutoUnlockTask(this),1200L);
                 return;
             }
         } catch (Exception e) {
@@ -162,8 +158,6 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         wakeForQueue(context);
         android.app.KeyguardManager keyguard=(android.app.KeyguardManager)context.getSystemService(Context.KEYGUARD_SERVICE);
         if(keyguard!=null&&keyguard.isKeyguardLocked()){
-            if(!context.getSharedPreferences(MainActivity.PREFS,MODE_PRIVATE).getBoolean(MainActivity.AUTO_UNLOCK_TASK_KEY,true))return;
-            context.getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(MainActivity.AUTO_TASK_UNLOCKED_BY_APP,true).apply();
             LockScreenSendActivity.open(context,LockScreenSendActivity.MODE_BULK);
             return;
         }
@@ -217,15 +211,6 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
 
     static synchronized void releaseQueueWakeLock(){
         try{if(queueWakeLock!=null&&queueWakeLock.isHeld())queueWakeLock.release();}catch(Exception ignored){}
-    }
-
-    static void finishAutoUnlockTask(Context context){
-        SharedPreferences task=context.getSharedPreferences(MainActivity.AUTO_PREFS,Context.MODE_PRIVATE);
-        boolean opened=task.getBoolean(MainActivity.AUTO_TASK_UNLOCKED_BY_APP,false);
-        task.edit().remove(MainActivity.AUTO_TASK_UNLOCKED_BY_APP).apply();
-        if(!opened||Build.VERSION.SDK_INT<28)return;
-        WhatsAppAccessibilityService service=activeService;
-        if(service!=null)service.handler.postDelayed(()->service.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN),350L);
     }
 
     @Override public void onInterrupt() { }

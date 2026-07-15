@@ -126,8 +126,6 @@ public class MainActivity extends Activity {
     static final String AUTO_IMAGE_URI = "send_image_uri";
     static final String AUTO_IMAGE_TYPE = "send_image_type";
     static final String AUTO_QUEUE_TOKEN = "queue_token";
-    static final String AUTO_UNLOCK_TASK_KEY = "auto_unlock_for_task";
-    static final String AUTO_TASK_UNLOCKED_BY_APP = "task_unlocked_by_app";
     static final String BROADCAST_RUNNING = "whatsapp_broadcast_running";
     static final String BROADCAST_LIST_NAME = "whatsapp_broadcast_list_name";
     static final String BROADCAST_MESSAGE = "whatsapp_broadcast_message";
@@ -169,7 +167,7 @@ public class MainActivity extends Activity {
     private ListView listView;
     private TextView statusText, pdfText, miniProgress, ledgerFileNameText;
     private EditText messageBox, searchBox;
-    private Button sendButton, accessibilityButton, notificationAccessButton, autoUnlockButton, editGroupButton, contactsButton, scheduleButton, selectedReviewButton;
+    private Button sendButton, accessibilityButton, editGroupButton, contactsButton, scheduleButton, selectedReviewButton;
     private Uri pdfUri;
     private Uri pendingMasterPdfUri;
     private String pendingCatalogName = "";
@@ -305,7 +303,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        refreshQuickAccessButtons();
+        refreshAccessibilityButton();
         boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
         if(running)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -413,17 +411,15 @@ public class MainActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
             catch (Exception e) { toast("Accessibility settings open nahi hui"); }
         });
-        notificationAccessButton=button("Notification Access: OFF");
-        notificationAccessButton.setTextSize(12);
-        notificationAccessButton.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}});
-        accessRow.addView(accessibilityButton,weighted(1f,42));
-        accessRow.addView(notificationAccessButton,weighted(1f,42));
+        Button notificationAccess=button("Notification Access");
+        notificationAccess.setTextSize(13);
+        notificationAccess.setOnClickListener(v->{
+            try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}
+            catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}
+        });
+        accessRow.addView(accessibilityButton,weighted(1f,41));
+        accessRow.addView(notificationAccess,weighted(1f,41));
         root.addView(accessRow);
-
-        autoUnlockButton=button("Automatic Unlock for Task: ON");
-        autoUnlockButton.setTextSize(13);
-        autoUnlockButton.setOnClickListener(v->{SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);boolean next=!p.getBoolean(AUTO_UNLOCK_TASK_KEY,true);p.edit().putBoolean(AUTO_UNLOCK_TASK_KEY,next).apply();refreshQuickAccessButtons();toast(next?"Task start par screen wake/unlock ON":"Automatic task unlock OFF");});
-        LinearLayout.LayoutParams unlockLp=new LinearLayout.LayoutParams(-1,dp(40));unlockLp.setMargins(dp(2),0,dp(2),dp(2));root.addView(autoUnlockButton,unlockLp);
 
         LinearLayout businessRow=row();
         Button businessFiles=button("BUSINESS FILES");
@@ -547,17 +543,11 @@ public class MainActivity extends Activity {
     private LinearLayout.LayoutParams weighted(float w,int h){ LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(h),w); lp.setMargins(dp(1),dp(1),dp(1),dp(1)); return lp; }
     private int dp(int n){ return Math.round(n*getResources().getDisplayMetrics().density); }
 
-    private void refreshQuickAccessButtons(){
+    private void refreshAccessibilityButton(){
+        if(accessibilityButton==null)return;
         boolean enabled=isAccessibilityServiceEnabled();
-        if(accessibilityButton!=null){accessibilityButton.setText(enabled?"Accessibility: ON":"Accessibility: OFF");accessibilityButton.setTextColor(enabled?Color.rgb(0,95,35):Color.rgb(150,35,35));}
-        boolean notifications=isNotificationListenerEnabled();
-        if(notificationAccessButton!=null){notificationAccessButton.setText(notifications?"Notification Access: ON":"Notification Access: OFF");notificationAccessButton.setTextColor(notifications?Color.rgb(0,95,35):Color.rgb(150,35,35));}
-        boolean autoUnlock=getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(AUTO_UNLOCK_TASK_KEY,true);
-        if(autoUnlockButton!=null){autoUnlockButton.setText(autoUnlock?"Automatic Unlock for Task: ON":"Automatic Unlock for Task: OFF");autoUnlockButton.setTextColor(autoUnlock?Color.rgb(0,95,35):Color.rgb(150,35,35));}
-    }
-    private boolean isNotificationListenerEnabled(){
-        String enabled=Settings.Secure.getString(getContentResolver(),"enabled_notification_listeners");
-        return enabled!=null&&enabled.contains(getPackageName());
+        accessibilityButton.setText(enabled?"Accessibility: ON":"Accessibility: OFF");
+        accessibilityButton.setTextColor(enabled?Color.rgb(0,95,35):Color.rgb(150,35,35));
     }
 
     private void requestContacts(){
@@ -1281,18 +1271,32 @@ public class MainActivity extends Activity {
 
     private void openCatalogPhoneGallery(){
         try{
-            // Open the phone manufacturer's Gallery/Albums directly (Vivo Albums included).
-            // Some Gallery apps return one Uri, while supported apps return ClipData for multiple images.
-            Intent i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-            i.setType("image/*");
-            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+            Intent i;
+            if(Build.VERSION.SDK_INT>=33){
+                i=new Intent(MediaStore.ACTION_PICK_IMAGES);
+                i.setType("image/*");
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+                i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX,Math.min(50,MediaStore.getPickImagesMaxLimit()));
+            }else{
+                // ACTION_PICK is single-select on many Vivo/Oppo Gallery apps.
+                // GET_CONTENT keeps Gallery/Albums available and returns ClipData.
+                i=new Intent(Intent.ACTION_GET_CONTENT);
+                i.setType("image/*");
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+            }
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivityForResult(i,PICK_CATALOG_FILE);
+            // Do not wrap the Android photo picker in a chooser: this opens the
+            // phone's Gallery/Albums surface directly instead of the Files app.
+            if(Build.VERSION.SDK_INT>=33)startActivityForResult(i,PICK_CATALOG_FILE);
+            else startActivityForResult(Intent.createChooser(i,"Select Catalog pictures from Phone Gallery"),PICK_CATALOG_FILE);
         }catch(Exception first){
             try{
-                Intent fallback=Build.VERSION.SDK_INT>=33?new Intent(MediaStore.ACTION_PICK_IMAGES):new Intent(Intent.ACTION_GET_CONTENT);
-                fallback.setType("image/*");fallback.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);fallback.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivityForResult(fallback,PICK_CATALOG_FILE);
+                Intent fallback=new Intent(Intent.ACTION_GET_CONTENT);
+                fallback.setType("image/*");
+                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                fallback.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+                startActivityForResult(Intent.createChooser(fallback,"Select Catalog pictures from Phone Gallery"),PICK_CATALOG_FILE);
             }catch(Exception e){toast("Phone Gallery open nahi hui");}
         }
     }
@@ -1503,7 +1507,6 @@ public class MainActivity extends Activity {
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
         Button ledger=button(p.getString(AutoReplyNotificationService.LEDGER_URI,"").isEmpty()?"UPLOAD & PREPARE MASTER LEDGER PDF":"UPDATE & PREPARE MASTER LEDGER PDF ✓");
         Button customers=button("Manage Ledger Customers ("+ledgerCustomerCount()+")");
-        Button mappingCheck=button("CHECK PHONE ↔ LEDGER MAPPING");
         Button convertPdf=button("MASTER PDF → PHONE + BALANCE EXCEL");
         Button paymentReminder=button("PAYMENT REMINDER");
         Button receipt=button("CREATE PAYMENT RECEIPT PDF");
@@ -1514,13 +1517,12 @@ public class MainActivity extends Activity {
         TextView fileLabel=new TextView(this);fileLabel.setText("SAVED LEDGER FILE");fileLabel.setTextSize(13);fileLabel.setTypeface(Typeface.DEFAULT_BOLD);fileLabel.setTextColor(Color.DKGRAY);fileLabel.setPadding(dp(4),dp(9),dp(4),dp(4));
         ledgerFileNameText=new TextView(this);ledgerFileNameText.setText(savedLedgerName.isEmpty()?"No Ledger file saved":savedLedgerName);ledgerFileNameText.setTextSize(17);ledgerFileNameText.setTypeface(Typeface.DEFAULT_BOLD);ledgerFileNameText.setTextColor(savedLedgerName.isEmpty()?Color.rgb(190,45,45):Color.rgb(0,125,70));ledgerFileNameText.setBackground(rounded(savedLedgerName.isEmpty()?Color.rgb(255,235,235):Color.rgb(225,248,235),12));ledgerFileNameText.setPadding(dp(12),dp(10),dp(12),dp(10));
         TextView current=new TextView(this);current.setPadding(dp(4),dp(8),dp(4),dp(8));current.setText("Customers: "+ledgerCustomerCount()+"\nLast status: "+p.getString("last_business_status","No send attempt yet"));
-        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(receipt,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(mappingCheck,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
+        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(receipt,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
         box.addView(history,new LinearLayout.LayoutParams(-1,dp(42)));
         ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));
         paymentReminder.setOnClickListener(v->showPaymentReminderScreen());
         receipt.setOnClickListener(v->showPaymentReceiptDialog());
         customers.setOnClickListener(v->showLedgerCustomersDialog());
-        mappingCheck.setOnClickListener(v->showLedgerMappingCheck());
         convertPdf.setOnClickListener(v->chooseMasterPdfForExcel());
         importCsv.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select optional customer Excel"),PICK_LEDGER_CUSTOMERS_XLSX);});
         history.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("File update history").setMessage(p.getString("file_history","No file updates yet")).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->p.edit().remove("file_history").apply()).show());
@@ -1528,14 +1530,6 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Business Files • Ledger").setMessage("Catalog main screen par alag section mein hai. Ledger Auto Reply ke liye Notification Access ON rakhein.").setView(scroll)
             .setPositiveButton("Save & Turn ON",(d,w)->{p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,ledgerKey.getText().toString().trim()).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast("Ledger settings saved • Auto Reply ON");})
             .setNegativeButton("Close",null).show();
-    }
-
-    private void showLedgerMappingCheck(){
-        int total=0,ready=0,invalid=0,missingPdf=0,duplicates=0;Set<String> phones=new LinkedHashSet<>();StringBuilder issues=new StringBuilder();
-        try{JSONArray a=new JSONArray(getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));total=a.length();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null){invalid++;continue;}String phone=normalize(o.optString("phone",""));String name=o.optString("name","Customer");if(phone.isEmpty()){invalid++;if(issues.length()<700)issues.append("\n• Invalid number: ").append(name);continue;}if(!phones.add(phone)){duplicates++;if(issues.length()<700)issues.append("\n• Duplicate: +").append(phone).append(" • ").append(name);continue;}String uri=o.optString("ledger_uri","");if(uri.isEmpty()){missingPdf++;if(issues.length()<700)issues.append("\n• PDF not ready: +").append(phone).append(" • ").append(name);continue;}ready++;}}
-        catch(Exception e){issues.append("\n• Mapping data read failed");}
-        String status="Total mapped: "+total+"\nReady phone + PDF: "+ready+"\nInvalid phone: "+invalid+"\nDuplicate phone: "+duplicates+"\nPDF missing: "+missingPdf+"\n\nLedger auto reply uses verified 10-digit phone only. Name-only match is blocked."+(issues.length()==0?"\n\nAll mappings ready ✓":"\nIssues:"+issues);
-        new AlertDialog.Builder(this).setTitle("Ledger Mapping Check").setMessage(status).setPositiveButton("OK",null).show();
     }
 
     private void showPaymentReceiptDialog(){
@@ -1720,6 +1714,16 @@ public class MainActivity extends Activity {
             if(!label.matcher(lines[i]).find())continue;
             String phone=extractIndianMobile(lines[i+1]);if(!phone.isEmpty())return phone;
         }
+        // Some Tally print formats show the party mobile number without a
+        // "Mobile" label. Accept it when the page contains one unambiguous
+        // Indian mobile number; labelled values above always take priority.
+        LinkedHashSet<String> candidates=new LinkedHashSet<>();
+        Matcher all=Pattern.compile("(?<![0-9])(?:\\+?91[\\s().-]*)?([6-9](?:[\\s().-]*[0-9]){9})(?![0-9])").matcher(text);
+        while(all.find()){
+            String ten=all.group(1).replaceAll("[^0-9]","");
+            if(ten.length()==10)candidates.add("91"+ten);
+        }
+        if(candidates.size()==1)return candidates.iterator().next();
         return "";
     }
 

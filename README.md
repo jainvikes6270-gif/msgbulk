@@ -1,9 +1,13 @@
-# LathaBulk v3.21.6 – Gallery + Task Unlock + Verified Ledger Mapping
+# LathaBulk v3.21.6 – Ledger + Catalog Reliable Send Fix
 
-- CATLOG `PHONE GALLERY` now launches the device Gallery/Albums directly, with a system photo-picker fallback.
-- Accessibility and Notification Access are together on the main screen with live ON/OFF status; Notification Access was removed from Settings.
-- `Automatic Unlock for Task` wakes/unlocks only when an approved send task starts, resumes after Android security confirmation, and locks again after a task that started locked.
-- Ledger auto reply now requires a verified 10-digit phone match. Name-only fallback is blocked, and Business Files includes a phone-to-PDF mapping check.
+- Real WhatsApp notifications titled `Name (2 messages)` are no longer skipped.
+- Ledger mapping accepts one unambiguous Indian mobile number even when Tally omits the Mobile label.
+- A Catalog type now opens one WhatsApp preview with all selected images/PDFs instead of stopping between separate windows.
+- Catalog Gallery opens the Android/Vivo photo picker directly and supports multiple selection.
+- Accessibility and Notification Access are together on the main screen.
+- Large PDF previews get up to 3 minutes before the automatic send state expires.
+
+# LathaBulk v3.21.5 – Ledger + CATLOG Workflow Fix
 
 - Ledger parser now recognises Mobile, Mob, Phone, Telephone, Tel, WhatsApp and Contact labels.
 - CATLOG resolves the notification sender through Contacts or the verified Ledger customer map, preventing the WhatsApp recipient-picker stop.
@@ -176,7 +180,7 @@
 ## v3.16.3 changes
 
 - Fixed GitHub Actions Java compilation failure caused by duplicate `last10Digits()` method.
-- Android `versionCode` is 53 for clean update installation over v3.21.5.
+- Android `versionCode` is 52 for clean update installation over v3.21.4.
 
 ## v3.16.2 changes
 
