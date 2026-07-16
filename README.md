@@ -253,3 +253,33 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 
 - Settings list no longer displays Lifetime Free or the active plan status.
 - Plan status remains available only inside the Subscription & Payment screen.
+
+# LathaBulk v3.23.6 – Ledger + Catalog Attachment Send Repair
+
+- Ledger and Catalog attachment preview now detects WhatsApp's current Send button IDs.
+- Accessibility can click the Send icon's clickable parent when the icon itself is not clickable.
+- Text Auto Reply behavior remains unchanged.
+
+# LathaBulk v3.23.7 – Continuous Auto Reply
+
+- Removed the Auto Reply cooldown field and five-minute reply block.
+- Repeated Ledger, Catalog and Auto Reply keywords can now trigger continuously.
+
+# LathaBulk v3.24.0 – Permanent Signed Auto Update
+
+- Checks the latest GitHub Release once every 24 hours and shows an in-app update popup.
+- Settings includes **Check for App Update** for manual checks.
+- Downloads `LathaEPS-Smart.apk` and opens Android's update confirmation automatically.
+- Tag builds (`v3.24.0`, `v3.24.1`, etc.) use the permanent signing key stored only in GitHub Actions secrets.
+- Every release automatically publishes the APK and `latest-version.json` assets.
+
+## One-time private GitHub secrets
+
+Add these repository secrets before creating the first `v3.24.0` tag:
+
+- `LATHAEPS_KEYSTORE_BASE64`
+- `LATHAEPS_KEYSTORE_PASSWORD`
+- `LATHAEPS_KEY_ALIAS`
+- `LATHAEPS_KEY_PASSWORD`
+
+Never upload the `.jks` key or private setup file into this public repository. After uploading the project, create and push tag `v3.24.0`; the workflow creates the signed GitHub Release automatically.

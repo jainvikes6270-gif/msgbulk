@@ -53,9 +53,9 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
         AccessibilityNodeInfo send = findSendButton(root, pkg);
-        if (send != null && send.isEnabled() && send.isClickable()) {
+        if (send != null && send.isEnabled()) {
             clickLocked = true;
-            send.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            if(!clickNodeOrParent(send)){clickLocked=false;return;}
             if(pendingShare){
                 boolean more=AutoReplyNotificationService.advanceCatalogQueue(this);
                 if(more){
@@ -72,11 +72,14 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo findSendButton(AccessibilityNodeInfo root, String pkg) {
-        List<AccessibilityNodeInfo> byId = root.findAccessibilityNodeInfosByViewId(pkg + ":id/send");
-        if (byId != null) for (AccessibilityNodeInfo n : byId) if (n != null && n.isClickable()) return n;
+        String[] ids={"send","send_button","media_send","send_btn"};
+        for(String id:ids){
+            List<AccessibilityNodeInfo> byId=root.findAccessibilityNodeInfosByViewId(pkg+":id/"+id);
+            if(byId!=null)for(AccessibilityNodeInfo n:byId)if(n!=null&&n.isEnabled()&&(n.isClickable()||clickableParent(n)!=null))return n;
+        }
         AccessibilityNodeInfo found = findByDescription(root);
         if (found != null) return found;
-        return null;
+        return findActionNode(root,new String[]{"send","send message","send media","भेजें","அனுப்பு"});
     }
 
     private void handleBroadcast(AccessibilityNodeInfo root,SharedPreferences p,String pkg){
@@ -99,7 +102,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     private AccessibilityNodeInfo findExactResult(AccessibilityNodeInfo root,String value){List<AccessibilityNodeInfo> nodes=root.findAccessibilityNodeInfosByText(value);if(nodes==null)return null;for(AccessibilityNodeInfo n:nodes){if(n==null||n.isEditable())continue;CharSequence text=n.getText();if(text!=null&&text.toString().trim().equalsIgnoreCase(value))return n;}return null;}
     private AccessibilityNodeInfo findActionNode(AccessibilityNodeInfo node,String[] words){if(node==null)return null;String text=node.getText()==null?"":node.getText().toString().trim().toLowerCase(Locale.ROOT);String desc=node.getContentDescription()==null?"":node.getContentDescription().toString().trim().toLowerCase(Locale.ROOT);for(String word:words){String w=word.toLowerCase(Locale.ROOT);if((text.equals(w)||desc.equals(w)||desc.contains(w))&&(node.isClickable()||clickableParent(node)!=null))return node;}for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo r=findActionNode(node.getChild(i),words);if(r!=null)return r;}return null;}
     private AccessibilityNodeInfo clickableParent(AccessibilityNodeInfo node){AccessibilityNodeInfo p=node==null?null:node.getParent();for(int i=0;p!=null&&i<4;i++){if(p.isClickable())return p;p=p.getParent();}return null;}
-    private void clickNodeOrParent(AccessibilityNodeInfo node){if(node==null)return;if(node.isClickable())node.performAction(AccessibilityNodeInfo.ACTION_CLICK);else{AccessibilityNodeInfo p=clickableParent(node);if(p!=null)p.performAction(AccessibilityNodeInfo.ACTION_CLICK);}}
+    private boolean clickNodeOrParent(AccessibilityNodeInfo node){if(node==null)return false;if(node.isClickable())return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);AccessibilityNodeInfo p=clickableParent(node);return p!=null&&p.performAction(AccessibilityNodeInfo.ACTION_CLICK);}
     private void finishBroadcast(boolean success,String label){SharedPreferences p=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);p.edit().putBoolean(MainActivity.BROADCAST_RUNNING,false).remove(MainActivity.BROADCAST_STAGE).remove(MainActivity.BROADCAST_FILE_URI).remove(MainActivity.BROADCAST_FILE_TYPE).apply();MainActivity.updateProgressNotification(this,success?1:0,1,label,success);clickLocked=false;if(success){Intent done=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);startActivity(done);}}
 
     private AccessibilityNodeInfo findByDescription(AccessibilityNodeInfo node) {
@@ -107,7 +110,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         CharSequence d = node.getContentDescription();
         if (d != null) {
             String x = d.toString().trim().toLowerCase();
-            if ((x.equals("send") || x.equals("भेजें") || x.contains("send")) && node.isClickable()) return node;
+            if ((x.equals("send") || x.equals("भेजें") || x.equals("அனுப்பு") || x.contains("send")) && node.isEnabled() && (node.isClickable()||clickableParent(node)!=null)) return node;
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo r = findByDescription(node.getChild(i));

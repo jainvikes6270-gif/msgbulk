@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.DownloadManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -30,6 +31,7 @@ import android.provider.OpenableColumns;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Environment;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -72,6 +74,8 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument;
 import com.tom_roush.pdfbox.text.PDFTextStripper;
 
 import java.net.URLEncoder;
+import java.net.URL;
+import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -199,6 +203,7 @@ public class MainActivity extends Activity {
         PaymentScheduleReceiver.restoreStoredSchedule(this);
         requestNotificationPermissionIfNeeded();
         showLoginOrApp();
+        uiHandler.postDelayed(this::autoCheckForAppUpdate,3000L);
     }
 
     private void showLoginOrApp(){
@@ -1010,6 +1015,7 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
         addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS SMART").setPositiveButton("OK",null).show());
+        addSettingsButton(list,"⬇  Check for App Update","Current v"+appVersion()+" • Check latest version",v->checkForAppUpdate());
         addSettingsButton(list,"↗  Share App APK","Direct APK share karein • GitHub username ya source code nahi dikhega",v->shareApp());
         addSettingsButton(list,"₹  Subscription & Payment","Plan details, UPI payment & activation",v->startActivity(new Intent(this,SubscriptionActivity.class)));
         addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
@@ -1091,7 +1097,34 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.5";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.24.0";}}
+    private long appVersionCode(){try{if(Build.VERSION.SDK_INT>=28)return getPackageManager().getPackageInfo(getPackageName(),0).getLongVersionCode();return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception e){return 0;}}
+    private void checkForAppUpdate(){checkForAppUpdate(false);}
+    private void autoCheckForAppUpdate(){SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);long now=System.currentTimeMillis();if(now-p.getLong("last_auto_update_check",0)<24L*60L*60L*1000L)return;p.edit().putLong("last_auto_update_check",now).apply();checkForAppUpdate(true);}
+    private void checkForAppUpdate(boolean silent){
+        if(!silent)toast("Checking latest version…");
+        new Thread(()->{
+            JSONObject info=null;
+            try{
+                URL url=new URL("https://github.com/jainvikes6270-gif/msgbulk/releases/latest/download/latest-version.json?time="+System.currentTimeMillis());
+                HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setInstanceFollowRedirects(true);c.setConnectTimeout(12000);c.setReadTimeout(12000);c.setRequestProperty("Cache-Control","no-cache");c.setRequestProperty("Accept","application/json");
+                try(BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()))){StringBuilder s=new StringBuilder();String line;while((line=r.readLine())!=null)s.append(line);info=new JSONObject(s.toString());}c.disconnect();
+            }catch(Exception ignored){}
+            final JSONObject found=info;
+            runOnUiThread(()->{
+                if(found==null){if(!silent)new AlertDialog.Builder(this).setTitle("App Update").setMessage("Update check nahi ho paya. Internet check karke retry karein.").setPositiveButton("RETRY",(d,w)->checkForAppUpdate()).setNegativeButton("Close",null).show();return;}
+                String latest=found.optString("version","");long code=found.optLong("versionCode",0);String apk=found.optString("downloadUrl","");boolean newer=code>appVersionCode();
+                if(!newer){if(!silent)toast("App is up to date • v"+appVersion());return;}
+                if(!isTrustedUpdateUrl(apk)){if(!silent)toast("Update link invalid");return;}
+                new AlertDialog.Builder(this).setTitle("New Update Available").setMessage("Current: v"+appVersion()+"\nLatest: v"+latest+"\n\nDownload ke baad Android install confirmation dikhayega. App data safe rahega.").setPositiveButton("DOWNLOAD & UPDATE",(d,w)->downloadUpdate(apk,latest)).setNegativeButton("Later",null).show();
+            });
+        }).start();
+    }
+    private boolean isTrustedUpdateUrl(String value){return value!=null&&value.startsWith("https://github.com/jainvikes6270-gif/msgbulk/releases/")&&value.endsWith("LathaEPS-Smart.apk");}
+    private void downloadUpdate(String apkUrl,String version){
+        if(Build.VERSION.SDK_INT>=26&&!getPackageManager().canRequestPackageInstalls()){new AlertDialog.Builder(this).setTitle("Allow App Updates").setMessage("LATHAEPS SMART ko downloaded update install karne ki permission ON karein. Phir Check for App Update dobara dabayein.").setPositiveButton("OPEN SETTING",(d,w)->{try{startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())));}catch(Exception e){toast("Install permission setting open nahi hui");}}).setNegativeButton("Cancel",null).show();return;}
+        try{DownloadManager dm=(DownloadManager)getSystemService(DOWNLOAD_SERVICE);if(dm==null)throw new Exception("Download unavailable");String file="LathaEPS-Smart-v"+(version==null?"latest":version)+".apk";DownloadManager.Request req=new DownloadManager.Request(Uri.parse(apkUrl));req.setTitle("LATHAEPS SMART update");req.setDescription("Downloading version "+version);req.setMimeType("application/vnd.android.package-archive");req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);req.setDestinationInExternalFilesDir(this,Environment.DIRECTORY_DOWNLOADS,file);long id=dm.enqueue(req);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putLong("app_update_download_id",id).putString("app_update_file",file).apply();toast("Update downloading • notification check karein");}catch(Exception e){toast("Update download start nahi hua");}
+    }
 
     private void shareApp(){
         try{
@@ -1923,14 +1956,13 @@ public class MainActivity extends Activity {
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
         EditText keyword=new EditText(this);keyword.setHint("Received message / keyword");Spinner match=new Spinner(this);String[] modes={"Contains","Exact match","Starts with","Ends with"};match.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,modes));
         EditText reply=new EditText(this);reply.setHint("Reply text / image caption");reply.setMinLines(2);CheckBox caseSensitive=new CheckBox(this);caseSensitive.setText("Case sensitive");
-        EditText cool=new EditText(this);cool.setHint("Cooldown minutes");cool.setInputType(InputType.TYPE_CLASS_NUMBER);cool.setText(String.valueOf(p.getInt(AutoReplyNotificationService.COOLDOWN,5)));
         if(old!=null){keyword.setText(old.optString("keyword"));match.setSelection(old.optInt("match",0));reply.setText(old.optString("reply"));caseSensitive.setChecked(old.optBoolean("case",false));}
         CheckBox sendImage=new CheckBox(this);sendImage.setText("Send image with this rule");sendImage.setChecked(!pendingRuleImageUri.isEmpty());
         Button image=button(pendingRuleImageUri.isEmpty()?"Choose image for this rule (optional)":"Change this rule image ✓");
         pendingRuleImageEnabled=sendImage;pendingRuleImageButton=image;
-        box.addView(keyword);box.addView(match);box.addView(reply);box.addView(caseSensitive);box.addView(cool);box.addView(sendImage);box.addView(image,new LinearLayout.LayoutParams(-1,dp(46)));image.setOnClickListener(v->openPhoneGalleryFirst());
+        box.addView(keyword);box.addView(match);box.addView(reply);box.addView(caseSensitive);box.addView(sendImage);box.addView(image,new LinearLayout.LayoutParams(-1,dp(46)));image.setOnClickListener(v->openPhoneGalleryFirst());
         AlertDialog d=new AlertDialog.Builder(this).setTitle(editIndex<0?"Add Auto Reply Rule":"Edit Rule "+(editIndex+1)).setView(box).setPositiveButton("Save",null).setNegativeButton("Cancel",null).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String k=keyword.getText().toString().trim();if(k.isEmpty()){keyword.setError("Keyword required");return;}if(sendImage.isChecked()&&pendingRuleImageUri.isEmpty()){toast("Image choose karein ya Send image option OFF karein");return;}try{int cooldown=Math.max(1,Integer.parseInt(cool.getText().toString().trim()));JSONArray arr=new JSONArray(p.getString("rules","[]"));JSONObject o=new JSONObject();o.put("keyword",k);o.put("match",match.getSelectedItemPosition());o.put("case",caseSensitive.isChecked());o.put("reply",reply.getText().toString().trim());o.put("image",sendImage.isChecked()?pendingRuleImageUri:"");o.put("type",sendImage.isChecked()?pendingRuleImageType:"image/*");if(editIndex>=0){JSONArray out=new JSONArray();for(int i=0;i<arr.length();i++)out.put(i==editIndex?o:arr.get(i));arr=out;}else arr.put(o);p.edit().putString("rules",arr.toString()).putInt(AutoReplyNotificationService.COOLDOWN,cooldown).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast(editIndex<0?"Rule added • Auto reply ON":"Rule updated");d.dismiss();refresh.run();}catch(Exception e){toast("Rule save failed");}}));
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String k=keyword.getText().toString().trim();if(k.isEmpty()){keyword.setError("Keyword required");return;}if(sendImage.isChecked()&&pendingRuleImageUri.isEmpty()){toast("Image choose karein ya Send image option OFF karein");return;}try{JSONArray arr=new JSONArray(p.getString("rules","[]"));JSONObject o=new JSONObject();o.put("keyword",k);o.put("match",match.getSelectedItemPosition());o.put("case",caseSensitive.isChecked());o.put("reply",reply.getText().toString().trim());o.put("image",sendImage.isChecked()?pendingRuleImageUri:"");o.put("type",sendImage.isChecked()?pendingRuleImageType:"image/*");if(editIndex>=0){JSONArray out=new JSONArray();for(int i=0;i<arr.length();i++)out.put(i==editIndex?o:arr.get(i));arr=out;}else arr.put(o);p.edit().putString("rules",arr.toString()).putBoolean(AutoReplyNotificationService.ENABLED,true).apply();toast(editIndex<0?"Rule added • Auto reply ON":"Rule updated");d.dismiss();refresh.run();}catch(Exception e){toast("Rule save failed");}}));
         d.setOnDismissListener(x->{pendingRuleImageEnabled=null;pendingRuleImageButton=null;pendingRuleImageUri="";pendingRuleImageType="image/*";});d.show();
     }
 

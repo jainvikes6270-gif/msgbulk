@@ -1,0 +1,39 @@
+LATHAEPS SMART v3.24.0 - CODE QA VERIFIED
+
+Project integrity
+- All Java source files passed Java grammar parsing.
+- Android manifest and XML resource files passed XML parsing.
+- GitHub Actions workflow passed YAML parsing.
+- Manifest services, activities and receivers have matching Java source files.
+- Permanent release signing configuration and update receiver are wired.
+
+Ledger
+- Master PDF import, text extraction, phone normalization and strict last-10-digit mapping verified.
+- Customer PDFs are stored under FileProvider-safe internal storage.
+- Incoming ledger keyword resolves only the verified sender phone.
+- PDF share queue and current WhatsApp Send-button/parent-click detection verified.
+
+Catalog
+- Phone Gallery and PDF selections are copied into permanent app storage.
+- Category/keyword matching and one-by-one attachment queue verified.
+- Queue completion, cancellation and locked-screen resume paths verified.
+
+Auto Reply
+- Text-only rules save and send without inheriting an old image.
+- Each image rule owns its optional image and MIME type.
+- User cooldown field and five-minute block are removed.
+- New repeated messages remain continuous; only an exact duplicate Android notification event is ignored.
+
+Payment Reminder
+- Phone contact and Master Ledger import paths verified.
+- Test First, Send Now and per-recipient message queues verified.
+- Balance and due-date values are not inserted into the outgoing payment request.
+- One Time, Daily, Weekly and Monthly alarm paths verified.
+- Boot and app-update schedule restoration, cancellation and history paths verified.
+
+Auto Update
+- Daily silent check and manual Settings check verified.
+- Trusted GitHub Release JSON/APK URLs, DownloadManager and installer receiver verified.
+- Tag release workflow publishes permanently signed LathaEPS-Smart.apk and latest-version.json.
+
+Final real-device behavior still depends on Android permissions, current WhatsApp UI and the signed GitHub Actions build completing successfully.

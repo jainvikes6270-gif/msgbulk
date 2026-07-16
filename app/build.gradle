@@ -8,12 +8,24 @@ android {
         applicationId 'com.lathaeps.lathabulk'
         minSdk 24
         targetSdk 35
-        versionCode 62
-        versionName '3.23.5'
+        versionCode 65
+        versionName '3.24.0'
+    }
+
+    signingConfigs {
+        release {
+            if (System.getenv('LATHAEPS_KEYSTORE_FILE')) {
+                storeFile file(System.getenv('LATHAEPS_KEYSTORE_FILE'))
+                storePassword System.getenv('LATHAEPS_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('LATHAEPS_KEY_ALIAS')
+                keyPassword System.getenv('LATHAEPS_KEY_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
