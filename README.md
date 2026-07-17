@@ -1,3 +1,11 @@
+# LathaBulk v3.23.19 – Ledger exact-phone + duplicate-event fix
+
+## v3.23.19
+
+- One incoming Ledger request is processed only once even when WhatsApp reposts or updates the same notification.
+- When WhatsApp exposes only a saved contact name, all numbers under that exact phone contact are checked against the Ledger map; the PDF is sent only for an exact unique 10-digit Ledger match.
+- A contact name alone never authorizes a Ledger send.
+
 # LathaBulk v3.23.2 – Direct APK Share + Paid Plans + Admin Activation
 
 ## v3.23.2

@@ -31,7 +31,9 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
     public static final String CATALOG_QUEUE_CONTACT="catalog_share_contact", SHARE_PICKER_STAGE="catalog_share_picker_stage", SHARE_PICKER_TRIES="catalog_share_picker_tries";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
-    private static final String LAST_EVENT_KEY="last_notification_event_key";
+    private static final String RECENT_EVENTS="recent_notification_events";
+    private static final long EVENT_FALLBACK_WINDOW_MS=20000L;
+    private static final long EVENT_HISTORY_MS=600000L;
     private final Handler handler=new Handler(Looper.getMainLooper());
 
     @Override public void onNotificationPosted(StatusBarNotification sbn){
@@ -50,9 +52,10 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String senderPhone=resolvePhoneFromNotification(sbn,n,e,title);
         String titleLower=title.trim().toLowerCase(Locale.ROOT);
         if((n.flags&Notification.FLAG_GROUP_SUMMARY)!=0||titleLower.equals("whatsapp")||titleLower.matches("[0-9]+\\s+new messages?"))return;
-        String eventKey=sbn.getKey()+"|"+sbn.getPostTime()+"|"+text;
-        if(eventKey.equals(p.getString(LAST_EVENT_KEY,"")))return;
-        p.edit().putString(LAST_EVENT_KEY,eventKey).apply();
+        long messageTime=extractLatestMessageTime(e);
+        String senderIdentity=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
+        String eventKey=pkg+"|"+senderIdentity+"|"+text.trim()+"|"+(messageTime>0?messageTime:0);
+        if(!markNotificationEventOnce(p,eventKey,messageTime>0))return;
         String file="", type="", caption="";
         ArrayList<Uri> catalogFiles=new ArrayList<>();
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
@@ -134,16 +137,54 @@ public class AutoReplyNotificationService extends NotificationListenerService {
 
     private JSONObject findLedgerCustomer(SharedPreferences p,String senderPhone,String senderTitle){
         String sp=last10(senderPhone);
-        if(sp.length()!=10)return null;
         try{
             JSONArray a=new JSONArray(p.getString(LEDGER_CUSTOMERS,"[]"));
+            if(sp.length()==10){
+                for(int i=0;i<a.length();i++){
+                    JSONObject o=a.optJSONObject(i);if(o==null)continue;
+                    String ph=last10(o.optString("phone",""));
+                    if(ph.length()==10&&ph.equals(sp))return o;
+                }
+                return null;
+            }
+            // WhatsApp can expose only the saved contact name. Every phone under
+            // that exact device contact is intersected with the Ledger map; the
+            // name by itself is never accepted as authorization.
+            ArrayList<String> contactPhones=resolvePhonesFromContacts(senderTitle);
+            JSONObject matched=null;
             for(int i=0;i<a.length();i++){
                 JSONObject o=a.optJSONObject(i);if(o==null)continue;
                 String ph=last10(o.optString("phone",""));
-                if(sp.length()==10&&ph.length()==10&&ph.equals(sp))return o;
+                if(ph.length()!=10||!contactPhones.contains(ph))continue;
+                if(matched!=null&&!last10(matched.optString("phone","")).equals(ph))return null;
+                matched=o;
             }
+            return matched;
         }catch(Exception ignored){}
         return null;
+    }
+
+    /** Ignore reposts/updates of one logical WhatsApp message without adding a general reply cooldown. */
+    private boolean markNotificationEventOnce(SharedPreferences p,String fingerprint,boolean hasStableMessageTime){
+        long now=System.currentTimeMillis();
+        String key=Integer.toHexString(fingerprint.hashCode())+"_"+fingerprint.length();
+        try{
+            JSONObject recent=new JSONObject(p.getString(RECENT_EVENTS,"{}"));
+            long previous=recent.optLong(key,0L);
+            long duplicateWindow=hasStableMessageTime?EVENT_HISTORY_MS:EVENT_FALLBACK_WINDOW_MS;
+            if(previous>0&&now-previous<duplicateWindow)return false;
+            JSONArray names=recent.names();
+            if(names!=null)for(int i=0;i<names.length();i++){
+                String old=names.optString(i);
+                if(now-recent.optLong(old,0L)>EVENT_HISTORY_MS)recent.remove(old);
+            }
+            recent.put(key,now);
+            p.edit().putString(RECENT_EVENTS,recent.toString()).apply();
+            return true;
+        }catch(Exception ignored){
+            p.edit().putString(RECENT_EVENTS,"{}").apply();
+            return true;
+        }
     }
 
     private void saveStatus(SharedPreferences p,String status){
@@ -196,6 +237,16 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return "";
     }
 
+    private long extractLatestMessageTime(Bundle extras){
+        if(extras==null)return 0L;
+        try{
+            android.os.Parcelable[] messages=extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+            if(messages!=null&&messages.length>0&&messages[messages.length-1] instanceof Bundle)
+                return ((Bundle)messages[messages.length-1]).getLong("time",0L);
+        }catch(Exception ignored){}
+        return 0L;
+    }
+
     private String resolvePhoneFromNotification(StatusBarNotification sbn,Notification n,Bundle extras,String title){
         ArrayList<String> candidates=new ArrayList<>();
         candidates.add(title);
@@ -239,21 +290,25 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     }
 
     private String resolvePhoneFromContacts(String title){
-        if(title==null||title.trim().isEmpty()||"null".equalsIgnoreCase(title.trim()))return "";
-        if(checkSelfPermission(android.Manifest.permission.READ_CONTACTS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return "";
+        ArrayList<String> phones=resolvePhonesFromContacts(title);
+        return phones.size()==1?"91"+phones.get(0):"";
+    }
+
+    private ArrayList<String> resolvePhonesFromContacts(String title){
+        ArrayList<String> phones=new ArrayList<>();
+        if(title==null||title.trim().isEmpty()||"null".equalsIgnoreCase(title.trim()))return phones;
+        if(checkSelfPermission(android.Manifest.permission.READ_CONTACTS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return phones;
         Cursor c=null;try{
             c=getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,new String[]{ContactsContract.CommonDataKinds.Phone.NUMBER,ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME},null,null,null);
-            String wanted=normaliseContactName(cleanContactTitle(title)),found="";
-            if(wanted.isEmpty())return "";
+            String wanted=normaliseContactName(cleanContactTitle(title));
+            if(wanted.isEmpty())return phones;
             if(c!=null)while(c.moveToNext()){
                 if(!wanted.equals(normaliseContactName(c.getString(1))))continue;
-                String ten=last10(c.getString(0));if(ten.length()!=10)continue;
-                if(!found.isEmpty()&&!last10(found).equals(ten))return "";
-                found="91"+ten;
+                String ten=last10(c.getString(0));
+                if(ten.matches("[6-9][0-9]{9}")&&!phones.contains(ten))phones.add(ten);
             }
-            return found;
         }catch(Exception ignored){}finally{if(c!=null)c.close();}
-        return "";
+        return phones;
     }
 
     private String normaliseContactName(String value){

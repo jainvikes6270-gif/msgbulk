@@ -1,4 +1,4 @@
-# LathaBulk v3.23.18 QA Checklist
+# LathaBulk v3.23.19 QA Checklist
 
 ## Automated static checks passed
 
@@ -6,7 +6,7 @@
 - AndroidManifest and all XML resources parse successfully.
 - GitHub Actions workflow YAML parses successfully.
 - Package/namespace remains `com.lathaeps.lathabulk`.
-- `versionCode 75`, `versionName 3.23.18`.
+- `versionCode 76`, `versionName 3.23.19`.
 - No signing key, keystore or signed-release configuration included.
 - No Auto Reply cooldown field/block remains.
 
