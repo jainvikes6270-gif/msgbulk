@@ -29,6 +29,17 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     private long lastRetryToken = 0L;
     private static PowerManager.WakeLock queueWakeLock;
 
+    @Override protected void onServiceConnected(){
+        super.onServiceConnected();clickLocked=false;
+        handler.postDelayed(()->{
+            AccessibilityNodeInfo root=getRootInActiveWindow();if(root==null||root.getPackageName()==null)return;
+            String pkg=root.getPackageName().toString();if(!pkg.equals("com.whatsapp")&&!pkg.equals("com.whatsapp.w4b"))return;
+            SharedPreferences a=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);SharedPreferences p=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);
+            boolean pending=a.getBoolean(AutoReplyNotificationService.PENDING_SHARE,false),bulk=p.getBoolean(MainActivity.AUTO_RUNNING,false);
+            if(pending||bulk)attemptPendingSend(pkg,pending,bulk);
+        },650L);
+    }
+
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null || event.getPackageName() == null) return;
         if(!SubscriptionManager.hasAccess(this)){stopExpiredQueues(this);return;}
@@ -38,7 +49,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         boolean pendingShare = autoReply.getBoolean(AutoReplyNotificationService.PENDING_SHARE, false);
         long pendingAt = autoReply.getLong(AutoReplyNotificationService.PENDING_SHARE_AT, 0L);
         if (pendingShare && System.currentTimeMillis()-pendingAt > 120000L) {
-            autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).apply();
+            autoReply.edit().putBoolean(AutoReplyNotificationService.PENDING_SHARE,false).putBoolean(AutoReplyNotificationService.PREPARING_SHARE,false).apply();
             TaskDeviceController.cancel(this);
             pendingShare=false;
         }
@@ -65,6 +76,10 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         if (!pendingShare && !bulkRunning) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) { scheduleSendRetry(pkg); return; }
+        if(pendingShare && handleShareRecipientPicker(root,autoReply,pkg)){
+            scheduleSendRetry(pkg);
+            return;
+        }
         AccessibilityNodeInfo send = findSendButton(root, pkg);
         if (send != null && send.isEnabled()) {
             clickLocked = true;
@@ -88,10 +103,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
 
     private void scheduleSendRetry(String pkg) {
         final long token=++lastRetryToken;
-        handler.postDelayed(()->retryPendingSend(pkg,token),350L);
-        handler.postDelayed(()->retryPendingSend(pkg,token),900L);
-        handler.postDelayed(()->retryPendingSend(pkg,token),1700L);
-        handler.postDelayed(()->retryPendingSend(pkg,token),2800L);
+        handler.postDelayed(()->retryPendingSend(pkg,token),500L);
     }
 
     private void retryPendingSend(String pkg,long token){
@@ -115,6 +127,81 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         if(found!=null)return found;
         return findBottomRightSendCandidate(root,root);
     }
+
+    /** Handles WhatsApp's "Send to…" screen when the jid extra is ignored. */
+    private boolean handleShareRecipientPicker(AccessibilityNodeInfo root,SharedPreferences prefs,String pkg){
+        if(!isShareRecipientPicker(root))return false;
+        int stage=prefs.getInt(AutoReplyNotificationService.SHARE_PICKER_STAGE,0);
+        String phone=last10(prefs.getString(AutoReplyNotificationService.CATALOG_QUEUE_PHONE,""));
+        String contact=prefs.getString(AutoReplyNotificationService.CATALOG_QUEUE_CONTACT,"").trim();
+        String query=!phone.isEmpty()?phone:(!contact.equalsIgnoreCase("null")?contact:"");
+        if(query.isEmpty()){
+            prefs.edit().putString("last_business_status","Send stopped • recipient phone/name not available").apply();
+            return true;
+        }
+        if(stage==0){
+            AccessibilityNodeInfo edit=findFirstEditable(root);
+            if(edit!=null){setNodeText(edit,query);lockSharePickerStep(prefs,2,700);return true;}
+            AccessibilityNodeInfo search=findActionNode(root,new String[]{"search","search name or number","खोज","தேடு"});
+            if(search!=null){clickLocked=true;clickNodeOrParent(search);prefs.edit().putInt(AutoReplyNotificationService.SHARE_PICKER_STAGE,1).apply();handler.postDelayed(()->clickLocked=false,500);return true;}
+            return true;
+        }
+        if(stage==1){
+            AccessibilityNodeInfo edit=findFirstEditable(root);
+            if(edit!=null){setNodeText(edit,query);lockSharePickerStep(prefs,2,700);}
+            return true;
+        }
+        if(stage==2){
+            AccessibilityNodeInfo result=findRecipientResult(root,contact,phone);
+            if(result!=null){clickLocked=true;clickNodeOrParent(result);prefs.edit().putInt(AutoReplyNotificationService.SHARE_PICKER_STAGE,3).apply();handler.postDelayed(()->clickLocked=false,650);}
+            return true;
+        }
+        AccessibilityNodeInfo next=findActionNode(root,new String[]{"next","continue","send","आगे","भेजें","அடுத்து","அனுப்பு"});
+        if(next==null)next=findBottomRightSendCandidate(root,root);
+        if(next!=null){clickLocked=true;clickNodeOrParent(next);prefs.edit().putInt(AutoReplyNotificationService.SHARE_PICKER_STAGE,4).apply();handler.postDelayed(()->clickLocked=false,850);}
+        return true;
+    }
+
+    private void lockSharePickerStep(SharedPreferences p,int stage,long delay){
+        clickLocked=true;p.edit().putInt(AutoReplyNotificationService.SHARE_PICKER_STAGE,stage).apply();handler.postDelayed(()->clickLocked=false,delay);
+    }
+
+    private boolean isShareRecipientPicker(AccessibilityNodeInfo root){
+        return treeContains(root,new String[]{"send to","share to","select contact","search name or number","frequently contacted","recent chats","भेजें इसे","संपर्क चुनें","அனுப்ப வேண்டியவர்"});
+    }
+
+    private boolean treeContains(AccessibilityNodeInfo node,String[] needles){
+        if(node==null)return false;
+        String text=((node.getText()==null?"":node.getText().toString())+" "+(node.getContentDescription()==null?"":node.getContentDescription().toString())).toLowerCase(Locale.ROOT);
+        for(String needle:needles)if(text.contains(needle.toLowerCase(Locale.ROOT)))return true;
+        for(int i=0;i<node.getChildCount();i++)if(treeContains(node.getChild(i),needles))return true;
+        return false;
+    }
+
+    private AccessibilityNodeInfo findRecipientResult(AccessibilityNodeInfo root,String contact,String phone){
+        if(contact!=null&&!contact.isEmpty()){
+            List<AccessibilityNodeInfo> named=root.findAccessibilityNodeInfosByText(contact);
+            if(named!=null)for(AccessibilityNodeInfo n:named)if(isUsableRecipientNode(n))return n;
+        }
+        if(phone!=null&&!phone.isEmpty()){
+            List<AccessibilityNodeInfo> numbered=root.findAccessibilityNodeInfosByText(phone);
+            if(numbered!=null)for(AccessibilityNodeInfo n:numbered)if(isUsableRecipientNode(n))return n;
+        }
+        return findFirstRecipientRow(root);
+    }
+
+    private boolean isUsableRecipientNode(AccessibilityNodeInfo n){return n!=null&&!n.isEditable()&&n.isEnabled()&&(n.isClickable()||clickableParent(n)!=null);}
+
+    private AccessibilityNodeInfo findFirstRecipientRow(AccessibilityNodeInfo node){
+        if(node==null)return null;
+        String text=node.getText()==null?"":node.getText().toString().trim().toLowerCase(Locale.ROOT);
+        boolean label=text.equals("send to")||text.equals("share to")||text.equals("frequently contacted")||text.equals("recent chats")||text.equals("new group")||text.equals("search")||text.equals("next")||text.equals("send");
+        if(!text.isEmpty()&&!label&&!node.isEditable()&&node.isEnabled()&&(node.isClickable()||clickableParent(node)!=null))return node;
+        for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo r=findFirstRecipientRow(node.getChild(i));if(r!=null)return r;}
+        return null;
+    }
+
+    private String last10(String value){String d=value==null?"":value.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
 
     /** Last resort for WhatsApp versions whose Send icon has no public ID/label. */
     private AccessibilityNodeInfo findBottomRightSendCandidate(AccessibilityNodeInfo root,AccessibilityNodeInfo node){
@@ -292,8 +379,11 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 .putBoolean(MainActivity.BROADCAST_RUNNING,false).apply();
         context.getSharedPreferences(AutoReplyNotificationService.PREFS,Context.MODE_PRIVATE).edit()
                 .putBoolean(AutoReplyNotificationService.PENDING_SHARE,false)
+                .putBoolean(AutoReplyNotificationService.PREPARING_SHARE,false)
                 .remove(AutoReplyNotificationService.CATALOG_QUEUE)
-                .remove(AutoReplyNotificationService.CATALOG_QUEUE_INDEX).apply();
+                .remove(AutoReplyNotificationService.CATALOG_QUEUE_INDEX)
+                .remove(AutoReplyNotificationService.CATALOG_QUEUE_CONTACT)
+                .remove(AutoReplyNotificationService.SHARE_PICKER_STAGE).apply();
         releaseQueueWakeLock();
         TaskDeviceController.cancel(context);
     }

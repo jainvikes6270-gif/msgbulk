@@ -282,3 +282,23 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - A bottom-right Send-button fallback covers WhatsApp screens that hide the icon ID or label.
 - Auto Reply remains continuous with no cooldown option.
 - Only bulk sending keeps its separate 3–7 second random delay.
+
+# LathaBulk v3.23.11 – WhatsApp Recipient Window Repair
+
+- Fixes Ledger, Catalog and image Auto Reply stopping on WhatsApp's `Send to…` window.
+- If WhatsApp ignores the direct recipient ID, Accessibility searches the original sender, selects the recipient, continues to preview and presses the final Send button.
+- The recipient-picker stage is saved across window redraws and cleared after completion/cancel.
+- No-cooldown Auto Reply and the premium crop/manual-placement editor remain unchanged.
+
+# LathaBulk v3.23.12 – Consolidated Ledger/Catalog/Auto Reply QA
+
+- Ledger customer edits preserve the prepared customer PDF URI, filename, balance and page mapping.
+- Valid individual WhatsApp notifications are no longer rejected only because their title contains a message count.
+- Identical reposts of the same notification event are ignored without adding a reply cooldown; every new repeated keyword message still works.
+- Recipient search prefers the verified last-10-digit phone number, with the WhatsApp contact title as fallback.
+- Unlabelled green Next/Send buttons are supported in both recipient selection and final preview.
+- Accessibility resumes an already-pending task when its service reconnects.
+- Retry scheduling is single-chain to avoid stale handler events during long WhatsApp loads.
+- The sender chat no longer becomes an active send target before the real PDF/image share queue is ready.
+- Attachment requests arriving during another task wait for the active task instead of overwriting its Ledger/Catalog queue.
+- Debug-only GitHub build, no signed-release configuration, no Auto Reply cooldown option.

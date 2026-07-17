@@ -26,9 +26,12 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String LEDGER_URI="ledger_uri", CATALOG_URI="catalog_uri";
     public static final String LEDGER_KEY="ledger_key", CATALOG_KEY="catalog_key";
     public static final String PENDING_SHARE="pending_share", PENDING_SHARE_AT="pending_share_at";
+    public static final String PREPARING_SHARE="preparing_share";
     public static final String CATALOG_QUEUE="catalog_share_queue", CATALOG_QUEUE_INDEX="catalog_share_index";
     public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
+    public static final String CATALOG_QUEUE_CONTACT="catalog_share_contact", SHARE_PICKER_STAGE="catalog_share_picker_stage";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
+    private static final String LAST_EVENT_KEY="last_notification_event_key";
     private final Handler handler=new Handler(Looper.getMainLooper());
 
     @Override public void onNotificationPosted(StatusBarNotification sbn){
@@ -42,18 +45,19 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         Bundle e=n.extras;
         String title=String.valueOf(e.getCharSequence(Notification.EXTRA_TITLE,""));
         String text=extractMessageText(e);
+        if(text.trim().isEmpty())return;
         String lower=text.toLowerCase(Locale.ROOT);
         String senderPhone=resolvePhoneFromNotification(sbn,n,e,title);
-        if(title.toLowerCase(Locale.ROOT).contains("messages") || title.toLowerCase(Locale.ROOT).contains("whatsapp")) return;
-        long now=System.currentTimeMillis();
-
+        String titleLower=title.trim().toLowerCase(Locale.ROOT);
+        if((n.flags&Notification.FLAG_GROUP_SUMMARY)!=0||titleLower.equals("whatsapp")||titleLower.matches("[0-9]+\\s+new messages?"))return;
+        String eventKey=sbn.getKey()+"|"+sbn.getPostTime()+"|"+text;
+        if(eventKey.equals(p.getString(LAST_EVENT_KEY,"")))return;
+        p.edit().putString(LAST_EVENT_KEY,eventKey).apply();
         String file="", type="", caption="";
         ArrayList<Uri> catalogFiles=new ArrayList<>();
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
-        String command="rule";
         if(keywordMatches(lower,lk)){
-            command="ledger";
             JSONObject customer=findLedgerCustomer(p,senderPhone);
             if(customer==null){saveStatus(p,"Ledger not sent • verified phone not matched: "+title);return;}
             file=customer.optString("ledger_uri","");
@@ -63,7 +67,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             type="application/pdf";caption="LATHA EPS Ledger • "+customer.optString("name","Customer");
         }
         else if(findCatalogsForMessage(lower,ck).length()>0||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){
-            command="catalog";JSONArray catalogs=findCatalogsForMessage(lower,ck);
+            JSONArray catalogs=findCatalogsForMessage(lower,ck);
             if(catalogs.length()==0){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}
             JSONObject first=catalogs.optJSONObject(0);if(first==null)return;
             for(int i=0;i<catalogs.length();i++){JSONObject item=catalogs.optJSONObject(i);if(item==null)continue;String uri=item.optString("uri","");if(!uri.isEmpty())catalogFiles.add(Uri.parse(uri));}
@@ -85,20 +89,36 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             if(!matched){String key=p.getString(KEYWORD,"").trim().toLowerCase(Locale.ROOT);if(key.isEmpty()||!lower.contains(key))return;caption=p.getString(REPLY,"").trim();file=p.getString(IMAGE,"");type=p.getString(IMAGE+"_type","image/*");}
         }
         if(!file.isEmpty()){
-            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,now).apply();
-            if(n.contentIntent!=null){ try{n.contentIntent.send();}catch(Exception ignored){} }
-            final String f=file,t=type,c=caption;
+            final String f=file,c=caption;
             final ArrayList<Uri> files=new ArrayList<>(catalogFiles);
-            final String phone=senderPhone;
-            handler.postDelayed(()->{
-                if(files.isEmpty())files.add(Uri.parse(f));
-                prepareCatalogQueue(files,c,pkg,phone);
-                TaskDeviceController.begin(this);
-                shareNextCatalogFile(this);
-            },1200);
+            final String phone=senderPhone,contact=cleanContactTitle(title);
+            if(files.isEmpty())files.add(Uri.parse(f));
+            startShareWhenReady(files,c,pkg,phone,contact,n.contentIntent,0);
         } else if(!caption.isEmpty()) {
             sendRemoteReply(n,caption);
         }
+    }
+
+    /** Serialises attachment replies and activates Accessibility only after the real share screen starts. */
+    private void startShareWhenReady(ArrayList<Uri> files,String caption,String pkg,String phone,String contact,PendingIntent openChat,int attempt){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(p.getBoolean(PENDING_SHARE,false)||p.getBoolean(PREPARING_SHARE,false)){
+            if(attempt>=240){saveStatus(p,"Reply skipped • previous attachment task did not finish");return;}
+            handler.postDelayed(()->startShareWhenReady(files,caption,pkg,phone,contact,openChat,attempt+1),500L);
+            return;
+        }
+        p.edit().putBoolean(PREPARING_SHARE,true).putString("last_business_status","Preparing WhatsApp attachment…").putLong("last_business_status_at",System.currentTimeMillis()).apply();
+        if(openChat!=null){try{openChat.send();}catch(Exception ignored){}}
+        handler.postDelayed(()->{
+            try{
+                prepareCatalogQueue(files,caption,pkg,phone,contact);
+                getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PREPARING_SHARE,false).apply();
+                TaskDeviceController.begin(this);
+                shareNextCatalogFile(this);
+            }catch(Exception error){
+                getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PREPARING_SHARE,false).putBoolean(PENDING_SHARE,false).putString("last_business_status","Reply prepare failed • "+error.getClass().getSimpleName()).apply();
+            }
+        },1200L);
     }
 
     private boolean matchesBusinessKeyword(String message,String saved,String... aliases){
@@ -157,6 +177,11 @@ public class AutoReplyNotificationService extends NotificationListenerService {
 
     private static String digits(String s){return s==null?"":s.replaceAll("[^0-9]","");}
     private static String last10(String s){String d=digits(s);return d.length()>10?d.substring(d.length()-10):d;}
+
+    private String cleanContactTitle(String title){
+        if(title==null)return "";
+        return title.replaceAll("(?i)\\s*\\([0-9]+\\s+(?:new\\s+)?messages?\\)\\s*$","").trim();
+    }
 
     private String extractMessageText(Bundle e){
         CharSequence direct=e.getCharSequence(Notification.EXTRA_TEXT,"");
@@ -264,13 +289,15 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }
     }
 
-    private void prepareCatalogQueue(ArrayList<Uri> uris,String caption,String pkg,String phone){
+    private void prepareCatalogQueue(ArrayList<Uri> uris,String caption,String pkg,String phone,String contact){
         JSONArray queue=new JSONArray();for(Uri uri:uris)queue.put(uri.toString());
         getSharedPreferences(PREFS,MODE_PRIVATE).edit()
             .putString(CATALOG_QUEUE,queue.toString()).putInt(CATALOG_QUEUE_INDEX,0)
             .putString(CATALOG_QUEUE_CAPTION,caption==null?"":caption)
             .putString(CATALOG_QUEUE_PACKAGE,pkg==null?"com.whatsapp":pkg)
             .putString(CATALOG_QUEUE_PHONE,phone==null?"":phone)
+            .putString(CATALOG_QUEUE_CONTACT,contact==null?"":contact)
+            .putInt(SHARE_PICKER_STAGE,0)
             .putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();
     }
 
@@ -295,7 +322,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
             i.setPackage(pkg);if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
             context.grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.startActivity(i);
-            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
+            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putInt(SHARE_PICKER_STAGE,0).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
             return true;
         }catch(Exception error){clearCatalogQueue(p);TaskDeviceController.cancel(context);p.edit().putString("last_business_status","Catalog/Ledger send failed • "+error.getClass().getSimpleName()).apply();return false;}
     }
@@ -310,7 +337,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     }
 
     private static void clearCatalogQueue(SharedPreferences p){
-        p.edit().putBoolean(PENDING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).apply();
+        p.edit().putBoolean(PENDING_SHARE,false).putBoolean(PREPARING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).remove(CATALOG_QUEUE_CONTACT).remove(SHARE_PICKER_STAGE).apply();
     }
 
     @SuppressWarnings("deprecation") private static void wakeScreen(android.content.Context context){
