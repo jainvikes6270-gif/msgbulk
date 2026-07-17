@@ -268,6 +268,7 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - 8 text colors: white, yellow, red, black, blue, green, pink aur orange
 - Top, center aur bottom text position; small, medium aur large size
 - Continuous auto reply / no-cooldown behavior v3.23.7 se preserved
+- Signed-release build configuration removed; GitHub workflow builds debug APK only
 
 - Removed the Auto Reply cooldown field and five-minute reply block.
 - Repeated Ledger, Catalog and Auto Reply keywords can now trigger continuously.
