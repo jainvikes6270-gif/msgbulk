@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -25,6 +26,7 @@ import java.util.Locale;
 public class WhatsAppAccessibilityService extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean clickLocked = false;
+    private long lastRetryToken = 0L;
     private static PowerManager.WakeLock queueWakeLock;
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -50,8 +52,19 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         }
         boolean bulkRunning=p.getBoolean(MainActivity.AUTO_RUNNING, false);
         if ((!bulkRunning && !pendingShare) || clickLocked) return;
+        attemptPendingSend(pkg, pendingShare, bulkRunning);
+    }
+
+    /** Retry because some WhatsApp builds publish the final preview tree late. */
+    private void attemptPendingSend(String pkg, boolean pendingShare, boolean bulkRunning) {
+        if (clickLocked) return;
+        SharedPreferences autoReply = getSharedPreferences(AutoReplyNotificationService.PREFS, MODE_PRIVATE);
+        SharedPreferences p = getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE);
+        pendingShare = pendingShare && autoReply.getBoolean(AutoReplyNotificationService.PENDING_SHARE, false);
+        bulkRunning = bulkRunning && p.getBoolean(MainActivity.AUTO_RUNNING, false);
+        if (!pendingShare && !bulkRunning) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) return;
+        if (root == null) { scheduleSendRetry(pkg); return; }
         AccessibilityNodeInfo send = findSendButton(root, pkg);
         if (send != null && send.isEnabled()) {
             clickLocked = true;
@@ -68,18 +81,64 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             int sentIndex=p.getInt(MainActivity.AUTO_INDEX,0);
             String queueToken=p.getString(MainActivity.AUTO_QUEUE_TOKEN,"");
             handler.postDelayed(()->advanceQueue(sentIndex,queueToken), delay);
+        } else {
+            scheduleSendRetry(pkg);
         }
     }
 
+    private void scheduleSendRetry(String pkg) {
+        final long token=++lastRetryToken;
+        handler.postDelayed(()->retryPendingSend(pkg,token),350L);
+        handler.postDelayed(()->retryPendingSend(pkg,token),900L);
+        handler.postDelayed(()->retryPendingSend(pkg,token),1700L);
+        handler.postDelayed(()->retryPendingSend(pkg,token),2800L);
+    }
+
+    private void retryPendingSend(String pkg,long token){
+        if(token!=lastRetryToken||clickLocked)return;
+        SharedPreferences a=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
+        SharedPreferences p=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);
+        boolean pending=a.getBoolean(AutoReplyNotificationService.PENDING_SHARE,false);
+        boolean bulk=p.getBoolean(MainActivity.AUTO_RUNNING,false);
+        if(pending||bulk)attemptPendingSend(pkg,pending,bulk);
+    }
+
     private AccessibilityNodeInfo findSendButton(AccessibilityNodeInfo root, String pkg) {
-        String[] ids={"send","send_button","media_send","send_btn"};
+        String[] ids={"send","send_button","media_send","send_btn","send_media","send_message","fab"};
         for(String id:ids){
             List<AccessibilityNodeInfo> byId=root.findAccessibilityNodeInfosByViewId(pkg+":id/"+id);
             if(byId!=null)for(AccessibilityNodeInfo n:byId)if(n!=null&&n.isEnabled()&&(n.isClickable()||clickableParent(n)!=null))return n;
         }
         AccessibilityNodeInfo found = findByDescription(root);
         if (found != null) return found;
-        return findActionNode(root,new String[]{"send","send message","send media","भेजें","அனுப்பு"});
+        found=findActionNode(root,new String[]{"send","send message","send media","send photo","send document","भेजें","அனுப்பு"});
+        if(found!=null)return found;
+        return findBottomRightSendCandidate(root,root);
+    }
+
+    /** Last resort for WhatsApp versions whose Send icon has no public ID/label. */
+    private AccessibilityNodeInfo findBottomRightSendCandidate(AccessibilityNodeInfo root,AccessibilityNodeInfo node){
+        if(root==null||node==null)return null;
+        Rect screen=new Rect();root.getBoundsInScreen(screen);
+        return findBottomRightSendCandidate(node,screen,null);
+    }
+
+    private AccessibilityNodeInfo findBottomRightSendCandidate(AccessibilityNodeInfo node,Rect screen,AccessibilityNodeInfo best){
+        if(node==null)return best;
+        Rect b=new Rect();node.getBoundsInScreen(b);
+        CharSequence raw=node.getContentDescription();String desc=raw==null?"":raw.toString().toLowerCase(Locale.ROOT);
+        String cls=node.getClassName()==null?"":node.getClassName().toString();
+        boolean excluded=desc.contains("camera")||desc.contains("attach")||desc.contains("emoji")||desc.contains("voice")||desc.contains("microphone")||desc.contains("gallery");
+        boolean button=cls.contains("Button")||cls.contains("ImageView")||node.isClickable();
+        boolean right=b.centerX()>screen.left+(screen.width()*65/100);
+        boolean bottom=b.centerY()>screen.top+(screen.height()*55/100);
+        boolean usable=node.isEnabled()&&!excluded&&button&&(node.isClickable()||clickableParent(node)!=null)&&b.width()>=32&&b.height()>=32;
+        if(right&&bottom&&usable){
+            if(best==null)best=node;
+            else{Rect old=new Rect();best.getBoundsInScreen(old);if(b.centerX()+b.centerY()>old.centerX()+old.centerY())best=node;}
+        }
+        for(int i=0;i<node.getChildCount();i++)best=findBottomRightSendCandidate(node.getChild(i),screen,best);
+        return best;
     }
 
     private void handleBroadcast(AccessibilityNodeInfo root,SharedPreferences p,String pkg){

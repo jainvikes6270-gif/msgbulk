@@ -22,7 +22,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class AutoReplyNotificationService extends NotificationListenerService {
-    public static final String PREFS="auto_reply_prefs", ENABLED="enabled", KEYWORD="keyword", REPLY="reply", IMAGE="image", COOLDOWN="cooldown";
+    public static final String PREFS="auto_reply_prefs", ENABLED="enabled", KEYWORD="keyword", REPLY="reply", IMAGE="image";
     public static final String LEDGER_URI="ledger_uri", CATALOG_URI="catalog_uri";
     public static final String LEDGER_KEY="ledger_key", CATALOG_KEY="catalog_key";
     public static final String PENDING_SHARE="pending_share", PENDING_SHARE_AT="pending_share_at";

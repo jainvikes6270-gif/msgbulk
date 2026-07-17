@@ -274,3 +274,11 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 
 - Removed the Auto Reply cooldown field and five-minute reply block.
 - Repeated Ledger, Catalog and Auto Reply keywords can now trigger continuously.
+
+# LathaBulk v3.23.10 – Task Completion Repair
+
+- Ledger, Catalog and image Auto Reply no longer stop on the WhatsApp preview window.
+- Accessibility retries while the preview loads and recognizes newer WhatsApp Send-button IDs.
+- A bottom-right Send-button fallback covers WhatsApp screens that hide the icon ID or label.
+- Auto Reply remains continuous with no cooldown option.
+- Only bulk sending keeps its separate 3–7 second random delay.
