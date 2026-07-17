@@ -53,28 +53,25 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String titleLower=title.trim().toLowerCase(Locale.ROOT);
         if((n.flags&Notification.FLAG_GROUP_SUMMARY)!=0||titleLower.equals("whatsapp")||titleLower.matches("[0-9]+\\s+new messages?"))return;
         long messageTime=extractLatestMessageTime(e);
+        String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
+        String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
+        if(keywordMatches(lower,lk)){
+            // WhatsApp often posts the same message several times. The first post can
+            // contain only a display name, while a later update contains the real JID.
+            // Deduplicate by the logical message (not by the changing sender identity)
+            // and wait briefly for the notification identity to settle before replying.
+            String stableLedgerId=messageTime>0?String.valueOf(messageTime):sbn.getKey();
+            String ledgerEventKey=pkg+"|ledger|"+text.trim()+"|"+stableLedgerId;
+            if(!markNotificationEventOnce(p,ledgerEventKey,messageTime>0))return;
+            resolveAndSendLedger(sbn,n,pkg,text,messageTime,senderPhone,title,0);
+            return;
+        }
         String senderIdentity=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
         String eventKey=pkg+"|"+senderIdentity+"|"+text.trim()+"|"+(messageTime>0?messageTime:0);
         if(!markNotificationEventOnce(p,eventKey,messageTime>0))return;
         String file="", type="", caption="";
         ArrayList<Uri> catalogFiles=new ArrayList<>();
-        String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
-        String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
-        if(keywordMatches(lower,lk)){
-            JSONObject customer=findLedgerCustomer(p,senderPhone,title);
-            if(customer==null){
-                String help="आपका मोबाइल नंबर Ledger रिकॉर्ड से मैच नहीं हुआ। कृपया सहायता के लिए LATHAEPS से संपर्क करें।";
-                saveStatus(p,"Ledger not sent • exact phone not matched: "+title);
-                sendRemoteReply(n,help);
-                return;
-            }
-            file=customer.optString("ledger_uri","");
-            if(file.isEmpty()){saveStatus(p,"Ledger not sent • customer PDF missing: "+customer.optString("name",title));return;}
-            String customerPhone=digits(customer.optString("phone",""));
-            if(!customerPhone.isEmpty())senderPhone=customerPhone.length()==10?"91"+customerPhone:customerPhone;
-            type="application/pdf";caption="LATHA EPS Ledger • "+customer.optString("name","Customer");
-        }
-        else if(findCatalogsForMessage(lower,ck).length()>0||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){
+        if(findCatalogsForMessage(lower,ck).length()>0||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){
             JSONArray catalogs=findCatalogsForMessage(lower,ck);
             if(catalogs.length()==0){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}
             JSONObject first=catalogs.optJSONObject(0);if(first==null)return;
@@ -105,6 +102,54 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         } else if(!caption.isEmpty()) {
             sendRemoteReply(n,caption);
         }
+    }
+
+    /** Waits for WhatsApp's updated notification identity, then sends exactly one ledger result. */
+    private void resolveAndSendLedger(StatusBarNotification original,Notification originalNotification,String pkg,String requestedText,long requestedTime,String originalPhone,String originalTitle,int attempt){
+        handler.postDelayed(()->{
+            SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+            if(!p.getBoolean(ENABLED,false))return;
+            Notification replyNotification=originalNotification;
+            String resolvedPhone=originalPhone;
+            String resolvedTitle=originalTitle;
+            JSONObject customer=findLedgerCustomer(p,resolvedPhone,resolvedTitle);
+            try{
+                StatusBarNotification[] active=getActiveNotifications();
+                if(active!=null)for(StatusBarNotification candidate:active){
+                    if(candidate==null||!pkg.equals(candidate.getPackageName()))continue;
+                    Notification cn=candidate.getNotification();if(cn==null||(cn.flags&Notification.FLAG_GROUP_SUMMARY)!=0)continue;
+                    Bundle ce=cn.extras;String candidateText=extractMessageText(ce);
+                    if(!requestedText.trim().equals(candidateText.trim()))continue;
+                    long candidateTime=extractLatestMessageTime(ce);
+                    boolean sameKey=original.getKey()!=null&&original.getKey().equals(candidate.getKey());
+                    boolean sameTime=requestedTime>0&&candidateTime==requestedTime;
+                    if(!sameKey&&!sameTime)continue;
+                    String candidateTitle=String.valueOf(ce.getCharSequence(Notification.EXTRA_TITLE,""));
+                    String candidatePhone=resolvePhoneFromNotification(candidate,cn,ce,candidateTitle);
+                    JSONObject candidateCustomer=findLedgerCustomer(p,candidatePhone,candidateTitle);
+                    replyNotification=cn;resolvedTitle=candidateTitle;
+                    if(!candidatePhone.isEmpty())resolvedPhone=candidatePhone;
+                    if(candidateCustomer!=null){customer=candidateCustomer;break;}
+                }
+            }catch(Exception ignored){}
+            if(customer==null&&attempt<3){
+                resolveAndSendLedger(original,replyNotification,pkg,requestedText,requestedTime,resolvedPhone,resolvedTitle,attempt+1);
+                return;
+            }
+            if(customer==null){
+                String help="आपका मोबाइल नंबर Ledger रिकॉर्ड से मैच नहीं हुआ। कृपया सहायता के लिए LATHAEPS से संपर्क करें।";
+                saveStatus(p,"Ledger not sent • exact phone not matched: "+resolvedTitle);
+                sendRemoteReply(replyNotification,help);
+                return;
+            }
+            String file=customer.optString("ledger_uri","");
+            if(file.isEmpty()){saveStatus(p,"Ledger not sent • customer PDF missing: "+customer.optString("name",resolvedTitle));return;}
+            String customerPhone=digits(customer.optString("phone",""));
+            if(!customerPhone.isEmpty())resolvedPhone=customerPhone.length()==10?"91"+customerPhone:customerPhone;
+            ArrayList<Uri> files=new ArrayList<>();files.add(Uri.parse(file));
+            String caption="LATHA EPS Ledger • "+customer.optString("name","Customer");
+            startShareWhenReady(files,caption,pkg,resolvedPhone,cleanContactTitle(resolvedTitle),replyNotification.contentIntent,0);
+        },attempt==0?600L:700L);
     }
 
     /** Serialises attachment replies and activates Accessibility only after the real share screen starts. */

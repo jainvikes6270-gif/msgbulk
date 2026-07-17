@@ -1,4 +1,10 @@
-# LathaBulk v3.23.19 – Ledger exact-phone + duplicate-event fix
+# LathaBulk v3.23.20 – Ledger settled-phone single-reply fix
+
+## v3.23.20
+
+- Ledger auto reply waits briefly for WhatsApp's settled sender identity before deciding the exact phone match.
+- Repeated notification updates for one Ledger request produce only one final result.
+- Prevents early false “mobile number not matched” replies followed by a later Ledger send.
 
 ## v3.23.19
 

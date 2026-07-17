@@ -1,4 +1,11 @@
-# LathaBulk v3.23.19 QA Checklist
+# LathaBulk v3.23.20 QA Checklist
+
+## Ledger settled-phone regression
+
+- [ ] From a phone present in the Ledger map, send `ledger` once and confirm only the PDF is sent.
+- [ ] Confirm no early “mobile number not matched” text appears before the PDF.
+- [ ] Confirm WhatsApp notification reposts/updates do not start a second reply.
+- [ ] From a phone absent from the Ledger map, confirm exactly one LATHAEPS contact-help reply after identity verification.
 
 ## Automated static checks passed
 
@@ -6,8 +13,8 @@
 - AndroidManifest and all XML resources parse successfully.
 - GitHub Actions workflow YAML parses successfully.
 - Package/namespace remains `com.lathaeps.lathabulk`.
-- `versionCode 76`, `versionName 3.23.19`.
-- No signing key, keystore or signed-release configuration included.
+- `versionCode 77`, `versionName 3.23.20`.
+- No signing key or keystore is included; the Play AAB workflow reads signing values only from GitHub Secrets.
 - No Auto Reply cooldown field/block remains.
 
 ## Flow checks completed
