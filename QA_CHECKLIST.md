@@ -1,4 +1,4 @@
-# LathaBulk v3.23.14 QA Checklist
+# LathaBulk v3.23.18 QA Checklist
 
 ## Automated static checks passed
 
@@ -6,7 +6,7 @@
 - AndroidManifest and all XML resources parse successfully.
 - GitHub Actions workflow YAML parses successfully.
 - Package/namespace remains `com.lathaeps.lathabulk`.
-- `versionCode 71`, `versionName 3.23.14`.
+- `versionCode 75`, `versionName 3.23.18`.
 - No signing key, keystore or signed-release configuration included.
 - No Auto Reply cooldown field/block remains.
 
@@ -28,3 +28,9 @@
 - Latha Auto Send Accessibility: ON
 - Contacts permission: Allow
 - For a newly installed APK, toggle Accessibility OFF and ON once before testing.
+# v3.23.18 Ledger exact-phone-only matching
+
+- From a saved WhatsApp contact, send exactly `ledger`.
+- Confirm the sender's verified last 10 digits exactly equal the mapped Ledger phone before its PDF opens.
+- Confirm a missing or different phone sends only the LATHAEPS assistance reply; no PDF is attached.
+- Confirm Catalog and normal Auto Reply still behave exactly as before.

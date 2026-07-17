@@ -59,7 +59,12 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         if(keywordMatches(lower,lk)){
             JSONObject customer=findLedgerCustomer(p,senderPhone,title);
-            if(customer==null){saveStatus(p,"Ledger not sent • exact customer not matched: "+title);return;}
+            if(customer==null){
+                String help="आपका मोबाइल नंबर Ledger रिकॉर्ड से मैच नहीं हुआ। कृपया सहायता के लिए LATHAEPS से संपर्क करें।";
+                saveStatus(p,"Ledger not sent • exact phone not matched: "+title);
+                sendRemoteReply(n,help);
+                return;
+            }
             file=customer.optString("ledger_uri","");
             if(file.isEmpty()){saveStatus(p,"Ledger not sent • customer PDF missing: "+customer.optString("name",title));return;}
             String customerPhone=digits(customer.optString("phone",""));
@@ -128,20 +133,15 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     }
 
     private JSONObject findLedgerCustomer(SharedPreferences p,String senderPhone,String senderTitle){
-        String sp=last10(senderPhone);String wantedName=normaliseContactName(cleanContactTitle(senderTitle));
+        String sp=last10(senderPhone);
+        if(sp.length()!=10)return null;
         try{
             JSONArray a=new JSONArray(p.getString(LEDGER_CUSTOMERS,"[]"));
-            JSONObject uniqueNameMatch=null;
             for(int i=0;i<a.length();i++){
                 JSONObject o=a.optJSONObject(i);if(o==null)continue;
                 String ph=last10(o.optString("phone",""));
                 if(sp.length()==10&&ph.length()==10&&ph.equals(sp))return o;
-                if(sp.length()!=10&&!wantedName.isEmpty()&&wantedName.equals(normaliseContactName(o.optString("name","")))){
-                    if(uniqueNameMatch!=null)return null; // Never guess when duplicate customer names exist.
-                    uniqueNameMatch=o;
-                }
             }
-            return uniqueNameMatch;
         }catch(Exception ignored){}
         return null;
     }
@@ -200,6 +200,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         ArrayList<String> candidates=new ArrayList<>();
         candidates.add(title);
         if(extras!=null){
+            candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_SUB_TEXT,"")));
+            if(Build.VERSION.SDK_INT>=24)candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE,"")));
             try{String[] people=extras.getStringArray(Notification.EXTRA_PEOPLE);if(people!=null)for(String person:people)addTrustedPersonCandidate(candidates,person);}catch(Exception ignored){}
             if(Build.VERSION.SDK_INT>=30)try{
                 ArrayList<android.app.Person> people=extras.getParcelableArrayList(Notification.EXTRA_PEOPLE_LIST);
@@ -223,10 +225,10 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return "";
     }
 
-    /** Accept only explicit contact URIs. Notification keys/tags may contain random phone-shaped IDs. */
+    /** Accept only explicit phone identities. Contact/notification IDs may contain random phone-shaped digits. */
     private void addTrustedPersonCandidate(ArrayList<String> out,String value){
         if(value==null)return;String v=value.trim().toLowerCase(Locale.ROOT);
-        if(v.startsWith("tel:")||v.contains("@s.whatsapp.net"))out.add(value);
+        if(v.startsWith("tel:")||v.contains("@s.whatsapp.net")||(v.startsWith("whatsapp:")&&v.contains("phone=")))out.add(value);
     }
 
     private static String validIndianPhone(String value){
@@ -241,7 +243,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         if(checkSelfPermission(android.Manifest.permission.READ_CONTACTS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return "";
         Cursor c=null;try{
             c=getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,new String[]{ContactsContract.CommonDataKinds.Phone.NUMBER,ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME},null,null,null);
-            String wanted=normaliseContactName(title),found="";
+            String wanted=normaliseContactName(cleanContactTitle(title)),found="";
             if(wanted.isEmpty())return "";
             if(c!=null)while(c.moveToNext()){
                 if(!wanted.equals(normaliseContactName(c.getString(1))))continue;

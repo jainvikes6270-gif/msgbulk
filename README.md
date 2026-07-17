@@ -303,7 +303,12 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - Attachment requests arriving during another task wait for the active task instead of overwriting its Ledger/Catalog queue.
 - Debug-only GitHub build, no signed-release configuration, no Auto Reply cooldown option.
 
-# LathaBulk v3.23.14 – Ledger + Catalog Recipient Fix
+# LathaBulk v3.23.18 – Ledger Exact Phone + Assistance Reply
+
+- Ledger sends only when the incoming sender's verified last 10 digits exactly match the saved Ledger phone.
+- WhatsApp notification conversation metadata is checked when the visible title does not expose the number.
+- Customer/Tally name fallback is disabled; a missing or different number receives a LATHAEPS assistance message and no PDF.
+- Catalog and normal Auto Reply flows are unchanged.
 
 - Removed WhatsApp notification key/tag IDs from recipient phone detection; random phone-shaped IDs such as `7472764035` are no longer used.
 - Ledger now matches a verified phone first, with exact unique customer-name fallback when WhatsApp does not expose the phone number.
