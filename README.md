@@ -260,7 +260,7 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - Accessibility can click the Send icon's clickable parent when the icon itself is not clickable.
 - Text Auto Reply behavior remains unchanged.
 
-# LathaBulk v3.23.8 – Premium Live Image Editor
+# LathaBulk v3.23.9 – Crop + Manual Placement Image Editor
 
 - Image ke upar 2-line text likhne aur dobara edit karne ka option
 - Live preview: text, emoji/sticker, color, size aur position turant dikhega
@@ -269,6 +269,8 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - Top, center aur bottom text position; small, medium aur large size
 - Continuous auto reply / no-cooldown behavior v3.23.7 se preserved
 - Signed-release build configuration removed; GitHub workflow builds debug APK only
+- Crop presets: Original, Square 1:1, Portrait 4:5, Story 9:16 and Landscape 16:9
+- Text/sticker can be dragged with a finger anywhere on the live image preview
 
 - Removed the Auto Reply cooldown field and five-minute reply block.
 - Repeated Ledger, Catalog and Auto Reply keywords can now trigger continuously.
