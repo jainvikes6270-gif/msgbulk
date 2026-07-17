@@ -1,3 +1,14 @@
+# LathaBulk v3.23.23 – Price Source Files + Main Voice Search
+
+## v3.23.23
+
+- Price List Manager can store PDF and image source files inside Business Files.
+- PDF text is indexed locally for smart search; images use their saved name, category and keywords.
+- A large `VOICE SEARCH` microphone button is available directly on the main window.
+- Voice results show matching manual price items and source PDF/images, which can be opened or shared.
+- Source files and their search index are included automatically in Local/Drive backup and restore.
+- Ledger, Catalog and Auto Reply code/workflows are unchanged.
+
 # LathaBulk v3.23.22 – AI Smart + Voice Price Search
 
 ## v3.23.22

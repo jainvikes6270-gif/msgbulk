@@ -103,12 +103,14 @@ public class MainActivity extends Activity {
     private static final int PICK_DIRECT_IMAGE = 114;
     private static final int PICK_BROADCAST_FILE = 115;
     private static final int PRICE_VOICE_SEARCH = 116;
+    private static final int PICK_PRICE_SOURCE_FILE = 117;
     static final String CHANNEL_ID = "latha_bulk_progress";
     static final int NOTIFICATION_ID = 511;
     static final String PREFS = "latha_bulk_prefs";
     static final String GROUPS_KEY = "saved_groups";
     static final String CATALOG_ITEMS_KEY = "catalog_items";
     static final String PRICE_LIST_ITEMS_KEY = "price_list_items";
+    static final String PRICE_SOURCE_FILES_KEY = "price_source_files";
     private static final String PENDING_CATALOG_NAME_KEY="pending_catalog_name";
     private static final String PENDING_CATALOG_CATEGORY_KEY="pending_catalog_category";
     private static final String PENDING_CATALOG_KEYWORDS_KEY="pending_catalog_keywords";
@@ -190,6 +192,9 @@ public class MainActivity extends Activity {
     private Button pendingRuleImageButton;
     private CheckBox pendingRuleImageEnabled;
     private EditText priceListSearchBox;
+    private boolean priceVoiceFromHome=false;
+    private String pendingPriceSourceName="",pendingPriceSourceCategory="",pendingPriceSourceKeywords="";
+    private Runnable pendingPriceListRefresh;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -382,6 +387,11 @@ public class MainActivity extends Activity {
         businessFiles.setOnClickListener(v->showBusinessFilesDialog());
         catalogSection.setOnClickListener(v->showCatalogScreen());
         autoReplyButton.setOnClickListener(v->showAutoReplyScreen());
+
+        Button mainPriceVoice=button("🎤  VOICE SEARCH");
+        mainPriceVoice.setTextSize(16);mainPriceVoice.setTypeface(Typeface.DEFAULT_BOLD);mainPriceVoice.setTextColor(Color.WHITE);mainPriceVoice.setBackground(rounded(Color.rgb(21,73,126),15));
+        LinearLayout.LayoutParams priceVoiceLp=new LinearLayout.LayoutParams(-1,dp(48));priceVoiceLp.setMargins(dp(2),dp(3),dp(2),dp(3));root.addView(mainPriceVoice,priceVoiceLp);
+        mainPriceVoice.setOnClickListener(v->startPriceVoiceSearch(true));
 
         LinearLayout messageShell=row();
         messageShell.setGravity(Gravity.CENTER_VERTICAL);
@@ -964,7 +974,8 @@ public class MainActivity extends Activity {
         if(requestCode==CREATE_MASTER_LEDGER_XLSX&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null&&pendingMasterPdfUri!=null) convertMasterPdfToExcel(pendingMasterPdfUri,data.getData());
         if(requestCode==PICK_DIRECT_IMAGE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)showDirectImageEditor(data.getData());
         if(requestCode==PICK_BROADCAST_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){broadcastFileUri=data.getData();broadcastFileType=getContentResolver().getType(broadcastFileUri);try{getContentResolver().takePersistableUriPermission(broadcastFileUri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}if(broadcastFileLabel!=null)broadcastFileLabel.setText("Selected: "+(broadcastFileUri.getLastPathSegment()==null?"Attachment ready ✓":broadcastFileUri.getLastPathSegment()));}
-        if(requestCode==PRICE_VOICE_SEARCH){if(resultCode==RESULT_OK&&data!=null){ArrayList<String> heard=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);if(heard!=null&&!heard.isEmpty()&&priceListSearchBox!=null){priceListSearchBox.setText(heard.get(0));priceListSearchBox.setSelection(priceListSearchBox.length());toast("Searching: "+heard.get(0));}}else toast("Voice search cancelled • tap 🎤 and try again");}
+        if(requestCode==PICK_PRICE_SOURCE_FILE&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)savePriceSourceFile(data.getData());
+        if(requestCode==PRICE_VOICE_SEARCH){if(resultCode==RESULT_OK&&data!=null){ArrayList<String> heard=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);if(heard!=null&&!heard.isEmpty()){String spoken=heard.get(0);if(priceVoiceFromHome||priceListSearchBox==null)showPriceListScreen(spoken);else{priceListSearchBox.setText(spoken);priceListSearchBox.setSelection(priceListSearchBox.length());}toast("Searching: "+spoken);}}else toast("Voice search cancelled • tap 🎤 and try again");priceVoiceFromHome=false;}
     }
     private void sharePdf(){if(pdfUri==null){toast("Choose PDF first");return;}Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,pdfUri);i.putExtra(Intent.EXTRA_TEXT,buildFinalMessage());i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception e){i.setPackage(null);startActivity(Intent.createChooser(i,"Share PDF"));}}
 
@@ -1135,7 +1146,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.22";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.23";}}
 
     private void shareApp(){
         try{
@@ -1583,7 +1594,8 @@ public class MainActivity extends Activity {
     private JSONArray readPriceList(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(PRICE_LIST_ITEMS_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
     private void writePriceList(JSONArray items){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(PRICE_LIST_ITEMS_KEY,items.toString()).apply();}
 
-    private void showPriceListScreen(){
+    private void showPriceListScreen(){showPriceListScreen("");}
+    private void showPriceListScreen(String initialSearch){
         Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);
         LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(12),dp(10),dp(12),dp(12));page.setBackgroundColor(Color.rgb(244,247,250));
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setBackground(rounded(Color.rgb(21,73,126),17));
@@ -1591,15 +1603,16 @@ public class MainActivity extends Activity {
         TextView title=new TextView(this);title.setText("Price List Manager");title.setTextSize(23);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);
         head.addView(back,new LinearLayout.LayoutParams(dp(50),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);
         LinearLayout actions=row();Button add=button("+ ADD ITEM");Button share=button("SHARE PRICE LIST");actions.addView(add,weighted(1f,46));actions.addView(share,weighted(1f,46));page.addView(actions);
+        Button addSource=button("+ ADD PDF / IMAGE SOURCE FILE");addSource.setTypeface(Typeface.DEFAULT_BOLD);page.addView(addSource,new LinearLayout.LayoutParams(-1,dp(46)));
         LinearLayout searchRow=row();EditText search=new EditText(this);priceListSearchBox=search;search.setHint("AI Smart Search • type or speak");search.setSingleLine(true);search.setTextSize(15);search.setPadding(dp(14),0,dp(8),0);Button voice=button("🎤");voice.setTextSize(22);voice.setContentDescription("Voice search price list");searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(52),1f));searchRow.addView(voice,new LinearLayout.LayoutParams(dp(58),dp(50)));page.addView(searchRow,new LinearLayout.LayoutParams(-1,dp(54)));
         TextView summary=new TextView(this);summary.setTextSize(13);summary.setTextColor(Color.DKGRAY);summary.setPadding(dp(5),dp(5),dp(5),dp(5));page.addView(summary);
         ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(0,dp(5),0,dp(30));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
-        Runnable refresh=()->{JSONArray all=readPriceList();summary.setText(all.length()+" items saved • Backup includes this price list");renderPriceListCards(cards,search.getText().toString(),d);};
+        Runnable refresh=()->{JSONArray all=readPriceList(),sources=readPriceSources();summary.setText(all.length()+" items • "+sources.length()+" source files • Backup included");renderPriceListCards(cards,search.getText().toString(),d);};pendingPriceListRefresh=refresh;
         search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});
-        voice.setOnClickListener(v->startPriceVoiceSearch());back.setOnClickListener(v->d.dismiss());add.setOnClickListener(v->showPriceItemEditor(null,refresh));share.setOnClickListener(v->showPriceShareOptions());d.setOnDismissListener(v->{if(priceListSearchBox==search)priceListSearchBox=null;});refresh.run();d.setContentView(page);d.show();
+        voice.setOnClickListener(v->startPriceVoiceSearch(false));back.setOnClickListener(v->d.dismiss());add.setOnClickListener(v->showPriceItemEditor(null,refresh));addSource.setOnClickListener(v->showAddPriceSourceDialog());share.setOnClickListener(v->showPriceShareOptions());d.setOnDismissListener(v->{if(priceListSearchBox==search)priceListSearchBox=null;if(pendingPriceListRefresh==refresh)pendingPriceListRefresh=null;});if(initialSearch!=null&&!initialSearch.trim().isEmpty())search.setText(initialSearch);refresh.run();d.setContentView(page);d.show();
     }
 
-    private void startPriceVoiceSearch(){try{Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag());i.putExtra(RecognizerIntent.EXTRA_PROMPT,"Say brand and item • Mylinc switch");i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,3);startActivityForResult(i,PRICE_VOICE_SEARCH);}catch(Exception e){toast("Google voice search phone me available nahi hai");}}
+    private void startPriceVoiceSearch(boolean fromHome){priceVoiceFromHome=fromHome;try{Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag());i.putExtra(RecognizerIntent.EXTRA_PROMPT,"Say brand and item • Mylinc switch");i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,3);startActivityForResult(i,PRICE_VOICE_SEARCH);}catch(Exception e){priceVoiceFromHome=false;toast("Google voice search phone me available nahi hai");}}
 
     private String normalizePriceSearch(String value){
         String s=value==null?"":value.toLowerCase(Locale.ROOT).trim();
@@ -1609,13 +1622,39 @@ public class MainActivity extends Activity {
         return s.trim().replaceAll("\\s+"," ");
     }
 
+    private JSONArray readPriceSources(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(PRICE_SOURCE_FILES_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
+    private void writePriceSources(JSONArray items){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(PRICE_SOURCE_FILES_KEY,items.toString()).apply();}
+
+    private void showAddPriceSourceDialog(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),0,dp(18),0);
+        EditText category=new EditText(this);category.setHint("Brand / Category • Mylinc Switch");category.setSingleLine(true);EditText name=new EditText(this);name.setHint("Source name • optional");name.setSingleLine(true);EditText keywords=new EditText(this);keywords.setHint("Search words • switch, socket, plate");keywords.setSingleLine(false);keywords.setMinLines(2);box.addView(category);box.addView(name);box.addView(keywords);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Add Price Source PDF / Image").setMessage("PDF text local search me index hoga. Image ke liye name, category aur search words use honge.").setView(box).setPositiveButton("CHOOSE FILE",null).setNegativeButton("CANCEL",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String c=category.getText().toString().trim();if(c.isEmpty()){category.setError("Brand / category required");return;}pendingPriceSourceCategory=c;pendingPriceSourceName=name.getText().toString().trim();pendingPriceSourceKeywords=keywords.getText().toString().trim();getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("pending_price_source_category",pendingPriceSourceCategory).putString("pending_price_source_name",pendingPriceSourceName).putString("pending_price_source_keywords",pendingPriceSourceKeywords).apply();Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/pdf","image/*"});d.dismiss();startActivityForResult(Intent.createChooser(i,"Select Price List PDF or Image"),PICK_PRICE_SOURCE_FILE);}));d.show();
+    }
+
+    private void savePriceSourceFile(Uri source){
+        SharedPreferences prefs=getSharedPreferences(PREFS,MODE_PRIVATE);if(pendingPriceSourceCategory.isEmpty())pendingPriceSourceCategory=prefs.getString("pending_price_source_category","");if(pendingPriceSourceName.isEmpty())pendingPriceSourceName=prefs.getString("pending_price_source_name","");if(pendingPriceSourceKeywords.isEmpty())pendingPriceSourceKeywords=prefs.getString("pending_price_source_keywords","");
+        try{String mime=getContentResolver().getType(source);String original=getDisplayName(source);if(mime==null){String low=original.toLowerCase(Locale.ROOT);mime=low.endsWith(".pdf")?"application/pdf":low.endsWith(".png")?"image/png":low.endsWith(".webp")?"image/webp":"image/jpeg";}if(!mime.contains("pdf")&&!mime.startsWith("image/"))throw new Exception("Only PDF or image allowed");String ext=mime.contains("pdf")?"pdf":mime.contains("png")?"png":mime.contains("webp")?"webp":mime.contains("gif")?"gif":"jpg";File dir=new File(getFilesDir(),"business_files/price_sources");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Price source folder unavailable");File target=new File(dir,"price_source_"+System.currentTimeMillis()+"."+ext);try(InputStream in=getContentResolver().openInputStream(source);OutputStream out=new FileOutputStream(target)){if(in==null)throw new Exception("Source read failed");byte[] buf=new byte[16*1024];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}String extracted="";if(mime.contains("pdf")){try(PDDocument document=PDDocument.load(target)){extracted=new PDFTextStripper().getText(document);if(extracted.length()>40000)extracted=extracted.substring(0,40000);}catch(Exception ignored){}}
+            Uri safe=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",target);String display=pendingPriceSourceName.isEmpty()?(original.isEmpty()?target.getName():original):pendingPriceSourceName;JSONObject item=new JSONObject();item.put("id",String.valueOf(System.currentTimeMillis()));item.put("name",display);item.put("category",pendingPriceSourceCategory.isEmpty()?"Other":pendingPriceSourceCategory);item.put("keywords",pendingPriceSourceKeywords);item.put("type",mime);item.put("uri",safe.toString());item.put("path",target.getAbsolutePath());item.put("search_text",normalizePriceSearch(display+" "+pendingPriceSourceCategory+" "+pendingPriceSourceKeywords+" "+extracted));item.put("updated",System.currentTimeMillis());JSONArray a=readPriceSources();a.put(item);writePriceSources(a);prefs.edit().remove("pending_price_source_category").remove("pending_price_source_name").remove("pending_price_source_keywords").apply();pendingPriceSourceName="";pendingPriceSourceCategory="";pendingPriceSourceKeywords="";toast(mime.contains("pdf")?"Price PDF saved & indexed ✓":"Price image source saved ✓");if(pendingPriceListRefresh!=null)pendingPriceListRefresh.run();
+        }catch(Exception e){toast("Price source save failed: "+e.getMessage());}
+    }
+
+    private int renderPriceSourceCards(LinearLayout parent,String q,String[] words){
+        int shown=0;JSONArray sources=readPriceSources();for(int i=0;i<sources.length();i++){JSONObject source=sources.optJSONObject(i);if(source==null)continue;String hay=source.optString("search_text",normalizePriceSearch(source.optString("name")+" "+source.optString("category")+" "+source.optString("keywords")));boolean match=true;for(String word:words)if(!hay.contains(word)){match=false;break;}if(!match)continue;if(shown==0){TextView h=new TextView(this);h.setText("SOURCE PDF / IMAGES");h.setTextSize(16);h.setTypeface(Typeface.DEFAULT_BOLD);h.setTextColor(Color.rgb(160,82,20));h.setPadding(dp(5),dp(12),dp(5),dp(6));parent.addView(h);}shown++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.HORIZONTAL);card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(14),dp(7),dp(6),dp(7));card.setBackground(rounded(Color.rgb(255,248,235),14));TextView details=new TextView(this);boolean pdf=source.optString("type").contains("pdf");details.setText((pdf?"PDF  ":"IMAGE  ")+source.optString("name","Price Source")+"\n"+source.optString("category","Other")+(source.optString("keywords").isEmpty()?"":" • "+source.optString("keywords")));details.setTextSize(15);details.setTextColor(Color.rgb(50,40,28));details.setMaxLines(3);Button more=button("⋮");more.setTextSize(26);more.setTextColor(Color.rgb(160,82,20));more.setBackgroundColor(Color.TRANSPARENT);card.addView(details,new LinearLayout.LayoutParams(0,dp(68),1f));card.addView(more,new LinearLayout.LayoutParams(dp(50),dp(56)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(84));lp.setMargins(0,0,0,dp(8));parent.addView(card,lp);card.setOnClickListener(v->openPriceSource(source));more.setOnClickListener(v->showPriceSourceMenu(more,source));}return shown;
+    }
+
+    private void openPriceSource(JSONObject source){try{Uri uri=Uri.parse(source.optString("uri"));Intent i=new Intent(Intent.ACTION_VIEW);i.setDataAndType(uri,source.optString("type","application/pdf"));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Open Price Source"));}catch(Exception e){toast("Source file open nahi hua");}}
+    private void sharePriceSource(JSONObject source){try{Uri uri=Uri.parse(source.optString("uri"));Intent i=new Intent(Intent.ACTION_SEND);i.setType(source.optString("type","application/pdf"));i.putExtra(Intent.EXTRA_STREAM,uri);i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS • "+source.optString("name","Price List"));i.setClipData(android.content.ClipData.newRawUri("price source",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Share Price Source"));}catch(Exception e){toast("Source share failed");}}
+    private void showPriceSourceMenu(View anchor,JSONObject source){PopupMenu m=new PopupMenu(this,anchor);m.getMenu().add("Open");m.getMenu().add("Share");m.getMenu().add("Delete");m.setOnMenuItemClickListener(x->{String action=x.getTitle().toString();if(action.equals("Open"))openPriceSource(source);else if(action.equals("Share"))sharePriceSource(source);else new AlertDialog.Builder(this).setTitle("Delete source file?").setMessage(source.optString("name")).setPositiveButton("DELETE",(d,w)->deletePriceSource(source)).setNegativeButton("CANCEL",null).show();return true;});m.show();}
+    private void deletePriceSource(JSONObject source){try{JSONArray a=readPriceSources(),out=new JSONArray();String id=source.optString("id");for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null||!id.equals(o.optString("id")))out.put(a.get(i));}writePriceSources(out);String path=source.optString("path");if(!path.isEmpty())new File(path).delete();toast("Price source deleted");if(pendingPriceListRefresh!=null)pendingPriceListRefresh.run();}catch(Exception e){toast("Source delete failed");}}
+
     private List<JSONObject> sortedPriceItems(){
         List<JSONObject> list=new ArrayList<>();JSONArray a=readPriceList();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o!=null)list.add(o);}
         Collections.sort(list,(x,y)->{int c=x.optString("category").compareToIgnoreCase(y.optString("category"));return c!=0?c:x.optString("name").compareToIgnoreCase(y.optString("name"));});return list;
     }
 
     private void renderPriceListCards(LinearLayout parent,String query,Dialog screen){
-        parent.removeAllViews();String q=normalizePriceSearch(query);String[] words=q.isEmpty()?new String[0]:q.split(" ");int shown=0;String lastCategory="";
+        parent.removeAllViews();String q=normalizePriceSearch(query);String[] words=q.isEmpty()?new String[0]:q.split(" ");int sourceShown=renderPriceSourceCards(parent,q,words);int shown=0;String lastCategory="";
         for(JSONObject item:sortedPriceItems()){
             String hay=normalizePriceSearch(item.optString("category")+" "+item.optString("name")+" "+item.optString("rate")+" "+item.optString("unit"));boolean match=true;for(String word:words)if(!hay.contains(word)){match=false;break;}if(!match)continue;
             String category=item.optString("category","Other");if(!category.equalsIgnoreCase(lastCategory)){TextView h=new TextView(this);h.setText(category.toUpperCase(Locale.ROOT));h.setTextSize(16);h.setTypeface(Typeface.DEFAULT_BOLD);h.setTextColor(Color.rgb(21,73,126));h.setPadding(dp(5),dp(12),dp(5),dp(6));parent.addView(h);lastCategory=category;}
@@ -1624,7 +1663,7 @@ public class MainActivity extends Activity {
             Button more=button("⋮");more.setTextSize(26);more.setTextColor(Color.rgb(21,73,126));more.setBackgroundColor(Color.TRANSPARENT);card.addView(details,new LinearLayout.LayoutParams(0,dp(72),1f));card.addView(more,new LinearLayout.LayoutParams(dp(50),dp(58)));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(88));lp.setMargins(0,0,0,dp(8));parent.addView(card,lp);more.setOnClickListener(v->showPriceItemMenu(more,item,()->renderPriceListCards(parent,query,screen)));
         }
-        if(shown==0){TextView empty=new TextView(this);empty.setText(readPriceList().length()==0?"No price items saved\nTap + ADD ITEM to start":"No matching price item");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.GRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(180)));}
+        if(shown==0&&sourceShown==0){TextView empty=new TextView(this);empty.setText(readPriceList().length()==0&&readPriceSources().length()==0?"No price data saved\nAdd item or PDF / image source":"No matching price item or source file");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.GRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(180)));}
     }
 
     private void showPriceItemEditor(JSONObject existing,Runnable refresh){

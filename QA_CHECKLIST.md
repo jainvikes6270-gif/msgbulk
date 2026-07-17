@@ -1,4 +1,4 @@
-# LathaBulk v3.23.22 QA Checklist
+# LathaBulk v3.23.23 QA Checklist
 
 ## Ledger settled-phone regression
 
@@ -13,7 +13,15 @@
 - AndroidManifest and all XML resources parse successfully.
 - GitHub Actions workflow YAML parses successfully.
 - Package/namespace remains `com.lathaeps.lathabulk`.
-- `versionCode 79`, `versionName 3.23.22`.
+- `versionCode 80`, `versionName 3.23.23`.
+
+## Price Sources + Main Voice Search
+
+- Main window microphone starts Price List voice search without opening Business Files first.
+- Price List Manager accepts PDF and image source files and stores safe app-owned copies.
+- PDF text, file name, category and keywords participate in local smart search.
+- Matching source files open/share correctly; delete removes only the selected price source.
+- Ledger, Catalog and Auto Reply regression checks remain unchanged and pass independently.
 
 ## AI Smart + Voice Search
 
