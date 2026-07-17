@@ -29,7 +29,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String PREPARING_SHARE="preparing_share";
     public static final String CATALOG_QUEUE="catalog_share_queue", CATALOG_QUEUE_INDEX="catalog_share_index";
     public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
-    public static final String CATALOG_QUEUE_CONTACT="catalog_share_contact", SHARE_PICKER_STAGE="catalog_share_picker_stage";
+    public static final String CATALOG_QUEUE_CONTACT="catalog_share_contact", SHARE_PICKER_STAGE="catalog_share_picker_stage", SHARE_PICKER_TRIES="catalog_share_picker_tries";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
     private static final String LAST_EVENT_KEY="last_notification_event_key";
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -203,7 +203,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_SUB_TEXT,"")));
             candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT,"")));
             try{String[] people=extras.getStringArray(Notification.EXTRA_PEOPLE);if(people!=null)for(String person:people)candidates.add(person);}catch(Exception ignored){}
-            if(Build.VERSION.SDK_INT>=28)try{
+            if(Build.VERSION.SDK_INT>=30)try{
                 ArrayList<android.app.Person> people=extras.getParcelableArrayList(Notification.EXTRA_PEOPLE_LIST);
                 if(people!=null)for(android.app.Person person:people)if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}
             }catch(Exception ignored){}
@@ -214,6 +214,10 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                     Bundle message=(Bundle)messages[i];candidates.add(String.valueOf(message.getCharSequence("sender","")));
                     if(Build.VERSION.SDK_INT>=28){android.app.Person person=message.getParcelable("sender_person");if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}}
                 }
+            }catch(Exception ignored){}
+            if(Build.VERSION.SDK_INT>=28)try{
+                java.util.List<Notification.MessagingStyle.Message> styled=Notification.MessagingStyle.Message.getMessagesFromBundleArray(extras.getParcelableArray(Notification.EXTRA_MESSAGES));
+                for(int i=styled.size()-1;i>=0;i--){Notification.MessagingStyle.Message message=styled.get(i);android.app.Person person=message.getSenderPerson();if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}}
             }catch(Exception ignored){}
         }
         for(String value:candidates){String phone=validIndianPhone(value);if(!phone.isEmpty())return phone;}
@@ -297,7 +301,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             .putString(CATALOG_QUEUE_PACKAGE,pkg==null?"com.whatsapp":pkg)
             .putString(CATALOG_QUEUE_PHONE,phone==null?"":phone)
             .putString(CATALOG_QUEUE_CONTACT,contact==null?"":contact)
-            .putInt(SHARE_PICKER_STAGE,0)
+            .putInt(SHARE_PICKER_STAGE,0).putInt(SHARE_PICKER_TRIES,0)
             .putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();
     }
 
@@ -322,7 +326,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
             i.setPackage(pkg);if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
             context.grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.startActivity(i);
-            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putInt(SHARE_PICKER_STAGE,0).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
+            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putInt(SHARE_PICKER_STAGE,0).putInt(SHARE_PICKER_TRIES,0).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
             return true;
         }catch(Exception error){clearCatalogQueue(p);TaskDeviceController.cancel(context);p.edit().putString("last_business_status","Catalog/Ledger send failed • "+error.getClass().getSimpleName()).apply();return false;}
     }
@@ -337,7 +341,11 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     }
 
     private static void clearCatalogQueue(SharedPreferences p){
-        p.edit().putBoolean(PENDING_SHARE,false).putBoolean(PREPARING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).remove(CATALOG_QUEUE_CONTACT).remove(SHARE_PICKER_STAGE).apply();
+        p.edit().putBoolean(PENDING_SHARE,false).putBoolean(PREPARING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).remove(CATALOG_QUEUE_CONTACT).remove(SHARE_PICKER_STAGE).remove(SHARE_PICKER_TRIES).apply();
+    }
+
+    public static void cancelPendingShare(android.content.Context context,String status){
+        SharedPreferences p=context.getSharedPreferences(PREFS,android.content.Context.MODE_PRIVATE);clearCatalogQueue(p);p.edit().putString("last_business_status",status).putLong("last_business_status_at",System.currentTimeMillis()).apply();TaskDeviceController.cancel(context);
     }
 
     @SuppressWarnings("deprecation") private static void wakeScreen(android.content.Context context){

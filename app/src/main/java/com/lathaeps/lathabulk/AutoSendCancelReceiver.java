@@ -22,6 +22,7 @@ public class AutoSendCancelReceiver extends BroadcastReceiver {
             .remove(AutoReplyNotificationService.CATALOG_QUEUE_PHONE)
             .remove(AutoReplyNotificationService.CATALOG_QUEUE_CONTACT)
             .remove(AutoReplyNotificationService.SHARE_PICKER_STAGE)
+            .remove(AutoReplyNotificationService.SHARE_PICKER_TRIES)
             .putString("last_business_status","Auto Send cancelled by user").apply();
         WhatsAppAccessibilityService.releaseQueueWakeLock();
         TaskDeviceController.cancel(context);

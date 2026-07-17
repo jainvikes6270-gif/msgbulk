@@ -1,4 +1,4 @@
-# LathaBulk v3.23.12 QA Checklist
+# LathaBulk v3.23.13 QA Checklist
 
 ## Automated static checks passed
 
@@ -6,7 +6,7 @@
 - AndroidManifest and all XML resources parse successfully.
 - GitHub Actions workflow YAML parses successfully.
 - Package/namespace remains `com.lathaeps.lathabulk`.
-- `versionCode 69`, `versionName 3.23.12`.
+- `versionCode 70`, `versionName 3.23.13`.
 - No signing key, keystore or signed-release configuration included.
 - No Auto Reply cooldown field/block remains.
 
@@ -19,6 +19,7 @@
 - Duplicate repost of the same notification event is ignored; a new repeated keyword event is accepted.
 - Attachment queue becomes active only after the real share task is prepared.
 - WhatsApp direct chat, `Send to…` recipient search, contact selection, preview and final Send are handled.
+- Recipient selection requires an exact phone/name identity; arbitrary first-result selection is disabled.
 - Accessibility reconnect, task timeout, cancel and queue cleanup paths are present.
 
 ## Required phone permissions/settings

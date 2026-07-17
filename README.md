@@ -302,3 +302,11 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - The sender chat no longer becomes an active send target before the real PDF/image share queue is ready.
 - Attachment requests arriving during another task wait for the active task instead of overwriting its Ledger/Catalog queue.
 - Debug-only GitHub build, no signed-release configuration, no Auto Reply cooldown option.
+
+# LathaBulk v3.23.13 – Exact Recipient Safety
+
+- Removed the unsafe first-search-result fallback that could select an unrelated contact.
+- Catalog and image Auto Reply now select only an exact last-10-digit sender phone or exact normalized sender contact name.
+- If the exact sender is not found, the task stops with `Recipient not matched • nothing sent`; no other contact is selected.
+- Ledger phone extraction also reads Android MessagingStyle sender-person data before performing the strict saved-ledger phone match.
+- Recipient search attempts have a bounded timeout and are cleared on completion, cancel or expired task cleanup.

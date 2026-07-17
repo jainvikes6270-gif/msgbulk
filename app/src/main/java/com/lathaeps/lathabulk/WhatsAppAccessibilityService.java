@@ -153,7 +153,8 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         }
         if(stage==2){
             AccessibilityNodeInfo result=findRecipientResult(root,contact,phone);
-            if(result!=null){clickLocked=true;clickNodeOrParent(result);prefs.edit().putInt(AutoReplyNotificationService.SHARE_PICKER_STAGE,3).apply();handler.postDelayed(()->clickLocked=false,650);}
+            if(result!=null){clickLocked=true;clickNodeOrParent(result);prefs.edit().putInt(AutoReplyNotificationService.SHARE_PICKER_STAGE,3).putInt(AutoReplyNotificationService.SHARE_PICKER_TRIES,0).apply();handler.postDelayed(()->clickLocked=false,650);}
+            else{int tries=prefs.getInt(AutoReplyNotificationService.SHARE_PICKER_TRIES,0)+1;prefs.edit().putInt(AutoReplyNotificationService.SHARE_PICKER_TRIES,tries).apply();if(tries>=12)AutoReplyNotificationService.cancelPendingShare(this,"Recipient not matched • nothing sent");}
             return true;
         }
         AccessibilityNodeInfo next=findActionNode(root,new String[]{"next","continue","send","आगे","भेजें","அடுத்து","அனுப்பு"});
@@ -187,19 +188,21 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             List<AccessibilityNodeInfo> numbered=root.findAccessibilityNodeInfosByText(phone);
             if(numbered!=null)for(AccessibilityNodeInfo n:numbered)if(isUsableRecipientNode(n))return n;
         }
-        return findFirstRecipientRow(root);
+        return findExactRecipientIdentity(root,contact,phone);
     }
 
     private boolean isUsableRecipientNode(AccessibilityNodeInfo n){return n!=null&&!n.isEditable()&&n.isEnabled()&&(n.isClickable()||clickableParent(n)!=null);}
 
-    private AccessibilityNodeInfo findFirstRecipientRow(AccessibilityNodeInfo node){
+    private AccessibilityNodeInfo findExactRecipientIdentity(AccessibilityNodeInfo node,String contact,String phone){
         if(node==null)return null;
-        String text=node.getText()==null?"":node.getText().toString().trim().toLowerCase(Locale.ROOT);
-        boolean label=text.equals("send to")||text.equals("share to")||text.equals("frequently contacted")||text.equals("recent chats")||text.equals("new group")||text.equals("search")||text.equals("next")||text.equals("send");
-        if(!text.isEmpty()&&!label&&!node.isEditable()&&node.isEnabled()&&(node.isClickable()||clickableParent(node)!=null))return node;
-        for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo r=findFirstRecipientRow(node.getChild(i));if(r!=null)return r;}
+        String text=node.getText()==null?"":node.getText().toString().trim();String digits=text.replaceAll("[^0-9]","");String ten=digits.length()>10?digits.substring(digits.length()-10):digits;String wantedName=normaliseIdentity(contact),actualName=normaliseIdentity(text);
+        boolean phoneMatch=phone!=null&&phone.length()==10&&phone.equals(ten);boolean nameMatch=!wantedName.isEmpty()&&wantedName.equals(actualName);
+        if((phoneMatch||nameMatch)&&isUsableRecipientNode(node))return node;
+        for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo r=findExactRecipientIdentity(node.getChild(i),contact,phone);if(r!=null)return r;}
         return null;
     }
+
+    private String normaliseIdentity(String value){return value==null?"":value.toLowerCase(Locale.ROOT).replaceAll("(?i)\\s*\\([0-9]+\\s+(?:new\\s+)?messages?\\)\\s*$","").replaceAll("[^a-z0-9]+"," ").trim();}
 
     private String last10(String value){String d=value==null?"":value.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
 
@@ -383,7 +386,8 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
                 .remove(AutoReplyNotificationService.CATALOG_QUEUE)
                 .remove(AutoReplyNotificationService.CATALOG_QUEUE_INDEX)
                 .remove(AutoReplyNotificationService.CATALOG_QUEUE_CONTACT)
-                .remove(AutoReplyNotificationService.SHARE_PICKER_STAGE).apply();
+                .remove(AutoReplyNotificationService.SHARE_PICKER_STAGE)
+                .remove(AutoReplyNotificationService.SHARE_PICKER_TRIES).apply();
         releaseQueueWakeLock();
         TaskDeviceController.cancel(context);
     }
