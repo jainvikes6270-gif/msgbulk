@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
-import android.app.DownloadManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -31,7 +30,6 @@ import android.provider.OpenableColumns;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Environment;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -74,8 +72,6 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument;
 import com.tom_roush.pdfbox.text.PDFTextStripper;
 
 import java.net.URLEncoder;
-import java.net.URL;
-import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -203,7 +199,6 @@ public class MainActivity extends Activity {
         PaymentScheduleReceiver.restoreStoredSchedule(this);
         requestNotificationPermissionIfNeeded();
         showLoginOrApp();
-        uiHandler.postDelayed(this::autoCheckForAppUpdate,3000L);
     }
 
     private void showLoginOrApp(){
@@ -717,17 +712,35 @@ public class MainActivity extends Activity {
 
     private void showDirectImageEditor(Uri source){
         Bitmap original=loadScaledBitmap(source,1600);if(original==null){toast("Image open nahi hui");return;}
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),0,dp(14),0);
-        ImageView preview=new ImageView(this);preview.setImageBitmap(original);preview.setAdjustViewBounds(true);preview.setScaleType(ImageView.ScaleType.CENTER_INSIDE);box.addView(preview,new LinearLayout.LayoutParams(-1,dp(230)));
-        EditText overlay=new EditText(this);overlay.setHint("Text on image • optional");overlay.setSingleLine(false);overlay.setMaxLines(2);box.addView(overlay);
-        TextView stickerLabel=new TextView(this);stickerLabel.setText("Choose sticker / emoji");stickerLabel.setTypeface(Typeface.DEFAULT_BOLD);stickerLabel.setPadding(0,dp(7),0,dp(4));box.addView(stickerLabel);
-        LinearLayout stickers=row();String[] stickerValue={""};String[] choices={"NONE","❤️","⭐","⚡","🎉","👍"};for(String s:choices){Button b=button(s);b.setTextSize(s.equals("NONE")?10:21);stickers.addView(b,weighted(1f,42));b.setOnClickListener(v->{stickerValue[0]=s.equals("NONE")?"":s;toast(stickerValue[0].isEmpty()?"Sticker removed":"Sticker selected "+stickerValue[0]);});}box.addView(stickers);
-        Spinner position=new Spinner(this);String[] positions={"Bottom","Center","Top"};position.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,positions));
-        Spinner color=new Spinner(this);String[] colors={"White","Yellow","Red","Black","Blue"};color.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,colors));
+        ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),dp(4),dp(14),dp(14));scroll.addView(box);
+        TextView tip=new TextView(this);tip.setText("LIVE IMAGE EDITOR • Changes preview par turant dikhenge");tip.setTextSize(12);tip.setTypeface(Typeface.DEFAULT_BOLD);tip.setTextColor(Color.rgb(35,105,175));tip.setGravity(Gravity.CENTER);tip.setPadding(0,0,0,dp(6));box.addView(tip);
+        ImageView preview=new ImageView(this);preview.setImageBitmap(original);preview.setAdjustViewBounds(true);preview.setScaleType(ImageView.ScaleType.CENTER_INSIDE);preview.setBackgroundColor(Color.rgb(235,235,235));box.addView(preview,new LinearLayout.LayoutParams(-1,dp(270)));
+
+        EditText overlay=new EditText(this);overlay.setHint("Image ke upar text likhein (2 lines)");overlay.setSingleLine(false);overlay.setMinLines(2);overlay.setMaxLines(2);overlay.setGravity(Gravity.TOP|Gravity.LEFT);overlay.setTextSize(17);overlay.setPadding(dp(12),dp(8),dp(12),dp(8));box.addView(overlay,new LinearLayout.LayoutParams(-1,dp(70)));
+
+        TextView stickerLabel=new TextView(this);stickerLabel.setText("Emoji / Sticker");stickerLabel.setTypeface(Typeface.DEFAULT_BOLD);stickerLabel.setPadding(0,dp(9),0,dp(3));box.addView(stickerLabel);
+        String[] stickerValue={""};String[] choices={"NONE","❤️","⭐","⚡","🎉","👍","🙏","✅","🔥","💐","😊","📞","💰"};List<Button> stickerButtons=new ArrayList<>();
+        LinearLayout stickers=row();stickers.setPadding(0,0,dp(4),0);android.widget.HorizontalScrollView stickerScroll=new android.widget.HorizontalScrollView(this);stickerScroll.setHorizontalScrollBarEnabled(false);stickerScroll.addView(stickers);
+        box.addView(stickerScroll,new LinearLayout.LayoutParams(-1,dp(50)));
+
+        TextView colorLabel=new TextView(this);colorLabel.setText("Text Color");colorLabel.setTypeface(Typeface.DEFAULT_BOLD);colorLabel.setPadding(0,dp(8),0,dp(3));box.addView(colorLabel);
+        String[] colorValue={"White"};String[] colors={"White","Yellow","Red","Black","Blue","Green","Pink","Orange"};int[] colorChips={Color.WHITE,Color.YELLOW,Color.RED,Color.BLACK,Color.rgb(30,100,240),Color.rgb(0,155,80),Color.rgb(235,45,130),Color.rgb(255,125,0)};
+        LinearLayout colorRow=row();colorRow.setGravity(Gravity.CENTER_VERTICAL);android.widget.HorizontalScrollView colorScroll=new android.widget.HorizontalScrollView(this);colorScroll.setHorizontalScrollBarEnabled(false);colorScroll.addView(colorRow);box.addView(colorScroll,new LinearLayout.LayoutParams(-1,dp(46)));
+
+        Spinner position=new Spinner(this);String[] positions={"Top","Center","Bottom"};position.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,positions));
         Spinner size=new Spinner(this);String[] sizes={"Medium","Large","Small"};size.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,sizes));
-        LinearLayout options=row();options.addView(position,weighted(1f,48));options.addView(color,weighted(1f,48));options.addView(size,weighted(1f,48));box.addView(options);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("Edit Image").setView(box).setPositiveButton("APPLY & USE",null).setNegativeButton("Cancel",null).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{Uri edited=createEditedImage(original,overlay.getText().toString().trim(),stickerValue[0],positions[position.getSelectedItemPosition()],colors[color.getSelectedItemPosition()],sizes[size.getSelectedItemPosition()]);if(edited==null){toast("Image edit save failed");return;}directSendImageUri=edited;if(directSendPreview!=null){directSendPreview.setImageURI(null);directSendPreview.setImageURI(edited);directSendPreview.setVisibility(View.VISIBLE);}if(directSendImageButton!=null)directSendImageButton.setText("CHANGE / EDIT IMAGE ✓");d.dismiss();}));d.show();
+        TextView positionLabel=new TextView(this);positionLabel.setText("Text Position                         Text Size");positionLabel.setTypeface(Typeface.DEFAULT_BOLD);positionLabel.setPadding(0,dp(7),0,0);box.addView(positionLabel);
+        LinearLayout options=row();options.addView(position,weighted(1f,48));options.addView(size,weighted(1f,48));box.addView(options);
+
+        Runnable refresh=()->preview.setImageBitmap(renderEditedBitmap(original,overlay.getText().toString().trim(),stickerValue[0],positions[position.getSelectedItemPosition()],colorValue[0],sizes[size.getSelectedItemPosition()]));
+        for(String s:choices){Button b=button(s);b.setTextSize(s.equals("NONE")?10:22);b.setAllCaps(false);stickerButtons.add(b);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(s.equals("NONE")?58:48),dp(44));lp.setMargins(0,0,dp(5),0);stickers.addView(b,lp);b.setOnClickListener(v->{stickerValue[0]=s.equals("NONE")?"":s;for(int i=0;i<stickerButtons.size();i++)stickerButtons.get(i).setAlpha(choices[i].equals(s)?1f:.55f);refresh.run();});}
+        stickerButtons.get(0).setAlpha(1f);for(int i=1;i<stickerButtons.size();i++)stickerButtons.get(i).setAlpha(.55f);
+        for(int i=0;i<colors.length;i++){final int index=i;Button chip=button(i==0?"✓":"");chip.setTextColor(i==3?Color.WHITE:Color.BLACK);chip.setTextSize(17);chip.setBackground(rounded(colorChips[i],30));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(43),dp(39));lp.setMargins(0,0,dp(8),0);colorRow.addView(chip,lp);chip.setOnClickListener(v->{colorValue[0]=colors[index];for(int j=0;j<colorRow.getChildCount();j++)((Button)colorRow.getChildAt(j)).setText(j==index?"✓":"");refresh.run();});}
+        overlay.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});
+        android.widget.AdapterView.OnItemSelectedListener changeListener=new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refresh.run();}public void onNothingSelected(android.widget.AdapterView<?> p){}};position.setOnItemSelectedListener(changeListener);size.setOnItemSelectedListener(changeListener);
+
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Premium Image Editor").setView(scroll).setPositiveButton("APPLY & USE",null).setNegativeButton("Cancel",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{Uri edited=createEditedImage(original,overlay.getText().toString().trim(),stickerValue[0],positions[position.getSelectedItemPosition()],colorValue[0],sizes[size.getSelectedItemPosition()]);if(edited==null){toast("Image edit save failed");return;}directSendImageUri=edited;if(directSendPreview!=null){directSendPreview.setImageURI(null);directSendPreview.setImageURI(edited);directSendPreview.setVisibility(View.VISIBLE);}if(directSendImageButton!=null)directSendImageButton.setText("CHANGE / EDIT IMAGE ✓");d.dismiss();}));d.show();
     }
 
     private Bitmap loadScaledBitmap(Uri uri,int maxSide){
@@ -735,12 +748,21 @@ public class MainActivity extends Activity {
     }
 
     private Uri createEditedImage(Bitmap original,String text,String sticker,String position,String colorName,String sizeName){
-        try{Bitmap output=original.copy(Bitmap.Config.ARGB_8888,true);Canvas canvas=new Canvas(output);float scale=output.getWidth()/720f;float textSize=("Large".equals(sizeName)?62:"Small".equals(sizeName)?34:48)*Math.max(.65f,scale);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);paint.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));paint.setTextSize(textSize);paint.setTextAlign(Paint.Align.CENTER);paint.setColor("Yellow".equals(colorName)?Color.YELLOW:"Red".equals(colorName)?Color.RED:"Black".equals(colorName)?Color.BLACK:"Blue".equals(colorName)?Color.rgb(30,100,240):Color.WHITE);paint.setShadowLayer(Math.max(3,4*scale),0,Math.max(2,2*scale),Color.BLACK);
-            float baseY="Top".equals(position)?output.getHeight()*.18f:"Center".equals(position)?output.getHeight()*.52f:output.getHeight()*.84f;float center=output.getWidth()/2f;
-            if(sticker!=null&&!sticker.isEmpty()){Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG);sp.setTextAlign(Paint.Align.CENTER);sp.setTextSize(textSize*1.75f);canvas.drawText(sticker,center,text.isEmpty()?baseY:baseY-textSize*1.25f,sp);}
-            if(text!=null&&!text.isEmpty()){String[] lines=text.split("\\n",2);float firstY=baseY-(lines.length-1)*textSize*.58f;for(int i=0;i<lines.length;i++){String line=lines[i];float y=firstY+i*textSize*1.15f;float width=Math.min(output.getWidth()*.92f,paint.measureText(line)+textSize*.55f);Paint bg=new Paint(Paint.ANTI_ALIAS_FLAG);bg.setColor(Color.argb(105,0,0,0));canvas.drawRoundRect(center-width/2,y-textSize*.9f,center+width/2,y+textSize*.25f,textSize*.22f,textSize*.22f,bg);canvas.drawText(line,center,y,paint);}}
+        try{Bitmap output=renderEditedBitmap(original,text,sticker,position,colorName,sizeName);
             File dir=new File(getFilesDir(),"edited_images");if(!dir.exists()&&!dir.mkdirs())return null;File out=new File(dir,"edited_"+System.currentTimeMillis()+".jpg");try(FileOutputStream stream=new FileOutputStream(out)){output.compress(Bitmap.CompressFormat.JPEG,92,stream);}return FileProvider.getUriForFile(this,getPackageName()+".fileprovider",out);
         }catch(Exception e){return null;}
+    }
+
+    private Bitmap renderEditedBitmap(Bitmap original,String text,String sticker,String position,String colorName,String sizeName){
+        Bitmap output=original.copy(Bitmap.Config.ARGB_8888,true);Canvas canvas=new Canvas(output);float scale=output.getWidth()/720f;float textSize=("Large".equals(sizeName)?62:"Small".equals(sizeName)?34:48)*Math.max(.65f,scale);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);paint.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));paint.setTextSize(textSize);paint.setTextAlign(Paint.Align.CENTER);paint.setColor(editorTextColor(colorName));paint.setShadowLayer(Math.max(3,4*scale),0,Math.max(2,2*scale),Color.BLACK);
+        float baseY="Top".equals(position)?output.getHeight()*.18f:"Center".equals(position)?output.getHeight()*.52f:output.getHeight()*.84f;float center=output.getWidth()/2f;String safeText=text==null?"":text;
+        if(sticker!=null&&!sticker.isEmpty()){Paint sp=new Paint(Paint.ANTI_ALIAS_FLAG);sp.setTextAlign(Paint.Align.CENTER);sp.setTextSize(textSize*1.75f);canvas.drawText(sticker,center,safeText.isEmpty()?baseY:baseY-textSize*1.25f,sp);}
+        if(!safeText.isEmpty()){String[] lines=safeText.split("\\n",2);float firstY=baseY-(lines.length-1)*textSize*.58f;for(int i=0;i<lines.length;i++){String line=lines[i];float y=firstY+i*textSize*1.15f;float width=Math.min(output.getWidth()*.92f,paint.measureText(line)+textSize*.55f);Paint bg=new Paint(Paint.ANTI_ALIAS_FLAG);bg.setColor(Color.argb(110,0,0,0));canvas.drawRoundRect(center-width/2,y-textSize*.9f,center+width/2,y+textSize*.25f,textSize*.22f,textSize*.22f,bg);canvas.drawText(line,center,y,paint);}}
+        return output;
+    }
+
+    private int editorTextColor(String name){
+        if("Yellow".equals(name))return Color.YELLOW;if("Red".equals(name))return Color.RED;if("Black".equals(name))return Color.BLACK;if("Blue".equals(name))return Color.rgb(30,100,240);if("Green".equals(name))return Color.rgb(0,155,80);if("Pink".equals(name))return Color.rgb(235,45,130);if("Orange".equals(name))return Color.rgb(255,125,0);return Color.WHITE;
     }
     private void openGroup(String name){
         List<String> nums=readGroups().get(name); if(nums==null)return;
@@ -1015,7 +1037,6 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
         addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS SMART").setPositiveButton("OK",null).show());
-        addSettingsButton(list,"⬇  Check for App Update","Current v"+appVersion()+" • Check latest version",v->checkForAppUpdate());
         addSettingsButton(list,"↗  Share App APK","Direct APK share karein • GitHub username ya source code nahi dikhega",v->shareApp());
         addSettingsButton(list,"₹  Subscription & Payment","Plan details, UPI payment & activation",v->startActivity(new Intent(this,SubscriptionActivity.class)));
         addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
@@ -1097,34 +1118,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.24.0";}}
-    private long appVersionCode(){try{if(Build.VERSION.SDK_INT>=28)return getPackageManager().getPackageInfo(getPackageName(),0).getLongVersionCode();return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception e){return 0;}}
-    private void checkForAppUpdate(){checkForAppUpdate(false);}
-    private void autoCheckForAppUpdate(){SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);long now=System.currentTimeMillis();if(now-p.getLong("last_auto_update_check",0)<24L*60L*60L*1000L)return;p.edit().putLong("last_auto_update_check",now).apply();checkForAppUpdate(true);}
-    private void checkForAppUpdate(boolean silent){
-        if(!silent)toast("Checking latest version…");
-        new Thread(()->{
-            JSONObject info=null;
-            try{
-                URL url=new URL("https://github.com/jainvikes6270-gif/msgbulk/releases/latest/download/latest-version.json?time="+System.currentTimeMillis());
-                HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setInstanceFollowRedirects(true);c.setConnectTimeout(12000);c.setReadTimeout(12000);c.setRequestProperty("Cache-Control","no-cache");c.setRequestProperty("Accept","application/json");
-                try(BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream()))){StringBuilder s=new StringBuilder();String line;while((line=r.readLine())!=null)s.append(line);info=new JSONObject(s.toString());}c.disconnect();
-            }catch(Exception ignored){}
-            final JSONObject found=info;
-            runOnUiThread(()->{
-                if(found==null){if(!silent)new AlertDialog.Builder(this).setTitle("App Update").setMessage("Update check nahi ho paya. Internet check karke retry karein.").setPositiveButton("RETRY",(d,w)->checkForAppUpdate()).setNegativeButton("Close",null).show();return;}
-                String latest=found.optString("version","");long code=found.optLong("versionCode",0);String apk=found.optString("downloadUrl","");boolean newer=code>appVersionCode();
-                if(!newer){if(!silent)toast("App is up to date • v"+appVersion());return;}
-                if(!isTrustedUpdateUrl(apk)){if(!silent)toast("Update link invalid");return;}
-                new AlertDialog.Builder(this).setTitle("New Update Available").setMessage("Current: v"+appVersion()+"\nLatest: v"+latest+"\n\nDownload ke baad Android install confirmation dikhayega. App data safe rahega.").setPositiveButton("DOWNLOAD & UPDATE",(d,w)->downloadUpdate(apk,latest)).setNegativeButton("Later",null).show();
-            });
-        }).start();
-    }
-    private boolean isTrustedUpdateUrl(String value){return value!=null&&value.startsWith("https://github.com/jainvikes6270-gif/msgbulk/releases/")&&value.endsWith("LathaEPS-Smart.apk");}
-    private void downloadUpdate(String apkUrl,String version){
-        if(Build.VERSION.SDK_INT>=26&&!getPackageManager().canRequestPackageInstalls()){new AlertDialog.Builder(this).setTitle("Allow App Updates").setMessage("LATHAEPS SMART ko downloaded update install karne ki permission ON karein. Phir Check for App Update dobara dabayein.").setPositiveButton("OPEN SETTING",(d,w)->{try{startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())));}catch(Exception e){toast("Install permission setting open nahi hui");}}).setNegativeButton("Cancel",null).show();return;}
-        try{DownloadManager dm=(DownloadManager)getSystemService(DOWNLOAD_SERVICE);if(dm==null)throw new Exception("Download unavailable");String file="LathaEPS-Smart-v"+(version==null?"latest":version)+".apk";DownloadManager.Request req=new DownloadManager.Request(Uri.parse(apkUrl));req.setTitle("LATHAEPS SMART update");req.setDescription("Downloading version "+version);req.setMimeType("application/vnd.android.package-archive");req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);req.setDestinationInExternalFilesDir(this,Environment.DIRECTORY_DOWNLOADS,file);long id=dm.enqueue(req);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putLong("app_update_download_id",id).putString("app_update_file",file).apply();toast("Update downloading • notification check karein");}catch(Exception e){toast("Update download start nahi hua");}
-    }
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.8";}}
 
     private void shareApp(){
         try{

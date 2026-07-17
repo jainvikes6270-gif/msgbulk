@@ -260,26 +260,14 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - Accessibility can click the Send icon's clickable parent when the icon itself is not clickable.
 - Text Auto Reply behavior remains unchanged.
 
-# LathaBulk v3.23.7 – Continuous Auto Reply
+# LathaBulk v3.23.8 – Premium Live Image Editor
+
+- Image ke upar 2-line text likhne aur dobara edit karne ka option
+- Live preview: text, emoji/sticker, color, size aur position turant dikhega
+- 12 emoji/sticker choices aur NONE/remove option
+- 8 text colors: white, yellow, red, black, blue, green, pink aur orange
+- Top, center aur bottom text position; small, medium aur large size
+- Continuous auto reply / no-cooldown behavior v3.23.7 se preserved
 
 - Removed the Auto Reply cooldown field and five-minute reply block.
 - Repeated Ledger, Catalog and Auto Reply keywords can now trigger continuously.
-
-# LathaBulk v3.24.0 – Permanent Signed Auto Update
-
-- Checks the latest GitHub Release once every 24 hours and shows an in-app update popup.
-- Settings includes **Check for App Update** for manual checks.
-- Downloads `LathaEPS-Smart.apk` and opens Android's update confirmation automatically.
-- Tag builds (`v3.24.0`, `v3.24.1`, etc.) use the permanent signing key stored only in GitHub Actions secrets.
-- Every release automatically publishes the APK and `latest-version.json` assets.
-
-## One-time private GitHub secrets
-
-Add these repository secrets before creating the first `v3.24.0` tag:
-
-- `LATHAEPS_KEYSTORE_BASE64`
-- `LATHAEPS_KEYSTORE_PASSWORD`
-- `LATHAEPS_KEY_ALIAS`
-- `LATHAEPS_KEY_PASSWORD`
-
-Never upload the `.jks` key or private setup file into this public repository. After uploading the project, create and push tag `v3.24.0`; the workflow creates the signed GitHub Release automatically.

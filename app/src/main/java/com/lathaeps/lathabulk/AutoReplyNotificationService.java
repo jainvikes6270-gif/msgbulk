@@ -17,15 +17,12 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 
 import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class AutoReplyNotificationService extends NotificationListenerService {
-    public static final String PREFS="auto_reply_prefs", ENABLED="enabled", KEYWORD="keyword", REPLY="reply", IMAGE="image";
+    public static final String PREFS="auto_reply_prefs", ENABLED="enabled", KEYWORD="keyword", REPLY="reply", IMAGE="image", COOLDOWN="cooldown";
     public static final String LEDGER_URI="ledger_uri", CATALOG_URI="catalog_uri";
     public static final String LEDGER_KEY="ledger_key", CATALOG_KEY="catalog_key";
     public static final String PENDING_SHARE="pending_share", PENDING_SHARE_AT="pending_share_at";
@@ -33,7 +30,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
     private final Handler handler=new Handler(Looper.getMainLooper());
-    private final LinkedHashMap<String,Long> handledNotifications=new LinkedHashMap<>();
 
     @Override public void onNotificationPosted(StatusBarNotification sbn){
         if(sbn==null) return;
@@ -46,7 +42,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         Bundle e=n.extras;
         String title=String.valueOf(e.getCharSequence(Notification.EXTRA_TITLE,""));
         String text=extractMessageText(e);
-        if(text.trim().isEmpty()||isDuplicateSystemEvent(sbn,text))return;
         String lower=text.toLowerCase(Locale.ROOT);
         String senderPhone=resolvePhoneFromNotification(sbn,n,e,title);
         if(title.toLowerCase(Locale.ROOT).contains("messages") || title.toLowerCase(Locale.ROOT).contains("whatsapp")) return;
@@ -56,7 +51,9 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         ArrayList<Uri> catalogFiles=new ArrayList<>();
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
+        String command="rule";
         if(keywordMatches(lower,lk)){
+            command="ledger";
             JSONObject customer=findLedgerCustomer(p,senderPhone);
             if(customer==null){saveStatus(p,"Ledger not sent • verified phone not matched: "+title);return;}
             file=customer.optString("ledger_uri","");
@@ -66,7 +63,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             type="application/pdf";caption="LATHA EPS Ledger • "+customer.optString("name","Customer");
         }
         else if(findCatalogsForMessage(lower,ck).length()>0||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){
-            JSONArray catalogs=findCatalogsForMessage(lower,ck);
+            command="catalog";JSONArray catalogs=findCatalogsForMessage(lower,ck);
             if(catalogs.length()==0){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}
             JSONObject first=catalogs.optJSONObject(0);if(first==null)return;
             for(int i=0;i<catalogs.length();i++){JSONObject item=catalogs.optJSONObject(i);if(item==null)continue;String uri=item.optString("uri","");if(!uri.isEmpty())catalogFiles.add(Uri.parse(uri));}
@@ -102,17 +99,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         } else if(!caption.isEmpty()) {
             sendRemoteReply(n,caption);
         }
-    }
-
-    private synchronized boolean isDuplicateSystemEvent(StatusBarNotification sbn,String text){
-        long now=System.currentTimeMillis();
-        Iterator<Map.Entry<String,Long>> it=handledNotifications.entrySet().iterator();
-        while(it.hasNext())if(now-it.next().getValue()>120_000L)it.remove();
-        String id=sbn.getKey()+"|"+sbn.getPostTime()+"|"+text;
-        if(handledNotifications.containsKey(id))return true;
-        handledNotifications.put(id,now);
-        while(handledNotifications.size()>100){Iterator<String> keys=handledNotifications.keySet().iterator();if(keys.hasNext()){keys.next();keys.remove();}else break;}
-        return false;
     }
 
     private boolean matchesBusinessKeyword(String message,String saved,String... aliases){
