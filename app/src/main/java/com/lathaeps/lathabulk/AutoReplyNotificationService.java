@@ -58,8 +58,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         if(keywordMatches(lower,lk)){
-            JSONObject customer=findLedgerCustomer(p,senderPhone);
-            if(customer==null){saveStatus(p,"Ledger not sent • verified phone not matched: "+title);return;}
+            JSONObject customer=findLedgerCustomer(p,senderPhone,title);
+            if(customer==null){saveStatus(p,"Ledger not sent • exact customer not matched: "+title);return;}
             file=customer.optString("ledger_uri","");
             if(file.isEmpty()){saveStatus(p,"Ledger not sent • customer PDF missing: "+customer.optString("name",title));return;}
             String customerPhone=digits(customer.optString("phone",""));
@@ -127,15 +127,21 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return false;
     }
 
-    private JSONObject findLedgerCustomer(SharedPreferences p,String senderPhone){
-        String sp=last10(senderPhone);if(sp.length()!=10)return null;
+    private JSONObject findLedgerCustomer(SharedPreferences p,String senderPhone,String senderTitle){
+        String sp=last10(senderPhone);String wantedName=normaliseContactName(cleanContactTitle(senderTitle));
         try{
             JSONArray a=new JSONArray(p.getString(LEDGER_CUSTOMERS,"[]"));
+            JSONObject uniqueNameMatch=null;
             for(int i=0;i<a.length();i++){
                 JSONObject o=a.optJSONObject(i);if(o==null)continue;
                 String ph=last10(o.optString("phone",""));
-                if(ph.length()==10&&ph.equals(sp))return o;
+                if(sp.length()==10&&ph.length()==10&&ph.equals(sp))return o;
+                if(sp.length()!=10&&!wantedName.isEmpty()&&wantedName.equals(normaliseContactName(o.optString("name","")))){
+                    if(uniqueNameMatch!=null)return null; // Never guess when duplicate customer names exist.
+                    uniqueNameMatch=o;
+                }
             }
+            return uniqueNameMatch;
         }catch(Exception ignored){}
         return null;
     }
@@ -193,36 +199,34 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     private String resolvePhoneFromNotification(StatusBarNotification sbn,Notification n,Bundle extras,String title){
         ArrayList<String> candidates=new ArrayList<>();
         candidates.add(title);
-        if(n!=null){
-            if(Build.VERSION.SDK_INT>=26)candidates.add(n.getShortcutId());
-            candidates.add(n.getGroup());
-        }
-        if(sbn!=null){candidates.add(sbn.getKey());candidates.add(sbn.getTag());}
         if(extras!=null){
-            candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE,"")));
-            candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_SUB_TEXT,"")));
-            candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT,"")));
-            try{String[] people=extras.getStringArray(Notification.EXTRA_PEOPLE);if(people!=null)for(String person:people)candidates.add(person);}catch(Exception ignored){}
+            try{String[] people=extras.getStringArray(Notification.EXTRA_PEOPLE);if(people!=null)for(String person:people)addTrustedPersonCandidate(candidates,person);}catch(Exception ignored){}
             if(Build.VERSION.SDK_INT>=30)try{
                 ArrayList<android.app.Person> people=extras.getParcelableArrayList(Notification.EXTRA_PEOPLE_LIST);
-                if(people!=null)for(android.app.Person person:people)if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}
+                if(people!=null)for(android.app.Person person:people)if(person!=null){addTrustedPersonCandidate(candidates,person.getUri());candidates.add(String.valueOf(person.getName()));}
             }catch(Exception ignored){}
             try{
                 android.os.Parcelable[] messages=extras.getParcelableArray(Notification.EXTRA_MESSAGES);
                 if(messages!=null)for(int i=messages.length-1;i>=0;i--){
                     if(!(messages[i] instanceof Bundle))continue;
                     Bundle message=(Bundle)messages[i];candidates.add(String.valueOf(message.getCharSequence("sender","")));
-                    if(Build.VERSION.SDK_INT>=28){android.app.Person person=message.getParcelable("sender_person");if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}}
+                    if(Build.VERSION.SDK_INT>=28){android.app.Person person=message.getParcelable("sender_person");if(person!=null){addTrustedPersonCandidate(candidates,person.getUri());candidates.add(String.valueOf(person.getName()));}}
                 }
             }catch(Exception ignored){}
             if(Build.VERSION.SDK_INT>=28)try{
                 java.util.List<Notification.MessagingStyle.Message> styled=Notification.MessagingStyle.Message.getMessagesFromBundleArray(extras.getParcelableArray(Notification.EXTRA_MESSAGES));
-                for(int i=styled.size()-1;i>=0;i--){Notification.MessagingStyle.Message message=styled.get(i);android.app.Person person=message.getSenderPerson();if(person!=null){candidates.add(person.getUri());candidates.add(person.getKey());candidates.add(String.valueOf(person.getName()));}}
+                for(int i=styled.size()-1;i>=0;i--){Notification.MessagingStyle.Message message=styled.get(i);android.app.Person person=message.getSenderPerson();if(person!=null){addTrustedPersonCandidate(candidates,person.getUri());candidates.add(String.valueOf(person.getName()));}}
             }catch(Exception ignored){}
         }
         for(String value:candidates){String phone=validIndianPhone(value);if(!phone.isEmpty())return phone;}
         for(String value:candidates){String phone=resolvePhoneFromContacts(value);if(!phone.isEmpty())return phone;}
         return "";
+    }
+
+    /** Accept only explicit contact URIs. Notification keys/tags may contain random phone-shaped IDs. */
+    private void addTrustedPersonCandidate(ArrayList<String> out,String value){
+        if(value==null)return;String v=value.trim().toLowerCase(Locale.ROOT);
+        if(v.startsWith("tel:")||v.contains("@s.whatsapp.net"))out.add(value);
     }
 
     private static String validIndianPhone(String value){
@@ -253,7 +257,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     private String normaliseContactName(String value){
         if(value==null)return "";
         return value.replaceAll("(?i)\\s*\\([0-9]+\\s+messages?\\)\\s*$","")
-                .toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim();
+                .toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+"," ").trim();
     }
 
     private void shareFile(Uri uri,String mime,String caption,String pkg,String phone){

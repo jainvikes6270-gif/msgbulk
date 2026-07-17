@@ -303,6 +303,13 @@ Upload the extracted project to GitHub. GitHub Actions workflow is included unde
 - Attachment requests arriving during another task wait for the active task instead of overwriting its Ledger/Catalog queue.
 - Debug-only GitHub build, no signed-release configuration, no Auto Reply cooldown option.
 
+# LathaBulk v3.23.14 – Ledger + Catalog Recipient Fix
+
+- Removed WhatsApp notification key/tag IDs from recipient phone detection; random phone-shaped IDs such as `7472764035` are no longer used.
+- Ledger now matches a verified phone first, with exact unique customer-name fallback when WhatsApp does not expose the phone number.
+- Catalog recipient picker now accepts only an exact full contact name or exact last 10 phone digits; partial matches are rejected.
+- Existing text Auto Reply behavior is unchanged.
+
 # LathaBulk v3.23.13 – Exact Recipient Safety
 
 - Removed the unsafe first-search-result fallback that could select an unrelated contact.

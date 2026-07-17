@@ -36,6 +36,10 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
             String pkg=root.getPackageName().toString();if(!pkg.equals("com.whatsapp")&&!pkg.equals("com.whatsapp.w4b"))return;
             SharedPreferences a=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);SharedPreferences p=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);
             boolean pending=a.getBoolean(AutoReplyNotificationService.PENDING_SHARE,false),bulk=p.getBoolean(MainActivity.AUTO_RUNNING,false);
+            long pendingAt=a.getLong(AutoReplyNotificationService.PENDING_SHARE_AT,0L);
+            if(pending&&(pendingAt<=0L||System.currentTimeMillis()-pendingAt>120000L)){
+                AutoReplyNotificationService.cancelPendingShare(this,"Old pending attachment cleared • ready");pending=false;
+            }
             if(pending||bulk)attemptPendingSend(pkg,pending,bulk);
         },650L);
     }
@@ -180,14 +184,8 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo findRecipientResult(AccessibilityNodeInfo root,String contact,String phone){
-        if(contact!=null&&!contact.isEmpty()){
-            List<AccessibilityNodeInfo> named=root.findAccessibilityNodeInfosByText(contact);
-            if(named!=null)for(AccessibilityNodeInfo n:named)if(isUsableRecipientNode(n))return n;
-        }
-        if(phone!=null&&!phone.isEmpty()){
-            List<AccessibilityNodeInfo> numbered=root.findAccessibilityNodeInfosByText(phone);
-            if(numbered!=null)for(AccessibilityNodeInfo n:numbered)if(isUsableRecipientNode(n))return n;
-        }
+        // Substring search can select a different contact with a similar name/number.
+        // Walk the result tree and accept only an exact 10-digit phone or exact full name.
         return findExactRecipientIdentity(root,contact,phone);
     }
 
@@ -202,7 +200,7 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         return null;
     }
 
-    private String normaliseIdentity(String value){return value==null?"":value.toLowerCase(Locale.ROOT).replaceAll("(?i)\\s*\\([0-9]+\\s+(?:new\\s+)?messages?\\)\\s*$","").replaceAll("[^a-z0-9]+"," ").trim();}
+    private String normaliseIdentity(String value){return value==null?"":value.toLowerCase(Locale.ROOT).replaceAll("(?i)\\s*\\([0-9]+\\s+(?:new\\s+)?messages?\\)\\s*$","").replaceAll("[^\\p{L}\\p{N}]+"," ").trim();}
 
     private String last10(String value){String d=value==null?"":value.replaceAll("[^0-9]","");return d.length()>10?d.substring(d.length()-10):d;}
 
