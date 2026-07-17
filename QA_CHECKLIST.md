@@ -1,4 +1,4 @@
-# LathaBulk v3.23.20 QA Checklist
+# LathaBulk v3.23.22 QA Checklist
 
 ## Ledger settled-phone regression
 
@@ -13,7 +13,21 @@
 - AndroidManifest and all XML resources parse successfully.
 - GitHub Actions workflow YAML parses successfully.
 - Package/namespace remains `com.lathaeps.lathabulk`.
-- `versionCode 77`, `versionName 3.23.20`.
+- `versionCode 79`, `versionName 3.23.22`.
+
+## AI Smart + Voice Search
+
+- Microphone button opens Android speech recognition from Price List Manager.
+- Saying `Mylinc switch` filters the saved list without typing.
+- `my link`, `mylink` and plural product words resolve through smart local matching.
+- Closing the Price List screen clears the temporary voice-search field safely.
+
+## Price List Manager
+
+- Business Files → Price List Manager opens without changing Ledger settings.
+- Add/edit/delete and search work for item, category, rate, unit, discount and GST.
+- PDF and WhatsApp-text sharing include all saved categories and items.
+- Local/Drive backup and restore preserve the saved price list.
 - No signing key or keystore is included; the Play AAB workflow reads signing values only from GitHub Secrets.
 - No Auto Reply cooldown field/block remains.
 

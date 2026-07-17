@@ -1,3 +1,22 @@
+# LathaBulk v3.23.22 – AI Smart + Voice Price Search
+
+## v3.23.22
+
+- Price List Manager includes one-tap microphone voice search.
+- Speak a brand and product such as `Mylinc switch`; matching saved price-list items appear without typing.
+- Smart multi-word matching understands common voice variations such as `my link` → `Mylinc` and singular/plural product words.
+- Search uses only Price List Manager data; no business price data is uploaded to an AI server.
+
+# LathaBulk v3.23.21 – Price List Manager
+
+## v3.23.21
+
+- Business Files now includes a category/brand-wise Price List Manager.
+- Add, edit, search and delete items with rate, unit, discount and GST.
+- Share the complete LATHA EPS price list as a professional PDF or WhatsApp-ready text.
+- Price list data is included automatically in Local/Drive backup and restore.
+- Existing Ledger, Catalog, Auto Reply and Payment Reminder workflows remain unchanged.
+
 # LathaBulk v3.23.20 – Ledger settled-phone single-reply fix
 
 ## v3.23.20
