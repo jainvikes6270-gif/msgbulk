@@ -7,6 +7,7 @@
 - Add Price Item is visible and saves a new manual price row.
 - Existing manual price items keep Edit and Delete actions.
 - Complete price-list share button is connected.
+- MainActivity contains no `BuildConfig` reference; updater uses `appVersion()` so Java compilation does not depend on BuildConfig generation.
 
 ## v3.23.28 voice checks
 

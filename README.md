@@ -5,6 +5,7 @@
 - Every media section has MANAGE: edit section, add more pictures/PDFs and delete the complete section.
 - Every saved image/PDF has edit details, replace and delete controls.
 - Add Price Item and Share Complete Price List are now connected on the Price List Manager screen.
+- Build fix: updater reads the installed version without depending on a generated `BuildConfig` class.
 
 ## v3.23.28
 
