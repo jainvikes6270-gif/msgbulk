@@ -1,4 +1,14 @@
-# LathaBulk v3.23.29 QA Checklist
+# LathaBulk v3.23.30 QA Checklist
+
+## v3.23.30 Supabase subscription checks
+
+- Run `SUPABASE_SUBSCRIPTION_SETUP.sql` and privately save the generated admin password.
+- First launch with internet creates one `app_subscriptions` row and shows 12 trial days.
+- Clear app data/reinstall; the same Device ID keeps the original trial start time.
+- Admin panel activates Yearly and user sees it after **REFRESH ONLINE STATUS**.
+- Admin panel activates Lifetime Free and can block/revoke the same device.
+- Wrong admin password is rejected; no password is stored inside the APK.
+- After 48 hours without verification, protected features require an online refresh.
 
 ## v3.23.29 Price List Manager checks
 

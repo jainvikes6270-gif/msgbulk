@@ -1,4 +1,15 @@
-# LathaBulk v3.23.29 – Complete Price List Manager Controls
+# LathaBulk v3.23.30 – Secure Supabase Subscription
+
+## v3.23.30
+
+- The 12-day trial is created and timed on Supabase, not in local app preferences.
+- Reinstalling the APK or clearing app data does not reset a device's trial.
+- Yearly, Lifetime Free and blocked status are verified online and cached for at most 48 hours.
+- The old APK-embedded activation secret and offline activation-code generator were removed.
+- The admin password is never stored in the APK. The secure Admin screen sends it over HTTPS to a protected Supabase function.
+- Run `SUPABASE_SUBSCRIPTION_SETUP.sql` once before installing this build. The final SQL result displays the generated admin password; save it privately.
+
+## v3.23.29 – Complete Price List Manager Controls
 
 ## v3.23.29
 

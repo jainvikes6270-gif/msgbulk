@@ -8,14 +8,18 @@ android {
         applicationId 'com.lathaeps.lathabulk'
         minSdk 24
         targetSdk 35
-        versionCode 86
-        versionName '3.23.29'
+        versionCode 87
+        versionName '3.23.30'
+        buildConfigField 'String', 'SUPABASE_URL', '"https://wcezfywsfkovyqmusxku.supabase.co"'
+        buildConfigField 'String', 'SUPABASE_ANON_KEY', '"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjZXpmeXdzZmtvdnlxbXVzeGt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMTc2OTQsImV4cCI6MjA5OTg5MzY5NH0.SxAM559s32jRI5RfEFEYKRBFHhF7hMWjHE93YPxU_fc"'
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    buildFeatures { buildConfig true }
 }
 
 dependencies {
