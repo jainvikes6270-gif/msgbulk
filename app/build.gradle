@@ -8,8 +8,8 @@ android {
         applicationId 'com.lathaeps.lathabulk'
         minSdk 24
         targetSdk 35
-        versionCode 96
-        versionName '3.23.39'
+        versionCode 98
+        versionName '3.23.41'
         buildConfigField 'String', 'SUPABASE_URL', '"https://wcezfywsfkovyqmusxku.supabase.co"'
         buildConfigField 'String', 'SUPABASE_ANON_KEY', '"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjZXpmeXdzZmtvdnlxbXVzeGt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMTc2OTQsImV4cCI6MjA5OTg5MzY5NH0.SxAM559s32jRI5RfEFEYKRBFHhF7hMWjHE93YPxU_fc"'
     }
@@ -26,4 +26,6 @@ dependencies {
     implementation 'androidx.core:core:1.15.0'
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
     implementation 'com.google.zxing:core:3.5.3'
+    // Bundled/offline OCR so a photographed material list can be read immediately.
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

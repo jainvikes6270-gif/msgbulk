@@ -1,4 +1,23 @@
-# LathaBulk v3.23.39 QA Checklist
+# LathaBulk v3.23.41 QA Checklist
+
+## v3.23.41 small transparent floating-mic checks
+
+- Enable Floating Voice Mic and confirm the bubble is visibly smaller (46dp) and semi-transparent.
+- Confirm content behind the floating mic remains visible.
+- Press/drag the mic and confirm it becomes clearer while touched, then returns to 58% opacity after release.
+- Tap without dragging and confirm Voice Search still opens.
+- Restart the service/app and confirm the small transparent appearance remains.
+
+## v3.23.40 camera-AI quotation checks
+
+- Open Business Files → Business Quotation Manager and tap CAMERA • AI READ MATERIAL LIST.
+- Photograph a clear printed material list and confirm the camera image is retained as a separate source file.
+- Confirm the offline AI/OCR review opens with rows in `Item name | Qty | Unit | Rate` format.
+- Correct one detected name/quantity/rate, import it, and confirm every row becomes a separately editable quotation item.
+- Open a previously saved source image → menu → AI read material list and confirm it can be imported again.
+- Tap EDIT COMPANY HEADER, change the company name, and confirm Preview/Image/PDF show the new header.
+- Tap SHARE IMAGE and SHARE PDF and confirm the Android chooser (including WhatsApp when installed) opens with the quotation attached.
+- Take a blurred/empty photo and confirm the app asks for a clearer retry instead of importing blank items.
 
 ## v3.23.39 fingerprint-unlock checks
 

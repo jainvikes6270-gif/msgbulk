@@ -1,4 +1,21 @@
-# LathaBulk v3.23.39 – Fingerprint App Unlock
+# LathaBulk v3.23.41 – Small Transparent Floating Mic
+
+## v3.23.41
+
+- Floating voice mic reduced from 62dp to a compact 46dp bubble.
+- Normal opacity is now 58%, so it does not cover app content behind it.
+- The mic becomes clearer while pressed/dragged and automatically returns to transparent after release.
+- Tap, drag position memory, voice search, foreground service and boot restore behavior remain unchanged.
+
+## v3.23.40
+
+- Business Quotation now has a direct **CAMERA • AI READ MATERIAL LIST** action.
+- A photographed material list is saved as a separate quotation source and read on-device with bundled ML Kit OCR (no model download wait).
+- Detected rows open in an editable review format: `Item name | Qty | Unit | Rate` before import.
+- Imported AI rows remain separate, fully editable quotation items with the current default Discount and GST.
+- Any saved source image can be read again from its menu with **AI read material list**.
+- The quotation toolbar now clearly exposes **EDIT COMPANY HEADER** for changing the company name and letter-pad details.
+- Final output buttons are clearly labeled **SHARE IMAGE** and **SHARE PDF** and open the Android/WhatsApp share chooser.
 
 ## v3.23.39
 

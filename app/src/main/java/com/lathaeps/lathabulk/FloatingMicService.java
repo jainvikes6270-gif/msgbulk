@@ -25,6 +25,8 @@ public class FloatingMicService extends Service {
     public static final String ACTION_STOP = "com.lathaeps.lathabulk.STOP_FLOATING_MIC";
     private static final String CHANNEL = "lathaeps_floating_voice";
     private static final int NOTIFICATION_ID = 539;
+    private static final int BUBBLE_SIZE_DP = 46;
+    private static final float BUBBLE_ALPHA = 0.58f;
 
     private WindowManager windowManager;
     private View bubble;
@@ -73,19 +75,20 @@ public class FloatingMicService extends Service {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         TextView mic = new TextView(this);
         mic.setText("🎤");
-        mic.setTextSize(27);
+        mic.setTextSize(20);
         mic.setGravity(Gravity.CENTER);
         mic.setContentDescription("LATHAEPS floating voice search");
-        mic.setElevation(dp(10));
+        mic.setElevation(dp(4));
+        mic.setAlpha(BUBBLE_ALPHA);
         GradientDrawable background = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(22, 105, 190), Color.rgb(95, 45, 170)});
+                new int[]{Color.argb(185, 22, 105, 190), Color.argb(185, 95, 45, 170)});
         background.setShape(GradientDrawable.OVAL);
-        background.setStroke(dp(2), Color.WHITE);
+        background.setStroke(dp(1), Color.argb(175, 255, 255, 255));
         mic.setBackground(background);
         bubble = mic;
 
         int type = Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
-        params = new WindowManager.LayoutParams(dp(62), dp(62), type,
+        params = new WindowManager.LayoutParams(dp(BUBBLE_SIZE_DP), dp(BUBBLE_SIZE_DP), type,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
@@ -97,6 +100,7 @@ public class FloatingMicService extends Service {
             boolean moved;
             @Override public boolean onTouch(View view, MotionEvent event) {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    view.setAlpha(0.90f);
                     initialX = params.x; initialY = params.y; downX = event.getRawX(); downY = event.getRawY(); moved = false; return true;
                 }
                 if (event.getAction() == MotionEvent.ACTION_MOVE) {
@@ -107,11 +111,13 @@ public class FloatingMicService extends Service {
                     return true;
                 }
                 if (event.getAction() == MotionEvent.ACTION_UP) {
+                    view.setAlpha(BUBBLE_ALPHA);
                     getSharedPreferences(MainActivity.PREFS, MODE_PRIVATE).edit()
                             .putInt("floating_mic_x", params.x).putInt("floating_mic_y", params.y).apply();
                     if (!moved) openVoiceSearch();
                     return true;
                 }
+                if (event.getAction() == MotionEvent.ACTION_CANCEL) { view.setAlpha(BUBBLE_ALPHA); return true; }
                 return false;
             }
         });
