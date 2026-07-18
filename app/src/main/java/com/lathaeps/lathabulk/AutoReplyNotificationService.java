@@ -46,6 +46,10 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         Notification n=sbn.getNotification();
         Bundle e=n.extras;
         String title=String.valueOf(e.getCharSequence(Notification.EXTRA_TITLE,""));
+        if(isWhatsAppGroupNotification(sbn,n,e)){
+            saveStatus(p,"Group message ignored • individual chats only");
+            return;
+        }
         String text=extractMessageText(e);
         if(text.trim().isEmpty())return;
         String lower=text.toLowerCase(Locale.ROOT);
@@ -117,7 +121,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                 StatusBarNotification[] active=getActiveNotifications();
                 if(active!=null)for(StatusBarNotification candidate:active){
                     if(candidate==null||!pkg.equals(candidate.getPackageName()))continue;
-                    Notification cn=candidate.getNotification();if(cn==null||(cn.flags&Notification.FLAG_GROUP_SUMMARY)!=0)continue;
+                    Notification cn=candidate.getNotification();if(cn==null||(cn.flags&Notification.FLAG_GROUP_SUMMARY)!=0||isWhatsAppGroupNotification(candidate,cn,cn.extras))continue;
                     Bundle ce=cn.extras;String candidateText=extractMessageText(ce);
                     if(!requestedText.trim().equals(candidateText.trim()))continue;
                     long candidateTime=extractLatestMessageTime(ce);
@@ -291,6 +295,32 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }catch(Exception ignored){}
         return 0L;
     }
+
+    /** Never auto-reply to WhatsApp groups. Only one-to-one notifications are accepted. */
+    private boolean isWhatsAppGroupNotification(StatusBarNotification sbn,Notification notification,Bundle extras){
+        if(notification==null)return true;
+        if((notification.flags&Notification.FLAG_GROUP_SUMMARY)!=0)return true;
+        if(extras!=null&&extras.getBoolean("android.isGroupConversation",false))return true;
+        if(Build.VERSION.SDK_INT>=26&&containsGroupJid(notification.getShortcutId()))return true;
+        if(sbn!=null&&(containsGroupJid(sbn.getKey())||containsGroupJid(sbn.getTag())))return true;
+        if(extras==null)return false;
+        try{String[] people=extras.getStringArray(Notification.EXTRA_PEOPLE);if(people!=null)for(String person:people)if(containsGroupJid(person))return true;}catch(Exception ignored){}
+        if(Build.VERSION.SDK_INT>=30)try{
+            ArrayList<android.app.Person> people=extras.getParcelableArrayList(Notification.EXTRA_PEOPLE_LIST);
+            if(people!=null)for(android.app.Person person:people)if(person!=null&&containsGroupJid(person.getUri()))return true;
+        }catch(Exception ignored){}
+        try{
+            android.os.Parcelable[] messages=extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+            if(messages!=null)for(android.os.Parcelable item:messages){
+                if(!(item instanceof Bundle))continue;Bundle message=(Bundle)item;
+                if(containsGroupJid(String.valueOf(message.getCharSequence("sender",""))))return true;
+                if(Build.VERSION.SDK_INT>=28){android.app.Person person=message.getParcelable("sender_person");if(person!=null&&containsGroupJid(person.getUri()))return true;}
+            }
+        }catch(Exception ignored){}
+        return false;
+    }
+
+    private boolean containsGroupJid(String value){return value!=null&&value.toLowerCase(Locale.ROOT).contains("@g.us");}
 
     private String resolvePhoneFromNotification(StatusBarNotification sbn,Notification n,Bundle extras,String title){
         ArrayList<String> candidates=new ArrayList<>();

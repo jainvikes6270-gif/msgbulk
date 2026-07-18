@@ -1,4 +1,25 @@
-# LathaBulk v3.23.31 – UPI QR and Copy Fallback
+# LathaBulk v3.23.33 – Brand-wise Price List Manager
+
+## v3.23.33
+
+- Price List Manager adds a dedicated **BRAND: ALL BRANDS** selector.
+- Brand and Product Section are now separate fields for price items, images and PDFs.
+- Polycab, Finolex, Mylinc and other brands render as separate colored brand groups.
+- Each brand contains its own categories such as Wire, Switch and DB.
+- Edit/Manage can move a saved file or complete section to another brand without deleting the file.
+- Voice/search, WhatsApp text and generated PDF include both brand and product category.
+- Existing price data remains available and can be reorganized with Edit.
+
+## v3.23.32 – Individual WhatsApp Chats Only
+
+## v3.23.32
+
+- Auto Reply, Ledger and Catalog notification replies ignore WhatsApp group conversations.
+- Group JIDs (`@g.us`), group-conversation notification metadata and group summaries are blocked before any reply is prepared.
+- Bulk Auto Send continues to use validated mobile numbers and direct one-to-one WhatsApp links only.
+- Send confirmation clearly shows **Individual chats only • WhatsApp groups blocked**.
+
+## v3.23.31 – UPI QR and Copy Fallback
 
 ## v3.23.31
 

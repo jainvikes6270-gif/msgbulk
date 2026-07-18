@@ -1,4 +1,22 @@
-# LathaBulk v3.23.31 QA Checklist
+# LathaBulk v3.23.33 QA Checklist
+
+## v3.23.33 brand-wise Price Manager checks
+
+- Brand selector lists ALL BRANDS plus every saved brand.
+- Selecting one brand hides other brands without deleting their data.
+- Add Image/PDF requires separate Brand and Product Section fields.
+- Add/Edit Price Item requires separate Brand and Product Category fields.
+- Manage section edits only the selected Brand + Section combination.
+- Brand-wise PDF and WhatsApp text show brand headers and category subheaders.
+- Existing saved sources and items remain visible and editable.
+
+## v3.23.32 individual-only safety checks
+
+- Group message containing an Auto Reply keyword receives no response.
+- Group message containing Ledger/Catalog keywords receives no PDF, image or text response.
+- Direct contact with the same keyword still receives the configured reply.
+- Bulk confirmation displays **Individual chats only • WhatsApp groups blocked**.
+- Bulk sending targets normalized phone numbers through direct one-to-one WhatsApp links.
 
 ## v3.23.31 UPI fallback checks
 
