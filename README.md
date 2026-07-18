@@ -1,3 +1,15 @@
+# LathaBulk v3.23.44 – Free-form Camera AI & Zoom Preview
+
+## v3.23.44
+
+- Camera AI now reads a customer's normal handwritten paper; no fixed six-column input is required.
+- Free-form lines such as `1.0 - 10 coil`, `1.5 - 2 coil` and a separate `Discount 9%` note become clean Description/Qty rows.
+- Electrical wire sizes written as bare numbers are presented as `1.0 sq`, `1.5 sq`, etc., and Coil quantities are totalled correctly.
+- A detected brand/heading becomes the quotation title and the detected discount becomes the overall quotation discount after review.
+- AI rows automatically match saved Price List Manager items when a compatible item/brand rate exists.
+- If no rates are available, preview/image/PDF uses a clean screenshot-style `SL | DESCRIPTION | QTY` material quotation with quantity total.
+- Quotation image preview now supports pinch zoom, drag, and double-tap zoom/reset.
+
 # LathaBulk v3.23.43 – Business Assistant Camera AI & Totals
 
 ## v3.23.43

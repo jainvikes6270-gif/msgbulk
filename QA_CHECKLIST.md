@@ -1,4 +1,14 @@
-# LathaBulk v3.23.43 QA Checklist
+# LathaBulk v3.23.44 QA Checklist
+
+## v3.23.44 Camera AI Free-form Note + Zoom QA
+
+- Photograph a normal handwritten note containing `1.0 - 10 coil`, `1.5 - 2 coil`, `2.5 - 2 coil`, and `Discount 9%`.
+- Confirm AI Review shows three rows in `Description | Qty | Unit` format without requiring six input columns.
+- Confirm the rows become `1.0 sq | 10 | Coils`, `1.5 sq | 2 | Coils`, and `2.5 sq | 2 | Coils`.
+- Confirm the output title uses a detected heading/brand when present, discount shows 9%, and total shows 14 Coils.
+- Without saved rates, confirm the preview/image/PDF uses the compact SL/DESCRIPTION/QTY layout.
+- With matching Price List Manager rates, confirm rate, discount, GST and grand total calculations remain available.
+- In Preview, pinch to zoom, drag the enlarged image, and double-tap to zoom/reset.
 
 ## v3.23.43 Camera AI, calculation and layout checks
 
