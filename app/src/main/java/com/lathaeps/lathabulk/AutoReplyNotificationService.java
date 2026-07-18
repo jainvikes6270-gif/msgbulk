@@ -31,6 +31,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
     public static final String CATALOG_QUEUE_CONTACT="catalog_share_contact", SHARE_PICKER_STAGE="catalog_share_picker_stage", SHARE_PICKER_TRIES="catalog_share_picker_tries";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
+    private static final String APP_PREFS="latha_bulk_prefs";
+    private static final String PRICE_SOURCE_FILES="price_source_files";
     private static final String RECENT_EVENTS="recent_notification_events";
     private static final long EVENT_FALLBACK_WINDOW_MS=20000L;
     private static final long EVENT_HISTORY_MS=600000L;
@@ -59,7 +61,34 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         long messageTime=extractLatestMessageTime(e);
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
-        if(keywordMatches(lower,lk)){
+        JSONArray priceFiles=findPriceSourcesForMessage(lower);
+        boolean explicitPriceRequest=isExplicitPriceListRequest(lower);
+        boolean explicitLedgerRequest=keywordMatches(lower,lk);
+        if(explicitPriceRequest||(priceFiles.length()>0&&!explicitLedgerRequest)){
+            String stablePriceId=messageTime>0?String.valueOf(messageTime):sbn.getKey();
+            String priceEventKey=pkg+"|price|"+text.trim()+"|"+stablePriceId;
+            if(!markNotificationEventOnce(p,priceEventKey,messageTime>0))return;
+            if(priceFiles.length()==0){
+                sendRemoteReply(n,"Requested price list nahi mili. Kripya LATHAEPS se contact karein.");
+                return;
+            }
+            ArrayList<Uri> files=new ArrayList<>();
+            JSONObject first=priceFiles.optJSONObject(0);
+            for(int i=0;i<priceFiles.length();i++){
+                JSONObject item=priceFiles.optJSONObject(i);if(item==null)continue;
+                String uri=item.optString("uri","");if(!uri.isEmpty())files.add(Uri.parse(uri));
+            }
+            if(files.isEmpty()){
+                sendRemoteReply(n,"Requested price list file available nahi hai. Kripya LATHAEPS se contact karein.");
+                return;
+            }
+            String brand=first==null?"":first.optString("brand","").trim();
+            String section=first==null?"":first.optString("category","").trim();
+            String caption="LATHA EPS Price List"+(brand.isEmpty()?"":" • "+brand)+(section.isEmpty()?"":" • "+section);
+            startShareWhenReady(files,caption,pkg,senderPhone,cleanContactTitle(title),n.contentIntent,0);
+            return;
+        }
+        if(explicitLedgerRequest){
             // WhatsApp often posts the same message several times. The first post can
             // contain only a display name, while a later update contains the real JID.
             // Deduplicate by the logical message (not by the changing sender identity)
@@ -254,6 +283,54 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         }catch(Exception ignored){}
         return found;
     }
+
+    /** Matches saved Price List Manager image/PDF sources before Ledger routing. */
+    private JSONArray findPriceSourcesForMessage(String message){
+        JSONArray found=new JSONArray();
+        try{
+            JSONArray items=new JSONArray(getSharedPreferences(APP_PREFS,MODE_PRIVATE).getString(PRICE_SOURCE_FILES,"[]"));
+            if(items.length()==0)return found;
+            String query=normaliseSearch(message);
+            ArrayList<String> words=new ArrayList<>();
+            for(String word:query.split("\\s+")){
+                if(word.length()<2||isGenericPriceWord(word))continue;
+                if(!words.contains(word))words.add(word);
+            }
+            JSONObject best=null;int bestScore=0;
+            for(int i=0;i<items.length();i++){
+                JSONObject item=items.optJSONObject(i);if(item==null||item.optString("uri","").isEmpty())continue;
+                String hay=normaliseSearch(item.optString("search_text","")+" "+item.optString("name","")+" "+item.optString("brand","")+" "+item.optString("category","")+" "+item.optString("keywords",""));
+                int score=0;boolean all=true;
+                for(String word:words){if((" "+hay+" ").contains(" "+word+" "))score++;else all=false;}
+                if(words.isEmpty())continue;
+                if(all&&score>bestScore){best=item;bestScore=score;}
+            }
+            if(best==null)return found;
+            String batch=best.optString("batch_id","");
+            if(batch.isEmpty()){found.put(best);return found;}
+            for(int i=0;i<items.length();i++){
+                JSONObject item=items.optJSONObject(i);
+                if(item!=null&&batch.equals(item.optString("batch_id",""))&&!item.optString("uri","").isEmpty())found.put(item);
+            }
+        }catch(Exception ignored){}
+        return found;
+    }
+
+    private boolean isExplicitPriceListRequest(String message){
+        String q=normaliseSearch(message);
+        return q.contains("price list")||q.contains("pricelist")||q.contains("rate list")||q.contains("rates list");
+    }
+
+    private boolean isGenericPriceWord(String word){
+        return "price".equals(word)||"pricelist".equals(word)||"rate".equals(word)||"rates".equals(word)||"list".equals(word)||"send".equals(word)||"please".equals(word)||"pls".equals(word)||"chahiye".equals(word)||"bhejo".equals(word)||"ka".equals(word)||"ki".equals(word)||"do".equals(word);
+    }
+
+    private String normaliseSearch(String value){
+        if(value==null)return "";
+        String clean=value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim().replaceAll("\\s+"," ");
+        return clean.replaceAll("\\b([0-9]+)\\s*(?:mtr|meter|metre|meters|metres)\\b","$1mtr");
+    }
+
     private boolean keywordMatches(String message,String raw){
         String term=raw==null?"":raw.trim().toLowerCase(Locale.ROOT);if(term.length()<2)return false;
         String source=" "+message.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim()+" ";String target=" "+term.replaceAll("[^a-z0-9]+"," ").trim()+" ";return !target.trim().isEmpty()&&source.contains(target);

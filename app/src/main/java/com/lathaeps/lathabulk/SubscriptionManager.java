@@ -75,6 +75,7 @@ final class SubscriptionManager {
         long leftMs = p.getLong(ACCESS_UNTIL, 0) - estimatedServerNow(p);
         int days = leftMs <= 0 ? 0 : (int)Math.ceil(leftMs / 86400000d);
         if ("yearly".equals(plan)) return "₹800/year • Active • " + days + " day(s) left";
+        if ("custom".equals(plan)) return "Custom validity • Active • " + days + " day(s) left";
         return "Free trial • " + days + " day(s) left";
     }
 
@@ -97,6 +98,19 @@ final class SubscriptionManager {
                 .put("p_plan", plan)
                 .put("p_admin_password", adminPassword).build(), (ok, json, message) ->
                 MAIN.post(() -> callback.done(ok, ok && json != null ? json.optString("message", "Subscription updated") : message)));
+    }
+
+    static void adminExtendDays(Context context,String targetDeviceId,int days,
+                                String adminPassword,Callback callback){
+        String device=targetDeviceId==null?"":targetDeviceId.replaceAll("[^A-Za-z0-9]","").toUpperCase(Locale.ROOT);
+        if(device.length()!=12){callback.done(false,"Valid 12-character Device ID required");return;}
+        if(days<1||days>365000){callback.done(false,"Days 1 se 365000 ke beech hone chahiye");return;}
+        if(adminPassword==null||adminPassword.length()<12){callback.done(false,"Admin password kam se kam 12 characters ka hona chahiye");return;}
+        rpc("admin_extend_subscription",new JSONObjectBuilder()
+                .put("p_device_id",device)
+                .put("p_days",days)
+                .put("p_admin_password",adminPassword).build(),(ok,json,message)->
+                MAIN.post(()->callback.done(ok,ok&&json!=null?json.optString("message",days+" days validity added"):message)));
     }
 
     private static void saveStatus(Context c, JSONObject j) {

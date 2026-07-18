@@ -1,4 +1,28 @@
-# LathaBulk v3.23.33 QA Checklist
+# LathaBulk v3.23.36 QA Checklist
+
+## v3.23.36 custom-validity checks
+
+- Run `SUPABASE_CUSTOM_VALIDITY_MIGRATION.sql` once in the existing Supabase project.
+- Open Secure Online Admin, select Custom Days, and confirm the days box becomes enabled.
+- Enter a valid Device ID and 30 days; confirm the success message says 30 days were extended.
+- Refresh subscription on that user's phone and confirm `Custom validity` with the correct days left.
+- Extend the same active user again and confirm new days are added after the existing expiry.
+
+## v3.23.35 brand-folder checks
+
+- Tap `+ BRAND`, create `Polycab`, and confirm one compact Polycab folder appears.
+- Confirm files are not shown outside while `ALL BRANDS` and an empty search are active.
+- Tap the Polycab folder and confirm only its sections, files, and price items appear.
+- Add an image/PDF inside the selected folder and confirm Brand is pre-filled as Polycab.
+- Use search and confirm matching files/items can still appear directly.
+
+## v3.23.34 price-list auto-reply routing checks
+
+- Save a Polycab / 90mtr PDF or image in Price List Manager with matching brand, section, name, or keywords.
+- From an individual WhatsApp chat, send `Polycab 90mtr price list`.
+- Confirm the matching price-list attachment is sent and the Ledger mismatch contact message is not sent.
+- Confirm `Polycab 90 mtr price list` matches the same file.
+- Send `ledger` and confirm normal exact-phone Ledger routing still runs.
 
 ## v3.23.33 brand-wise Price Manager checks
 

@@ -1,4 +1,24 @@
-# LathaBulk v3.23.33 – Brand-wise Price List Manager
+# LathaBulk v3.23.36 – Custom User Validity Extension
+
+## v3.23.36
+
+- Secure Admin panel now includes `Custom Days • Extend current validity`.
+- Admin can enter 1 to 365000 days for any valid 12-character Device ID.
+- Days are added after the user's current expiry; an active user's remaining validity is preserved.
+- Run `SUPABASE_CUSTOM_VALIDITY_MIGRATION.sql` once on an existing Supabase project. It does not rotate the admin password.
+
+## v3.23.35
+
+- Price List Manager home now shows compact brand folders instead of every saved file.
+- New `+ BRAND` action creates an empty named brand folder.
+- Tapping a folder opens that brand's image/PDF sections and price items.
+- Adding a file or price item while a brand folder is open pre-fills that brand.
+
+## v3.23.34
+
+- Incoming WhatsApp requests such as `Polycab 90mtr price list` now search Price List Manager files before Ledger routing.
+- Matching saved image/PDF files are attached; Ledger phone matching and its mismatch reply are skipped for price-list requests.
+- `90mtr`, `90 mtr`, `90 meter`, and `90 metre` use the same search form.
 
 ## v3.23.33
 
