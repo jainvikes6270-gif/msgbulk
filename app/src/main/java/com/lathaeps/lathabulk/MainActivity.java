@@ -7,6 +7,8 @@ import android.app.Dialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.hardware.biometrics.BiometricPrompt;
+import android.hardware.fingerprint.FingerprintManager;
 import android.content.Context;
 import android.content.ClipData;
 import android.content.Intent;
@@ -33,6 +35,7 @@ import android.speech.RecognizerIntent;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.CancellationSignal;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -91,6 +94,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
+    public static final String ACTION_FLOATING_VOICE_RESULT = "com.lathaeps.lathabulk.FLOATING_VOICE_RESULT";
+    public static final String EXTRA_FLOATING_VOICE_QUERY = "floating_voice_query";
     private static final int CONTACT_PERMISSION = 101;
     private static final int PICK_PDF = 102;
     private static final int NOTIFICATION_PERMISSION = 103;
@@ -148,6 +153,7 @@ public class MainActivity extends Activity {
     private static final String PIN_KEY = "login_pin";
     private static final String RECOVERY_KEY = "pin_recovery_word";
     private static final String LOGIN_ENABLED_KEY = "login_enabled";
+    private static final String FINGERPRINT_UNLOCK_KEY = "fingerprint_unlock_enabled";
     private static final String MESSAGE_HEADER_KEY = "message_header";
     private static final String MESSAGE_FOOTER_KEY = "message_footer";
     private static final String MESSAGE_TEMPLATES_KEY = "message_templates";
@@ -206,9 +212,12 @@ public class MainActivity extends Activity {
     private String pendingPriceSourceName="",pendingPriceSourceBrand="",pendingPriceSourceCategory="",pendingPriceSourceKeywords="";
     private String pendingPriceReplaceId="";
     private Runnable pendingPriceListRefresh;
+    private String pendingFloatingVoiceQuery="";
+    private boolean biometricFallbackShown=false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        captureFloatingVoiceIntent(getIntent());
         SubscriptionManager.ensureTrial(this);
         SubscriptionManager.refresh(this,(ok,message)->{});
         if(!SubscriptionManager.hasAccess(this)){
@@ -223,15 +232,32 @@ public class MainActivity extends Activity {
         showLoginOrApp();
     }
 
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        captureFloatingVoiceIntent(intent);
+        consumeFloatingVoiceQuery();
+    }
+
+    private void captureFloatingVoiceIntent(Intent intent){
+        if(intent!=null&&ACTION_FLOATING_VOICE_RESULT.equals(intent.getAction()))pendingFloatingVoiceQuery=intent.getStringExtra(EXTRA_FLOATING_VOICE_QUERY)==null?"":intent.getStringExtra(EXTRA_FLOATING_VOICE_QUERY).trim();
+    }
+
+    private void consumeFloatingVoiceQuery(){
+        if(pendingFloatingVoiceQuery.isEmpty()||messageBox==null)return;
+        String query=pendingFloatingVoiceQuery;pendingFloatingVoiceQuery="";
+        uiHandler.postDelayed(()->handleMainVoiceCommand(query),180);
+    }
+
     private void showLoginOrApp(){
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
         String pin=p.getString(PIN_KEY,"");
         if(pin.isEmpty()){
             setContentView(buildUi());
-            uiHandler.postDelayed(this::showCreatePinDialog,300);
+            if(pendingFloatingVoiceQuery.isEmpty())uiHandler.postDelayed(this::showCreatePinDialog,300);else consumeFloatingVoiceQuery();
         }else if(p.getBoolean(LOGIN_ENABLED_KEY,true)){
-            showUnlockDialog(pin);
-        }else setContentView(buildUi());
+            if(p.getBoolean(FINGERPRINT_UNLOCK_KEY,false))showBiometricUnlock(pin);else showUnlockDialog(pin);
+        }else {setContentView(buildUi());consumeFloatingVoiceQuery();}
     }
 
     private void showCreatePinDialog(){
@@ -248,12 +274,23 @@ public class MainActivity extends Activity {
         EditText input=new EditText(this); input.setHint("Enter PIN"); input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         AlertDialog d=new AlertDialog.Builder(this).setTitle("LathaBulk Login").setMessage("4-digit PIN enter kare").setView(input).setCancelable(false)
             .setPositiveButton("Login",null).setNeutralButton("Forgot PIN",(a,b)->showForgotPinDialog()).setNegativeButton("Exit",(a,b)->finish()).create();
-        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(savedPin.equals(input.getText().toString().trim())){d.dismiss();setContentView(buildUi());}else input.setError("Wrong PIN");}));
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(savedPin.equals(input.getText().toString().trim())){d.dismiss();setContentView(buildUi());consumeFloatingVoiceQuery();}else input.setError("Wrong PIN");}));
         d.show();
+    }
+
+    private boolean fingerprintAvailable(){
+        if(Build.VERSION.SDK_INT<28)return false;try{FingerprintManager manager=(FingerprintManager)getSystemService(Context.FINGERPRINT_SERVICE);return manager!=null&&manager.isHardwareDetected()&&manager.hasEnrolledFingerprints();}catch(Exception e){return false;}
+    }
+
+    private void showBiometricUnlock(String savedPin){
+        if(Build.VERSION.SDK_INT<28||!fingerprintAvailable()){toast("Fingerprint available nahi hai • App PIN use karein");showUnlockDialog(savedPin);return;}biometricFallbackShown=false;try{BiometricPrompt prompt=new BiometricPrompt.Builder(this).setTitle("LATHAEPS SMART").setSubtitle("App open karne ke liye fingerprint lagayein").setDescription("Fingerprint nahi chale to App PIN use karein").setNegativeButton("USE APP PIN",getMainExecutor(),(dialog,which)->{if(!biometricFallbackShown){biometricFallbackShown=true;showUnlockDialog(savedPin);}}).build();prompt.authenticate(new CancellationSignal(),getMainExecutor(),new BiometricPrompt.AuthenticationCallback(){@Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result){super.onAuthenticationSucceeded(result);biometricFallbackShown=true;setContentView(buildUi());consumeFloatingVoiceQuery();toast("Fingerprint unlock successful ✓");}@Override public void onAuthenticationFailed(){super.onAuthenticationFailed();toast("Fingerprint match nahi hua • dobara try karein");}@Override public void onAuthenticationError(int errorCode,CharSequence errString){super.onAuthenticationError(errorCode,errString);if(!biometricFallbackShown){biometricFallbackShown=true;showUnlockDialog(savedPin);}}});}catch(Exception e){showUnlockDialog(savedPin);}
     }
 
     @Override protected void onResume() {
         super.onResume();
+        if(getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(FloatingMicService.PREF_ENABLED,false)&&Settings.canDrawOverlays(this)){
+            try{FloatingMicService.start(this);}catch(Exception ignored){}
+        }
         refreshAccessButtons();
         boolean running=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).getBoolean(AUTO_RUNNING,false);
         if(running)getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -1105,6 +1142,8 @@ public class MainActivity extends Activity {
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Settings");title.setTextColor(Color.WHITE);title.setTextSize(24);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);head.setPadding(dp(6),0,dp(8),0);head.setBackground(rounded(Color.rgb(0,91,78),18));head.addView(back,new LinearLayout.LayoutParams(dp(48),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);back.setOnClickListener(v->d.dismiss());title.setOnLongClickListener(v->{startActivity(new Intent(this,AdminActivity.class));return true;});
         ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);list.setPadding(0,dp(14),0,dp(20));scroll.addView(list);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
+        boolean floatingMicOn=getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(FloatingMicService.PREF_ENABLED,false)&&Settings.canDrawOverlays(this);
+        addSettingsButton(list,"🎤  Floating Voice Mic",floatingMicOn?"ON • app ke bahar draggable voice shortcut":"OFF • tap karke floating shortcut ON karein",v->showFloatingMicSettings());
         addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS SMART").setPositiveButton("OK",null).show());
         addSettingsButton(list,"↗  Share App APK","Direct APK share karein • GitHub username ya source code nahi dikhega",v->shareApp());
         addSettingsButton(list,"₹  Subscription & Payment","Plan details, UPI payment & activation",v->startActivity(new Intent(this,SubscriptionActivity.class)));
@@ -1112,6 +1151,7 @@ public class MainActivity extends Activity {
         addSettingsButton(list,"☀  Screen-off Auto Send","Keeps screen awake while bulk sending",v->showScreenOffHelp());
         addSettingsButton(list,"✉  Contact Us","lathaeps@gmail.com",v->contactSupport());
         addSettingsButton(list,"🔒  Login & Forgot PIN","Change PIN, recovery word, login ON/OFF",v->showLoginSettings());
+        addSettingsButton(list,"☝  Fingerprint App Unlock",getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(FINGERPRINT_UNLOCK_KEY,false)?"ON • app fingerprint se open hoga":"OFF • App PIN fallback ke saath",v->showFingerprintSettings());
         addSettingsButton(list,"☁  Drive Backup","Choose Google Drive in the save window",v->createDriveBackupFile());
         addSettingsButton(list,"⬆  App Updates",getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(UPDATE_CHECK_ENABLED_KEY,true)?"New version notifications ON • tap for update settings":"New version notifications OFF • tap to change",v->showUpdateSettings());
         addSettingsButton(list,"🗑  Clear All Data","Remove contacts, recipient lists, catalogs, rules and files",v->confirmClearAllData(d));
@@ -1119,6 +1159,14 @@ public class MainActivity extends Activity {
     }
 
     private void addSettingsButton(LinearLayout parent,String title,String subtitle,View.OnClickListener click){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(18),dp(13),dp(14),dp(12));card.setBackground(rounded(isDark()?Color.rgb(45,50,54):Color.WHITE,18));TextView a=new TextView(this);a.setText(title);a.setTextSize(18);a.setTypeface(Typeface.DEFAULT_BOLD);a.setTextColor(isDark()?Color.WHITE:Color.rgb(10,65,59));TextView b=new TextView(this);b.setText(subtitle);b.setTextSize(13);b.setTextColor(isDark()?Color.LTGRAY:Color.DKGRAY);b.setPadding(0,dp(4),0,0);card.addView(a);card.addView(b);card.setOnClickListener(click);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}
+
+    private void showFloatingMicSettings(){
+        SharedPreferences prefs=getSharedPreferences(PREFS,MODE_PRIVATE);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(6),dp(18),dp(8));Switch enabled=new Switch(this);enabled.setText("Floating mic shortcut ON");enabled.setTextSize(17);enabled.setChecked(prefs.getBoolean(FloatingMicService.PREF_ENABLED,false)&&Settings.canDrawOverlays(this));box.addView(enabled,new LinearLayout.LayoutParams(-1,dp(58)));TextView help=new TextView(this);help.setText("Mic ko screen par kahin bhi drag karein. Tap karte hi voice search khulega. OFF karne par bubble aur uski notification dono hat jayenge.");help.setTextSize(14);help.setTextColor(Color.DKGRAY);help.setPadding(0,dp(8),0,dp(8));box.addView(help);AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Floating Voice Mic").setView(box).setPositiveButton("DONE",null).create();enabled.setOnCheckedChangeListener((button,on)->{if(on){prefs.edit().putBoolean(FloatingMicService.PREF_ENABLED,true).apply();if(!Settings.canDrawOverlays(this)){toast("Display over other apps permission Allow karein");try{startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}}else{try{FloatingMicService.start(this);toast("Floating voice mic ON ✓");}catch(Exception e){toast("Floating mic start nahi hua • permission check karein");}}}else{FloatingMicService.stop(this);toast("Floating voice mic OFF");}});dialog.show();
+    }
+
+    private void showFingerprintSettings(){
+        SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);if(Build.VERSION.SDK_INT<28){new AlertDialog.Builder(this).setTitle("Fingerprint Unlock").setMessage("Is phone Android version par secure fingerprint prompt supported nahi hai. App PIN available rahega.").setPositiveButton("OK",null).show();return;}LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(4),dp(18),dp(8));Switch enabled=new Switch(this);enabled.setText("Open app with fingerprint");enabled.setTextSize(17);enabled.setChecked(p.getBoolean(FINGERPRINT_UNLOCK_KEY,false));box.addView(enabled,new LinearLayout.LayoutParams(-1,dp(58)));TextView note=new TextView(this);note.setText("Fingerprint fail ya cancel hone par existing 4-digit App PIN se login kar sakte hain.");note.setTextSize(14);note.setTextColor(Color.DKGRAY);note.setPadding(0,dp(6),0,dp(8));box.addView(note);AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Fingerprint App Unlock").setView(box).setPositiveButton("DONE",null).create();enabled.setOnCheckedChangeListener((button,on)->{if(on){if(p.getString(PIN_KEY,"").isEmpty()){button.setChecked(false);toast("Pehle 4-digit App PIN create karein");return;}if(!fingerprintAvailable()){button.setChecked(false);new AlertDialog.Builder(this).setTitle("Fingerprint not ready").setMessage("Phone Settings me fingerprint add karke phir option ON karein.").setPositiveButton("OPEN SECURITY SETTINGS",(d,w)->{try{startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS));}catch(Exception ignored){}}).setNegativeButton("CLOSE",null).show();return;}p.edit().putBoolean(FINGERPRINT_UNLOCK_KEY,true).putBoolean(LOGIN_ENABLED_KEY,true).apply();toast("Fingerprint App Unlock ON ✓");}else{p.edit().putBoolean(FINGERPRINT_UNLOCK_KEY,false).apply();toast("Fingerprint App Unlock OFF • App PIN active");}});dialog.show();
+    }
 
     private void showContactSettingsScreen(){
         Dialog d=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(16),dp(12),dp(16),dp(16));page.setBackgroundColor(isDark()?Color.rgb(25,28,31):Color.rgb(241,248,247));
@@ -1186,7 +1234,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.36";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.39";}}
 
     private void shareApp(){
         try{
@@ -1222,7 +1270,7 @@ public class MainActivity extends Activity {
     }
     private void createDriveBackupFile(){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Drive_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(Intent.createChooser(i,"Choose Google Drive and save backup"),CREATE_BACKUP);}
     private void confirmClearAllData(Dialog settings){new AlertDialog.Builder(this).setTitle("Clear all app data?").setMessage("Contacts, recipient lists, catalogs, auto-reply rules, images, templates, ledgers and history delete honge. Login PIN aur recovery word safe rahenge.").setPositiveButton("Clear All",(d,w)->{clearAllUserData();settings.dismiss();recreate();}).setNegativeButton("Cancel",null).show();}
-    private void clearAllUserData(){SharedPreferences main=getSharedPreferences(PREFS,MODE_PRIVATE);String pin=main.getString(PIN_KEY,"");String recovery=main.getString(RECOVERY_KEY,"");boolean login=main.getBoolean(LOGIN_ENABLED_KEY,true);boolean dark=main.getBoolean(DARK_KEY,false);main.edit().clear().putString(PIN_KEY,pin).putString(RECOVERY_KEY,recovery).putBoolean(LOGIN_ENABLED_KEY,login).putBoolean(DARK_KEY,dark).apply();getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();deleteAppFiles(getFilesDir());selectedNumbers.clear();allContacts.clear();visibleContacts.clear();toast("All data cleared • PIN kept safe");}
+    private void clearAllUserData(){SharedPreferences main=getSharedPreferences(PREFS,MODE_PRIVATE);String pin=main.getString(PIN_KEY,"");String recovery=main.getString(RECOVERY_KEY,"");boolean login=main.getBoolean(LOGIN_ENABLED_KEY,true);boolean dark=main.getBoolean(DARK_KEY,false);main.edit().clear().putString(PIN_KEY,pin).putString(RECOVERY_KEY,recovery).putBoolean(LOGIN_ENABLED_KEY,login).putBoolean(DARK_KEY,dark).apply();getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences("lathaeps_quotation_manager",MODE_PRIVATE).edit().clear().apply();deleteAppFiles(getFilesDir());selectedNumbers.clear();allContacts.clear();visibleContacts.clear();toast("All data cleared • PIN kept safe");}
     private void deleteAppFiles(File dir){File[] files=dir.listFiles();if(files==null)return;for(File f:files){if(f.isDirectory())deleteAppFiles(f);f.delete();}}
 
     private void createBackupFile(){
@@ -1242,10 +1290,10 @@ public class MainActivity extends Activity {
     private void addFilesToBackup(File dir,String prefix,JSONObject out)throws Exception{File[] fs=dir.listFiles();if(fs==null)return;for(File f:fs){String path=prefix+f.getName();if(f.isDirectory())addFilesToBackup(f,path+"/",out);else{ByteArrayOutputStream b=new ByteArrayOutputStream();try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[8192];int n;while((n=in.read(buf))>0)b.write(buf,0,n);}out.put(path,Base64.encodeToString(b.toByteArray(),Base64.NO_WRAP));}}}
     private void restoreFiles(JSONObject files)throws Exception{java.util.Iterator<String> it=files.keys();while(it.hasNext()){String rel=it.next();File f=new File(getFilesDir(),rel);File parent=f.getParentFile();if(parent!=null)parent.mkdirs();byte[] data=Base64.decode(files.getString(rel),Base64.DEFAULT);try(OutputStream out=new FileOutputStream(f)){out.write(data);}}}
     private void writeBackup(Uri uri){
-        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version",appVersion());root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
+        try{JSONObject root=new JSONObject();root.put("app","LathaBulk");root.put("version",appVersion());root.put("created",System.currentTimeMillis());root.put(PREFS,prefsToJson(PREFS));root.put(AUTO_PREFS,prefsToJson(AUTO_PREFS));root.put(AutoReplyNotificationService.PREFS,prefsToJson(AutoReplyNotificationService.PREFS));root.put("quotation_prefs",prefsToJson("lathaeps_quotation_manager"));JSONObject files=new JSONObject();addFilesToBackup(getFilesDir(),"",files);root.put("files",files);try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(root.toString(2).getBytes(StandardCharsets.UTF_8));}toast("Backup saved • recipient lists, catalogs, quotations, images, keywords & templates included");}catch(Exception e){toast("Backup failed: "+e.getMessage());}
     }
     private void restoreBackup(Uri uri){
-        try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
+        try{StringBuilder b=new StringBuilder();try(BufferedReader r=new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(uri),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)b.append(line);}JSONObject root=new JSONObject(b.toString());if(!"LathaBulk".equals(root.optString("app")))throw new Exception("Invalid backup file");jsonToPrefs(PREFS,root.getJSONObject(PREFS));jsonToPrefs(AUTO_PREFS,root.getJSONObject(AUTO_PREFS));jsonToPrefs(AutoReplyNotificationService.PREFS,root.getJSONObject(AutoReplyNotificationService.PREFS));if(root.has("quotation_prefs"))jsonToPrefs("lathaeps_quotation_manager",root.getJSONObject("quotation_prefs"));if(root.has("files"))restoreFiles(root.getJSONObject("files"));toast("Restore complete");uiHandler.postDelayed(this::recreate,600);}catch(Exception e){toast("Restore failed: "+e.getMessage());}
     }
 
     private void chooseCsv(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("text/*");startActivityForResult(i,PICK_CSV);}
@@ -1617,6 +1665,7 @@ public class MainActivity extends Activity {
         Button customers=button("Manage Ledger Customers ("+ledgerCustomerCount()+")");
         Button convertPdf=button("MASTER PDF → PHONE + BALANCE EXCEL");
         Button paymentReminder=button("PAYMENT REMINDER");
+        Button quotation=button("BUSINESS QUOTATION MANAGER");
         Button priceList=button("PRICE LIST MANAGER");
         Button importCsv=button("IMPORT CUSTOMER EXCEL (OPTIONAL)");
         Button history=button("View updated files history");
@@ -1625,12 +1674,14 @@ public class MainActivity extends Activity {
         TextView fileLabel=new TextView(this);fileLabel.setText("SAVED LEDGER FILE");fileLabel.setTextSize(13);fileLabel.setTypeface(Typeface.DEFAULT_BOLD);fileLabel.setTextColor(Color.rgb(12,52,49));fileLabel.setPadding(dp(4),dp(9),dp(4),dp(4));
         ledgerFileNameText=new TextView(this);ledgerFileNameText.setText(savedLedgerName.isEmpty()?"No Ledger file saved":savedLedgerName);ledgerFileNameText.setTextSize(17);ledgerFileNameText.setTypeface(Typeface.DEFAULT_BOLD);ledgerFileNameText.setTextColor(savedLedgerName.isEmpty()?Color.rgb(190,45,45):Color.rgb(0,125,70));ledgerFileNameText.setBackground(rounded(savedLedgerName.isEmpty()?Color.rgb(255,235,235):Color.rgb(225,248,235),12));ledgerFileNameText.setPadding(dp(12),dp(10),dp(12),dp(10));
         TextView current=new TextView(this);current.setPadding(dp(12),dp(10),dp(12),dp(10));current.setText("Customers: "+ledgerCustomerCount()+"\nLast status: "+p.getString("last_business_status","No send attempt yet"));current.setTextColor(Color.rgb(28,28,28));current.setBackground(rounded(Color.WHITE,16));
-        Button[] featureButtons={priceList,paymentReminder,convertPdf,ledger,customers,importCsv,history};for(Button feature:featureButtons){feature.setTypeface(Typeface.DEFAULT_BOLD);feature.setTextColor(Color.rgb(0,91,78));feature.setBackground(rounded(Color.rgb(210,244,238),16));}
+        Button[] featureButtons={quotation,priceList,paymentReminder,convertPdf,ledger,customers,importCsv,history};for(Button feature:featureButtons){feature.setTypeface(Typeface.DEFAULT_BOLD);feature.setTextColor(Color.rgb(0,91,78));feature.setBackground(rounded(Color.rgb(210,244,238),16));}
+        quotation.setTextColor(Color.WHITE);quotation.setBackground(rounded(Color.rgb(111,45,165),16));
         priceList.setTextColor(Color.WHITE);priceList.setBackground(rounded(Color.rgb(0,91,78),16));paymentReminder.setTextColor(Color.WHITE);paymentReminder.setBackground(rounded(Color.rgb(18,128,78),16));
-        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(priceList,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
+        box.addView(fileLabel);LinearLayout.LayoutParams flp=new LinearLayout.LayoutParams(-1,-2);flp.setMargins(0,0,0,dp(6));box.addView(ledgerFileNameText,flp);box.addView(current);box.addView(quotation,new LinearLayout.LayoutParams(-1,dp(50)));box.addView(priceList,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(48)));box.addView(convertPdf,new LinearLayout.LayoutParams(-1,dp(46)));box.addView(ledger,new LinearLayout.LayoutParams(-1,dp(44)));box.addView(ledgerKey);box.addView(customers,new LinearLayout.LayoutParams(-1,dp(42)));box.addView(importCsv,new LinearLayout.LayoutParams(-1,dp(42)));
         box.addView(history,new LinearLayout.LayoutParams(-1,dp(42)));
         ledger.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));
         paymentReminder.setOnClickListener(v->showPaymentReminderScreen());
+        quotation.setOnClickListener(v->startActivity(new Intent(this,QuotationActivity.class)));
         priceList.setOnClickListener(v->showPriceListScreen());
         customers.setOnClickListener(v->showLedgerCustomersDialog());
         convertPdf.setOnClickListener(v->chooseMasterPdfForExcel());

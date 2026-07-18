@@ -1,4 +1,34 @@
-# LathaBulk v3.23.36 – Custom User Validity Extension
+# LathaBulk v3.23.39 – Fingerprint App Unlock
+
+## v3.23.39
+
+- Settings now includes optional **Fingerprint App Unlock**.
+- When enabled, app launch displays Android's secure biometric prompt before showing business data.
+- Existing 4-digit App PIN remains available as the fallback when fingerprint is cancelled, unavailable or fails.
+- Enabling fingerprint automatically keeps App Login enabled and requires an existing App PIN plus an enrolled phone fingerprint.
+- No fingerprint data is stored by LATHAEPS SMART; matching is handled by Android's system biometric prompt.
+
+## v3.23.38
+
+- Business Files now includes a complete **Business Quotation Manager**.
+- Upload supplier price lists, material lists and discount sheets as multiple Gallery images or PDF/files.
+- Source File Manager supports open, share, rename and delete while keeping each source separate.
+- Add materials manually or choose an existing item from Price List Manager with rate, unit, discount and GST prefilled.
+- Every quotation item keeps separate quantity, unit, rate, discount, GST and optional item details.
+- Discount Structure saves defaults for new items and can update every existing item together.
+- Customer name, customer details, quotation reference and subject are optional.
+- Editable Letter Pad includes business name, address, phone/email, GST and quotation terms.
+- Output options include Letter Pad preview, shareable PNG image and multi-page PDF.
+- Quotation settings, material items and source files are included in app Backup/Restore.
+
+## v3.23.37
+
+- Settings now includes an optional **Floating Voice Mic** shortcut.
+- The draggable mic stays available over other apps while enabled.
+- Tapping it opens speech recognition and routes the result through the existing main Voice Search commands and Price List search.
+- The first enable opens Android's **Display over other apps** permission screen.
+- Turning the option OFF removes both the bubble and its foreground notification.
+- The enabled shortcut is restored after device reboot or app update when Android overlay permission remains allowed.
 
 ## v3.23.36
 

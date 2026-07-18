@@ -1,4 +1,38 @@
-# LathaBulk v3.23.36 QA Checklist
+# LathaBulk v3.23.39 QA Checklist
+
+## v3.23.39 fingerprint-unlock checks
+
+- Confirm a 4-digit App PIN exists and at least one phone fingerprint is enrolled.
+- Open Settings → Fingerprint App Unlock and switch it ON.
+- Close the app completely and reopen it; confirm Android's fingerprint prompt appears before app data.
+- Use the correct fingerprint and confirm the main screen opens.
+- Use a wrong fingerprint and confirm the prompt stays available for retry.
+- Tap USE APP PIN and confirm the existing 4-digit App PIN unlocks the app.
+- Remove all enrolled phone fingerprints and confirm the app safely falls back to App PIN.
+- Switch Fingerprint App Unlock OFF and confirm the next launch uses only App PIN.
+
+## v3.23.38 business-quotation checks
+
+- Open Business Files → Business Quotation Manager.
+- Upload multiple Gallery images, then a PDF; open, share, rename and delete individual source files.
+- Add a manual material item with quantity, unit, rate, discount and GST.
+- Add another item from Price List Manager and confirm its saved fields are prefilled but independently editable.
+- Set default Discount/GST, add a new item, and confirm defaults are applied.
+- Use Apply to All and confirm existing separate item discounts update.
+- Save quotation/customer details with customer name blank and confirm output still works.
+- Edit Letter Pad business details and confirm preview uses them.
+- Generate IMAGE and PDF; confirm WhatsApp/Android share opens and the PDF includes every item.
+- Create Backup, clear/restore it, and confirm quotation items and source files return.
+
+## v3.23.37 floating-voice checks
+
+- Open Settings → Floating Voice Mic, switch it ON, and allow **Display over other apps**.
+- Confirm a draggable blue/purple mic appears outside the app and remains after the app is closed.
+- Drag it, release it, and confirm its last position is remembered.
+- Tap the mic, say `Mylinc switch`, and confirm the Price List search opens with matching content.
+- With Login PIN enabled, confirm the spoken result waits until the correct PIN is entered.
+- Switch Floating Voice Mic OFF and confirm both the bubble and ongoing notification disappear.
+- Restart the phone and confirm an enabled mic returns after boot.
 
 ## v3.23.36 custom-validity checks
 
