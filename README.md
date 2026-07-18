@@ -1,4 +1,10 @@
-# LathaBulk v3.23.30 – Secure Supabase Subscription
+# LathaBulk v3.23.31 – UPI QR and Copy Fallback
+
+## v3.23.31
+
+- Subscription payment adds **COPY UPI ID** and **SHOW PAYMENT QR** buttons.
+- If no compatible UPI app is installed, the payment button automatically shows the QR/copy fallback instead of the Android error.
+- QR contains the ₹800 amount, LATHAEPS UPI ID and the user's Device ID in the payment note.
 
 ## v3.23.30
 
@@ -8,8 +14,6 @@
 - The old APK-embedded activation secret and offline activation-code generator were removed.
 - The admin password is never stored in the APK. The secure Admin screen sends it over HTTPS to a protected Supabase function.
 - Run `SUPABASE_SUBSCRIPTION_SETUP.sql` once before installing this build. The final SQL result displays the generated admin password; save it privately.
-
-## v3.23.29 – Complete Price List Manager Controls
 
 ## v3.23.29
 

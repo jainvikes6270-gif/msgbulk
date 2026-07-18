@@ -8,14 +8,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 public class SubscriptionActivity extends Activity {
     private TextView status;
@@ -60,6 +66,11 @@ public class SubscriptionActivity extends Activity {
         yearly.addView(text("₹800 / YEAR",24,true,Color.rgb(0,91,78)));
         yearly.addView(text("All features • 1 device • Payment ke baad admin online activate karega",14,false,Color.DKGRAY));
         Button pay = button("PAY ₹800 BY UPI"); pay.setOnClickListener(v -> openUpi()); yearly.addView(pay,space(12,12));
+        Button copyUpi = button("COPY UPI ID");
+        copyUpi.setOnClickListener(v -> { copy("UPI ID",SubscriptionManager.UPI_ID); toast("UPI ID copied"); });
+        yearly.addView(copyUpi,space(0,8));
+        Button qr = button("SHOW PAYMENT QR"); qr.setOnClickListener(v -> showPaymentQr(paymentUri()));
+        yearly.addView(qr,space(0,8));
         root.addView(yearly,space(0,14));
 
         LinearLayout life = card();
@@ -90,13 +101,37 @@ public class SubscriptionActivity extends Activity {
     }
 
     private void openUpi() {
+        String uri = paymentUri();
         try {
-            String note = "LathaBulk 1 Year - " + SubscriptionManager.deviceId(this);
-            String uri = "upi://pay?pa="+SubscriptionManager.UPI_ID+"&pn="+Uri.encode("LATHA EPS")+"&am="+SubscriptionManager.YEARLY_PRICE+".00&cu=INR&tn="+Uri.encode(note);
-            startActivity(Intent.createChooser(new Intent(Intent.ACTION_VIEW,Uri.parse(uri)),"Pay with UPI"));
-            toast("Payment ke baad Device ID admin ko bhejein");
+            Intent payment = new Intent(Intent.ACTION_VIEW,Uri.parse(uri));
+            if (payment.resolveActivity(getPackageManager()) != null) {
+                startActivity(Intent.createChooser(payment,"Pay with UPI"));
+                toast("Payment ke baad Device ID admin ko bhejein");
+            } else showPaymentQr(uri);
         } catch(Exception e) {
-            new AlertDialog.Builder(this).setTitle("UPI app not found")
+            showPaymentQr(uri);
+        }
+    }
+
+    private String paymentUri() {
+        String note = "LathaBulk 1 Year - " + SubscriptionManager.deviceId(this);
+        return "upi://pay?pa="+SubscriptionManager.UPI_ID+"&pn="+Uri.encode("LATHA EPS")+"&am="+SubscriptionManager.YEARLY_PRICE+".00&cu=INR&tn="+Uri.encode(note);
+    }
+
+    private void showPaymentQr(String uri) {
+        try {
+            int size = dp(260);
+            BitMatrix matrix = new QRCodeWriter().encode(uri, BarcodeFormat.QR_CODE,size,size);
+            Bitmap bitmap = Bitmap.createBitmap(size,size,Bitmap.Config.RGB_565);
+            for(int y=0;y<size;y++) for(int x=0;x<size;x++) bitmap.setPixel(x,y,matrix.get(x,y)?Color.BLACK:Color.WHITE);
+            ImageView image = new ImageView(this); image.setImageBitmap(bitmap); image.setPadding(dp(12),dp(12),dp(12),dp(12));
+            new AlertDialog.Builder(this).setTitle("Pay ₹800 by UPI")
+                    .setMessage("QR ko dusre phone ke UPI app se scan karein.\nUPI ID: "+SubscriptionManager.UPI_ID)
+                    .setView(image)
+                    .setPositiveButton("COPY UPI ID",(d,w)->{copy("UPI ID",SubscriptionManager.UPI_ID);toast("UPI ID copied");})
+                    .setNegativeButton("CLOSE",null).show();
+        } catch(Exception e) {
+            new AlertDialog.Builder(this).setTitle("UPI payment")
                     .setMessage("UPI ID: "+SubscriptionManager.UPI_ID+"\nAmount: ₹800")
                     .setPositiveButton("COPY UPI ID",(d,w)->copy("UPI ID",SubscriptionManager.UPI_ID)).setNegativeButton("Close",null).show();
         }

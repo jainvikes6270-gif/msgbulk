@@ -1,10 +1,10 @@
-# Supabase setup — LATHAEPS SMART v3.23.30
+# Supabase setup — LATHAEPS SMART v3.23.31
 
 1. Open your Supabase project.
 2. Open **SQL Editor** and paste the complete `SUPABASE_SUBSCRIPTION_SETUP.sql` file.
 3. Press **Run** once.
 4. The bottom result contains `SAVE_THIS_ADMIN_PASSWORD`. Copy it and keep it private. Do not send it to users.
-5. Build/install v3.23.30. On first launch, keep internet on and press **REFRESH ONLINE STATUS** if needed.
+5. Build/install v3.23.31. On first launch, keep internet on and press **REFRESH ONLINE STATUS** if needed.
 
 ## Activate a paying user
 

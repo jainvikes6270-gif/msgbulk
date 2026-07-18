@@ -1,4 +1,4 @@
--- LATHAEPS SMART v3.23.30 secure subscription setup
+-- LATHAEPS SMART v3.23.31 secure subscription setup
 -- Paste this complete file into Supabase SQL Editor and press Run once.
 -- IMPORTANT: the last result displays a newly generated admin password. Save it privately.
 

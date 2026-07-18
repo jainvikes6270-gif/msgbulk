@@ -1,4 +1,11 @@
-# LathaBulk v3.23.30 QA Checklist
+# LathaBulk v3.23.31 QA Checklist
+
+## v3.23.31 UPI fallback checks
+
+- PAY ₹800 opens an installed UPI app when available.
+- Without a UPI handler, PAY ₹800 automatically shows a scannable QR.
+- COPY UPI ID copies `jainvikes6270@oksbi`.
+- QR payment payload includes ₹800 and the current Device ID note.
 
 ## v3.23.30 Supabase subscription checks
 
