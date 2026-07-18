@@ -1,4 +1,12 @@
-# LathaBulk v3.23.42 – Kotlin Duplicate-Class Build Fix
+# LathaBulk v3.23.43 – Business Assistant Camera AI & Totals
+
+## v3.23.43
+
+- Fixed Camera AI on camera apps that save the photo but do not return a reliable `RESULT_OK` value.
+- Camera OCR review now supports `Item | Qty | Unit | Rate | Disc% | GST%`.
+- Added automatic quantity × rate, item discount, additional overall discount, GST and grand-total calculations.
+- Quotation cards and PDF/image output now show a clear subtotal, discount, GST and grand-total breakdown.
+- Improved top and bottom action-button visibility with safe screen fitting, taller buttons and two-line labels.
 
 ## v3.23.42
 

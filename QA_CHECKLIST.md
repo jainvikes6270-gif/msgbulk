@@ -1,4 +1,12 @@
-# LathaBulk v3.23.42 QA Checklist
+# LathaBulk v3.23.43 QA Checklist
+
+## v3.23.43 Camera AI, calculation and layout checks
+
+- Take a camera photo and confirm Business Assistant AI review opens even on OEM camera apps.
+- Verify each reviewed line supports Item, Qty, Unit, Rate, Disc% and GST%.
+- Import items and verify Qty × Rate, item discount, overall discount, GST and grand total.
+- Preview/share PDF and image; verify subtotal, discount, GST and grand total are shown.
+- Verify top source/header buttons and bottom Preview/Share buttons remain fully visible above system bars.
 
 ## v3.23.42 dependency/build checks
 
