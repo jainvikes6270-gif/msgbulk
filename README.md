@@ -1,4 +1,10 @@
-# LathaBulk v3.23.41 – Small Transparent Floating Mic
+# LathaBulk v3.23.42 – Kotlin Duplicate-Class Build Fix
+
+## v3.23.42
+
+- Fixed GitHub Actions `checkDebugDuplicateClasses` failure introduced by the OCR dependency.
+- Kotlin stdlib, jdk7 and jdk8 transitive artifacts are now aligned through Kotlin BOM `1.8.22`.
+- Camera AI quotation, small transparent mic and every existing feature remain unchanged.
 
 ## v3.23.41
 

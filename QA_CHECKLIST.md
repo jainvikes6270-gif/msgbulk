@@ -1,4 +1,10 @@
-# LathaBulk v3.23.41 QA Checklist
+# LathaBulk v3.23.42 QA Checklist
+
+## v3.23.42 dependency/build checks
+
+- Push the project to GitHub and confirm `gradle assembleDebug --stacktrace` passes `:app:checkDebugDuplicateClasses`.
+- Confirm build output no longer reports mixed `kotlin-stdlib 1.8.22` with `kotlin-stdlib-jdk7/jdk8 1.6.21` duplicate classes.
+- Install the APK and recheck Camera AI material reading and the small transparent floating mic.
 
 ## v3.23.41 small transparent floating-mic checks
 
