@@ -1,4 +1,46 @@
-# LathaBulk v3.23.23 – Price Source Files + Main Voice Search
+# LathaBulk v3.23.29 – Complete Price List Manager Controls
+
+## v3.23.29
+
+- Every media section has MANAGE: edit section, add more pictures/PDFs and delete the complete section.
+- Every saved image/PDF has edit details, replace and delete controls.
+- Add Price Item and Share Complete Price List are now connected on the Price List Manager screen.
+
+## v3.23.28
+
+- Main microphone now understands screen-opening, backup/restore, update-check, ledger-search and catalog-search commands.
+- Brand share commands find the matching multiple-image/PDF section and require confirmation before Android sharing opens.
+- Plain brand/product speech still searches Price List Manager.
+
+## v3.23.27
+
+- Business Files is now a full-screen colorful window matching the Auto Reply design.
+- Settings no longer duplicates Local Backup and Restore; both remain on the main window.
+- Daily GitHub Releases update check with `UPDATE NOW` and `LATER` notification actions.
+- Settings includes App Updates notification control and manual `CHECK NOW`.
+- Price List Manager keeps multiple Gallery image and PDF sections with Share All.
+
+## v3.23.26
+
+- Added a dedicated `PICTURES FROM PHONE GALLERY` option with multiple selection.
+- Added a separate `PDF FROM FILES` option with multiple selection.
+- Selected pictures/PDFs continue to use the same brand/category and search keywords.
+- Ledger, Catalog and Auto Reply modules were not changed.
+
+## v3.23.25
+
+- Removed the top `+ ADD ITEM` and `SHARE PRICE LIST` buttons from Price List Manager.
+- The screen now focuses on multiple image/PDF sections plus typed and voice search.
+- Ledger, Catalog and Auto Reply modules were not changed.
+
+## v3.23.24
+
+- Price List Manager now accepts multiple images and PDFs in one selection.
+- Every selected file is stored under the same brand/category section and uses the same search keywords.
+- Section headers show separate image and PDF counts.
+- `SHARE ALL` sends every image/PDF saved in the matching section through Android share/WhatsApp.
+- Existing main-window voice search continues to filter these sections locally.
+- Ledger, Catalog and Auto Reply modules were not changed.
 
 ## v3.23.23
 
@@ -254,7 +296,7 @@
 3. Add, edit, delete and reorder keyword rules with the floating **+** button.
 4. Contains, Exact, Starts With, Ends With and Case Sensitive matching preserved.
 5. New user-friendly **Settings** screen with Dark/Light Theme.
-6. Separate Local Backup and Google Drive Backup options, plus Restore.
+6. Main window Local Backup/Restore, plus Settings Google Drive Backup.
 7. Secure Forgot PIN flow using a saved recovery word.
 8. Clear All removes app data but keeps the login PIN and recovery word safe.
 

@@ -1,4 +1,29 @@
-# LathaBulk v3.23.23 QA Checklist
+# LathaBulk v3.23.29 QA Checklist
+
+## v3.23.29 Price List Manager checks
+
+- Section MANAGE opens Edit, Add more pictures, Add more PDFs and Delete complete section.
+- Individual file menu opens Edit details, Replace file and Delete file.
+- Add Price Item is visible and saves a new manual price row.
+- Existing manual price items keep Edit and Delete actions.
+- Complete price-list share button is connected.
+
+## v3.23.28 voice checks
+
+- Main Voice Search opens Business Files, Catalog, Auto Reply, Payment Reminder, Recipient Lists and Settings.
+- `backup`, `restore` and `check update` commands open the expected safe action.
+- `ledger Ravi dhundo` opens Ledger Customers pre-filtered for Ravi.
+- `catalog wires` opens Catalog pre-filtered for wires.
+- `Polycab share karo` always asks for confirmation before opening Android share.
+
+## v3.23.27 checks
+
+- Main window still shows Local Backup and Restore Backup.
+- Settings does not duplicate Local Backup or Restore Backup; Drive Backup remains.
+- Business Files opens full-screen with the same green palette as Auto Reply.
+- Price List Manager accepts multiple Gallery images and multiple PDFs per section.
+- App Updates can be turned ON/OFF and CHECK NOW runs manually.
+- A newer GitHub Release creates UPDATE NOW and LATER notification actions.
 
 ## Ledger settled-phone regression
 
@@ -13,7 +38,18 @@
 - AndroidManifest and all XML resources parse successfully.
 - GitHub Actions workflow YAML parses successfully.
 - Package/namespace remains `com.lathaeps.lathabulk`.
-- `versionCode 80`, `versionName 3.23.23`.
+- `versionCode 86`, `versionName 3.23.29`.
+
+## Multiple Price Media Section
+
+- Confirm `+ ADD ITEM` and `SHARE PRICE LIST` are not shown at the top.
+- Confirm `PICTURES FROM PHONE GALLERY` opens the phone gallery and accepts multiple pictures.
+- Confirm `PDF FROM FILES` opens the file picker and accepts multiple PDFs.
+- Add one brand/category and select multiple images and PDFs together.
+- Confirm all selected files appear inside one section with correct image/PDF counts.
+- Search the brand using typed search and main-window voice search.
+- Tap `SHARE ALL` and confirm every section file is included in the Android/WhatsApp share sheet.
+- Open, share and delete one individual source without affecting the other files.
 
 ## Price Sources + Main Voice Search
 
