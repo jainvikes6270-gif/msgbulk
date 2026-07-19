@@ -1,4 +1,13 @@
-# LathaBulk v3.23.48 – Named Ledger Party Lists
+# LathaBulk v3.23.49 – Stable Device ID Signing Fix
+
+## v3.23.49
+
+- The normal GitHub APK workflow now builds a release APK and signs it with the permanent LATHAEPS keystore.
+- Removed the temporary GitHub-runner debug signing path that caused `ANDROID_ID`-based subscription IDs to change between builds.
+- After the one-time move to this permanently signed APK, reinstalling APKs built with the same signing secrets keeps the same Device ID on the same phone.
+- Version increased to `3.23.49` (`versionCode 106`) and APK/AAB artifact names updated.
+
+> Important: always install the `RELEASE_SIGNED` APK. Do not distribute old `app-debug.apk` files.
 
 ## v3.23.48
 

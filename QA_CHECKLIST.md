@@ -1,4 +1,12 @@
-# LathaBulk v3.23.48 QA Checklist
+# LathaBulk v3.23.49 QA Checklist
+
+## v3.23.49 Stable Device ID Signing QA
+
+- Run `Build Android APK` and confirm its artifact is `LATHAEPS-SMART-Stable-Device-ID-v3.23.49`.
+- Confirm the downloaded file is `LATHAEPS_SMART_v3.23.49_RELEASE_SIGNED.apk`, never `app-debug.apk`.
+- Install the signed APK, note the Device ID, uninstall it, install the exact same APK again, and confirm the Device ID remains unchanged.
+- Run the workflow again without changing any signing secret and confirm the new signed APK reports the same Device ID on the same phone.
+- Never replace or regenerate any of the four permanent LATHAEPS signing secrets.
 
 ## v3.23.48 Named Ledger Lists QA
 
