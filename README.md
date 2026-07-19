@@ -1,3 +1,14 @@
+# LathaBulk v3.23.48 – Named Ledger Party Lists
+
+## v3.23.48
+
+- Ledger Party Lists now use an Auto Reply-style full-screen card layout.
+- Create separate named lists and see customer names plus phone numbers before opening a list.
+- Open/Edit, add or remove parties, rename, delete and send each list independently.
+- Weekly or Monthly scheduling is available from every saved list.
+- The older single saved ledger list is migrated automatically as `My Ledger List`.
+- Version increased to `3.23.48` (`versionCode 105`) and signed APK/AAB workflow names updated.
+
 # LathaBulk v3.23.46 – Saved Ledger Party List & Schedule
 
 ## v3.23.46

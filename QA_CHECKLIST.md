@@ -1,3 +1,16 @@
+# LathaBulk v3.23.48 QA Checklist
+
+## v3.23.48 Named Ledger Lists QA
+
+- Business Files → Ledger Party Lists opens a full-screen list-card window.
+- Create at least two separate lists and verify both names appear.
+- Open each list and verify customer names and phone numbers are visible.
+- Add/remove parties, save, reopen and confirm selection persists.
+- Verify Send Ledgers uses only that list's mapped PDF files.
+- Verify Rename and Delete do not remove customers or Ledger PDFs.
+- Verify Weekly/Monthly schedule stores and displays the selected list name.
+- Existing single saved list migrates to `My Ledger List`.
+
 # LathaBulk v3.23.46 QA Checklist
 
 ## v3.23.46 Saved Ledger List & Schedule QA
