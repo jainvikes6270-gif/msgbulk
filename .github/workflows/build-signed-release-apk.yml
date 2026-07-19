@@ -26,10 +26,10 @@ jobs:
 
       - name: Check required signing secrets
         env:
-          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SIGNING_KEY_BASE64: ${{ secrets.LATHAEPS_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.LATHAEPS_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LATHAEPS_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LATHAEPS_KEY_PASSWORD }}
         run: |
           test -n "$SIGNING_KEY_BASE64" || (echo "Missing SIGNING_KEY_BASE64" && exit 1)
           test -n "$STORE_PASSWORD" || (echo "Missing STORE_PASSWORD" && exit 1)
@@ -38,7 +38,7 @@ jobs:
 
       - name: Restore permanent signing keystore
         env:
-          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
+          SIGNING_KEY_BASE64: ${{ secrets.LATHAEPS_KEYSTORE_BASE64 }}
         run: echo "$SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/upload-keystore.jks"
 
       - name: Build unsigned release APK
@@ -46,9 +46,9 @@ jobs:
 
       - name: Align and sign release APK
         env:
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.LATHAEPS_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LATHAEPS_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LATHAEPS_KEY_PASSWORD }}
         run: |
           UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
           OUTPUT_APK="LATHAEPS_SMART_v3.23.44_RELEASE_SIGNED.apk"
