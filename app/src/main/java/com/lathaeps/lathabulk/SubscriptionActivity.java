@@ -71,6 +71,10 @@ public class SubscriptionActivity extends Activity {
         yearly.addView(copyUpi,space(0,8));
         Button qr = button("SHOW PAYMENT QR"); qr.setOnClickListener(v -> showPaymentQr(paymentUri()));
         yearly.addView(qr,space(0,8));
+        yearly.addView(text("Payment ke baad screenshot WhatsApp 9025156444 par bhejein.",13,true,Color.rgb(18,105,72)),space(4,4));
+        Button confirm = button("SEND PAYMENT SCREENSHOT ON WHATSAPP");
+        confirm.setOnClickListener(v -> openPaymentConfirmationWhatsApp());
+        yearly.addView(confirm,space(4,8));
         root.addView(yearly,space(0,14));
 
         LinearLayout life = card();
@@ -103,11 +107,11 @@ public class SubscriptionActivity extends Activity {
     private void openUpi() {
         String uri = paymentUri();
         try {
-            Intent payment = new Intent(Intent.ACTION_VIEW,Uri.parse(uri));
-            if (payment.resolveActivity(getPackageManager()) != null) {
-                startActivity(Intent.createChooser(payment,"Pay with UPI"));
-                toast("Payment ke baad Device ID admin ko bhejein");
-            } else showPaymentQr(uri);
+            Intent payment = new Intent(Intent.ACTION_VIEW);
+            payment.setData(Uri.parse(uri));
+            payment.addCategory(Intent.CATEGORY_BROWSABLE);
+            startActivity(Intent.createChooser(payment,"Pay ₹800 with UPI"));
+            toast("Payment ke baad screenshot WhatsApp par bhejein");
         } catch(Exception e) {
             showPaymentQr(uri);
         }
@@ -115,7 +119,42 @@ public class SubscriptionActivity extends Activity {
 
     private String paymentUri() {
         String note = "LathaBulk 1 Year - " + SubscriptionManager.deviceId(this);
-        return "upi://pay?pa="+SubscriptionManager.UPI_ID+"&pn="+Uri.encode("LATHA EPS")+"&am="+SubscriptionManager.YEARLY_PRICE+".00&cu=INR&tn="+Uri.encode(note);
+        return new Uri.Builder()
+                .scheme("upi")
+                .authority("pay")
+                .appendQueryParameter("pa",SubscriptionManager.UPI_ID)
+                .appendQueryParameter("pn","LATHA EPS")
+                .appendQueryParameter("tn",note)
+                .appendQueryParameter("am",SubscriptionManager.YEARLY_PRICE+".00")
+                .appendQueryParameter("cu","INR")
+                .build().toString();
+    }
+
+    private void openPaymentConfirmationWhatsApp() {
+        String phone = "919025156444";
+        String message = "Hello LATHAEPS, maine ₹800 yearly subscription payment kiya hai.\n"
+                + "Device ID: " + SubscriptionManager.deviceId(this) + "\n"
+                + "Payment screenshot attach kar raha/rahi hoon. Please activate my app.";
+        Uri chat = Uri.parse("https://wa.me/"+phone+"?text="+Uri.encode(message));
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW,chat);
+            if (isInstalled("com.whatsapp.w4b")) intent.setPackage("com.whatsapp.w4b");
+            else if (isInstalled("com.whatsapp")) intent.setPackage("com.whatsapp");
+            startActivity(intent);
+            toast("WhatsApp chat khul gaya • Ab payment screenshot attach karke SEND karein");
+        } catch(Exception e) {
+            copy("Payment confirmation",message);
+            toast("WhatsApp open nahi hua • Message copy ho gaya. 9025156444 par bhejein");
+        }
+    }
+
+    private boolean isInstalled(String packageName) {
+        try {
+            getPackageManager().getPackageInfo(packageName,0);
+            return true;
+        } catch(Exception ignored) {
+            return false;
+        }
     }
 
     private void showPaymentQr(String uri) {

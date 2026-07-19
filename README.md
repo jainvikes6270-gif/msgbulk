@@ -1,4 +1,11 @@
-# LathaBulk v3.23.49 – Stable Device ID Signing Fix
+# LathaBulk v3.23.50 – UPI Payment + WhatsApp Confirmation
+
+## v3.23.50
+
+- Fixed the ₹800 UPI button so Android opens the installed UPI-app chooser directly.
+- UPI payment QR and Copy UPI ID remain available as fallbacks.
+- Added `SEND PAYMENT SCREENSHOT ON WHATSAPP`, opening WhatsApp number `9025156444` with the Device ID and confirmation message prefilled.
+- Version increased to `3.23.50` (`versionCode 107`) and APK/AAB artifact names updated.
 
 ## v3.23.49
 

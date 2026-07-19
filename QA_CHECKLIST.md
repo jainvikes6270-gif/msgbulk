@@ -1,4 +1,11 @@
-# LathaBulk v3.23.49 QA Checklist
+# LathaBulk v3.23.50 QA Checklist
+
+## v3.23.50 UPI + WhatsApp Confirmation QA
+
+- Tap `PAY ₹800 BY UPI` and confirm the installed UPI-app chooser opens with ₹800 filled.
+- Tap `SHOW PAYMENT QR` and confirm the QR and UPI ID appear.
+- Tap `SEND PAYMENT SCREENSHOT ON WHATSAPP` and confirm chat `9025156444` opens with Device ID prefilled; attach the screenshot and send it.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.50_RELEASE_SIGNED.apk`.
 
 ## v3.23.49 Stable Device ID Signing QA
 
