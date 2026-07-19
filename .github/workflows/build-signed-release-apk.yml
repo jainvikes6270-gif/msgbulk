@@ -51,7 +51,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.LATHAEPS_KEY_PASSWORD }}
         run: |
           UNSIGNED_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
-          OUTPUT_APK="LATHAEPS_SMART_v3.23.44_RELEASE_SIGNED.apk"
+          OUTPUT_APK="LATHAEPS_SMART_v3.23.47_RELEASE_SIGNED.apk"
           test -f "$UNSIGNED_APK"
           BUILD_TOOLS_DIR="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
           test -x "$BUILD_TOOLS_DIR/zipalign"
@@ -69,7 +69,7 @@ jobs:
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: LATHAEPS-SMART-Signed-Release-APK-v3.23.44
-          path: LATHAEPS_SMART_v3.23.44_RELEASE_SIGNED.apk
+          name: LATHAEPS-SMART-Signed-Release-APK-v3.23.47
+          path: LATHAEPS_SMART_v3.23.47_RELEASE_SIGNED.apk
           if-no-files-found: error
           retention-days: 30
