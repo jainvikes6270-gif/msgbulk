@@ -70,6 +70,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: LATHAEPS-SMART-Signed-Release-APK-v3.23.44
-          path: LATHAEPS_SMART_v3.23.44_RELEASE_SIGNED.apk
+          path: LATHAEPS_SMART_v3.23.46_RELEASE_SIGNED.apk
           if-no-files-found: error
           retention-days: 30
