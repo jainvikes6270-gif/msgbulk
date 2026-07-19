@@ -11,6 +11,7 @@ public class ScheduleRestoreReceiver extends BroadcastReceiver {
         String action=intent.getAction();
         if(Intent.ACTION_BOOT_COMPLETED.equals(action)||Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)){
             PaymentScheduleReceiver.restoreStoredSchedule(context);
+            LedgerScheduleReceiver.restoreStoredSchedule(context);
             boolean floatingEnabled=context.getSharedPreferences(MainActivity.PREFS,Context.MODE_PRIVATE).getBoolean(FloatingMicService.PREF_ENABLED,false);
             if(floatingEnabled&&Settings.canDrawOverlays(context))try{FloatingMicService.start(context);}catch(Exception ignored){}
         }

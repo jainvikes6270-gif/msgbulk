@@ -169,6 +169,9 @@ public class MainActivity extends Activity {
     static final String PAYMENT_SCHEDULE_MESSAGES = "payment_schedule_messages";
     static final String PAYMENT_SCHEDULE_REPEAT = "payment_schedule_repeat";
     static final String PAYMENT_SCHEDULE_LAST_REPEAT = "payment_schedule_last_repeat";
+    static final String LEDGER_SAVED_PARTIES_KEY = "ledger_saved_party_list";
+    static final String LEDGER_SCHEDULE_AT = "ledger_schedule_at";
+    static final String LEDGER_SCHEDULE_REPEAT = "ledger_schedule_repeat";
     private static final String UPDATE_CHECK_ENABLED_KEY = "update_check_enabled";
     private static final String UPDATE_LAST_CHECK_KEY = "update_last_check";
     private static final String UPDATE_API_URL = "https://api.github.com/repos/jainvikes6270-gif/msgbulk/releases/latest";
@@ -228,6 +231,7 @@ public class MainActivity extends Activity {
         PDFBoxResourceLoader.init(getApplicationContext());
         createNotificationChannel();
         PaymentScheduleReceiver.restoreStoredSchedule(this);
+        LedgerScheduleReceiver.restoreStoredSchedule(this);
         requestNotificationPermissionIfNeeded();
         showLoginOrApp();
     }
@@ -1234,7 +1238,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.44";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.46";}}
 
     private void shareApp(){
         try{
@@ -2214,12 +2218,48 @@ public class MainActivity extends Activity {
         SharedPreferences p=getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(12),0,dp(12),0);
         EditText search=new EditText(this);search.setHint("Search phone or customer name");if(initialSearch!=null&&!initialSearch.trim().isEmpty())search.setText(initialSearch);
-        ListView list=new ListView(this);box.addView(search);box.addView(list,new LinearLayout.LayoutParams(-1,dp(360)));
+        TextView selected=new TextView(this);selected.setTypeface(Typeface.DEFAULT_BOLD);selected.setPadding(dp(4),dp(6),dp(4),dp(6));
+        LinearLayout actions=row();Button selectAll=button("SELECT ALL");Button clear=button("CLEAR");Button send=button("SEND SELECTED LEDGERS");send.setTextColor(Color.WHITE);send.setBackgroundColor(Color.rgb(0,125,70));actions.addView(selectAll,weighted(1f,44));actions.addView(clear,weighted(.75f,44));
+        LinearLayout savedActions=row();Button saveList=button("SAVE SMALL LIST");Button loadList=button("OPEN SAVED LIST");Button scheduleList=button("WEEKLY / MONTHLY");savedActions.addView(saveList,weighted(1f,44));savedActions.addView(loadList,weighted(1f,44));savedActions.addView(scheduleList,weighted(1.1f,44));
+        ListView list=new ListView(this);list.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);box.addView(search);box.addView(selected);box.addView(actions);box.addView(savedActions);box.addView(list,new LinearLayout.LayoutParams(-1,dp(265)));box.addView(send,new LinearLayout.LayoutParams(-1,dp(50)));
         final ArrayList<String> rows=new ArrayList<>();final ArrayList<JSONObject> objects=new ArrayList<>();
-        Runnable refresh=()->{rows.clear();objects.clear();try{JSONArray a=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));String q=search.getText().toString().trim().toLowerCase(Locale.ROOT);for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;String ph=o.optString("phone","");String nm=o.optString("name","");String lf=o.optString("ledger_file","");String row=(nm.isEmpty()?ph:nm+"\n"+ph)+(lf.isEmpty()?"":"\nLedger: "+lf);if(q.isEmpty()||row.toLowerCase(Locale.ROOT).contains(q)){rows.add(row);objects.add(o);}}}catch(Exception ignored){}list.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,rows));};
+        final Set<String> chosen=new LinkedHashSet<>();
+        Runnable updateSelected=()->selected.setText(chosen.size()+" parties selected");
+        Runnable refresh=()->{rows.clear();objects.clear();try{JSONArray a=new JSONArray(p.getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));String q=search.getText().toString().trim().toLowerCase(Locale.ROOT);for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;String ph=normalize(o.optString("phone",""));String nm=o.optString("name","");String lf=o.optString("ledger_file","");String uri=o.optString("ledger_uri","");String row=(nm.isEmpty()?ph:nm+"\n"+ph)+(uri.isEmpty()?"\n⚠ Ledger PDF missing":"\n✓ Ledger ready"+(lf.isEmpty()?"":" • "+lf));if(q.isEmpty()||row.toLowerCase(Locale.ROOT).contains(q)){rows.add(row);objects.add(o);}}}catch(Exception ignored){}list.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_list_item_multiple_choice,rows));for(int i=0;i<objects.size();i++)list.setItemChecked(i,chosen.contains(normalize(objects.get(i).optString("phone",""))));updateSelected.run();};
         search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh.run();}public void afterTextChanged(Editable e){}});
-        list.setOnItemClickListener((a,v,pos,id)->showEditLedgerCustomer(objects.get(pos),refresh));refresh.run();
+        list.setOnItemClickListener((a,v,pos,id)->{String phone=normalize(objects.get(pos).optString("phone",""));if(list.isItemChecked(pos))chosen.add(phone);else chosen.remove(phone);updateSelected.run();});
+        list.setOnItemLongClickListener((a,v,pos,id)->{showEditLedgerCustomer(objects.get(pos),refresh);return true;});
+        selectAll.setOnClickListener(v->{for(JSONObject o:objects)if(!o.optString("ledger_uri","").isEmpty())chosen.add(normalize(o.optString("phone","")));refresh.run();});
+        clear.setOnClickListener(v->{chosen.clear();refresh.run();});
+        saveList.setOnClickListener(v->{if(chosen.isEmpty()){toast("Pehle parties select karein");return;}JSONArray saved=new JSONArray();for(String phone:chosen)saved.put(phone);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(LEDGER_SAVED_PARTIES_KEY,saved.toString()).apply();toast("Small Ledger list saved • "+chosen.size()+" parties");});
+        loadList.setOnClickListener(v->{chosen.clear();try{JSONArray saved=new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(LEDGER_SAVED_PARTIES_KEY,"[]"));for(int i=0;i<saved.length();i++)chosen.add(normalize(saved.optString(i)));}catch(Exception ignored){}refresh.run();toast(chosen.isEmpty()?"Saved Ledger list empty":chosen.size()+" saved parties selected");});
+        scheduleList.setOnClickListener(v->{if(chosen.isEmpty()){toast("Pehle parties select karein");return;}showLedgerScheduleRepeat(chosen);});
+        send.setOnClickListener(v->sendSelectedCustomerLedgers(chosen));refresh.run();
         new AlertDialog.Builder(this).setTitle("Ledger Customers • "+ledgerCustomerCount()).setView(box).setPositiveButton("Add customer",(d,w)->showEditLedgerCustomer(null,()->showLedgerCustomersDialog())).setNeutralButton("Clear all",(d,w)->p.edit().remove(AutoReplyNotificationService.LEDGER_CUSTOMERS).apply()).setNegativeButton("Close",null).show();
+    }
+
+    private void sendSelectedCustomerLedgers(Set<String> selectedPhones){
+        if(selectedPhones==null||selectedPhones.isEmpty()){toast("Pehle parties select karein");return;}
+        if(!isAccessibilityServiceEnabled()){toast("Pehle Accessibility ON karein");try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception ignored){}return;}
+        ArrayList<Uri> files=new ArrayList<>();ArrayList<String> phones=new ArrayList<>(),names=new ArrayList<>();int skipped=0;
+        try{JSONArray all=new JSONArray(getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).getString(AutoReplyNotificationService.LEDGER_CUSTOMERS,"[]"));for(int i=0;i<all.length();i++){JSONObject o=all.optJSONObject(i);if(o==null)continue;String phone=normalize(o.optString("phone",""));if(!selectedPhones.contains(phone))continue;String uri=o.optString("ledger_uri","");if(phone.length()<10||uri.isEmpty()||isDoNotSend(phone)){skipped++;continue;}files.add(Uri.parse(uri));phones.add(phone);names.add(o.optString("name","Customer"));}}catch(Exception e){toast("Ledger list read failed");return;}
+        if(files.isEmpty()){toast("Selected parties ke Ledger PDFs missing hain");return;}
+        final int skippedCount=skipped;new AlertDialog.Builder(this).setTitle("Send Ledgers to "+files.size()+" parties?").setMessage("Har selected party ko uska own Ledger PDF jayega."+(skippedCount>0?"\n\n"+skippedCount+" missing/blocked party skipped.":"")).setPositiveButton("START SEND",(d,w)->{if(AutoReplyNotificationService.prepareLedgerBatchQueue(this,files,phones,names))toast("Ledger sending started • "+files.size()+" parties");else toast("Ledger queue start failed");}).setNegativeButton("Cancel",null).show();
+    }
+
+    private void showLedgerScheduleRepeat(Set<String> selectedPhones){
+        final String[] repeats={"Weekly","Monthly"};final Set<String> copy=new LinkedHashSet<>(selectedPhones);
+        new AlertDialog.Builder(this).setTitle("Ledger Send Schedule").setSingleChoiceItems(repeats,0,null).setPositiveButton("NEXT",(dialog,which)->{int pos=((AlertDialog)dialog).getListView().getCheckedItemPosition();showLedgerScheduleDateTime(copy,repeats[pos<0?0:pos]);}).setNegativeButton("Cancel",null).show();
+    }
+
+    private void showLedgerScheduleDateTime(Set<String> selectedPhones,String repeat){
+        java.util.Calendar chosen=java.util.Calendar.getInstance();chosen.add(java.util.Calendar.MINUTE,2);
+        new android.app.DatePickerDialog(this,(dateView,year,month,day)->{chosen.set(java.util.Calendar.YEAR,year);chosen.set(java.util.Calendar.MONTH,month);chosen.set(java.util.Calendar.DAY_OF_MONTH,day);new android.app.TimePickerDialog(this,(timeView,hour,minute)->{chosen.set(java.util.Calendar.HOUR_OF_DAY,hour);chosen.set(java.util.Calendar.MINUTE,minute);chosen.set(java.util.Calendar.SECOND,0);chosen.set(java.util.Calendar.MILLISECOND,0);scheduleLedgerPartyList(selectedPhones,repeat,chosen.getTimeInMillis());},chosen.get(java.util.Calendar.HOUR_OF_DAY),chosen.get(java.util.Calendar.MINUTE),false).show();},chosen.get(java.util.Calendar.YEAR),chosen.get(java.util.Calendar.MONTH),chosen.get(java.util.Calendar.DAY_OF_MONTH)).show();
+    }
+
+    private void scheduleLedgerPartyList(Set<String> selectedPhones,String repeat,long at){
+        if(at<=System.currentTimeMillis()){toast("Future date/time select karein");return;}
+        try{android.app.AlarmManager manager=(android.app.AlarmManager)getSystemService(ALARM_SERVICE);if(manager==null)throw new Exception("Alarm unavailable");if(Build.VERSION.SDK_INT>=31&&!manager.canScheduleExactAlarms()){try{startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName())));}catch(Exception ignored){startActivity(new Intent(Settings.ACTION_SETTINGS));}toast("Alarms & reminders Allow karke schedule dobara karein");return;}JSONArray saved=new JSONArray();for(String phone:selectedPhones)saved.put(phone);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(LEDGER_SAVED_PARTIES_KEY,saved.toString()).putLong(LEDGER_SCHEDULE_AT,at).putString(LEDGER_SCHEDULE_REPEAT,repeat).apply();if(!LedgerScheduleReceiver.scheduleNext(this,at))throw new Exception("Schedule failed");LedgerScheduleReceiver.showScheduledNotification(this,saved.length(),at,repeat);String when=new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a",Locale.getDefault()).format(new java.util.Date(at));toast(repeat+" Ledger send scheduled • "+when);}catch(Exception e){toast("Ledger schedule save failed");}
     }
 
     private void showEditLedgerCustomer(JSONObject existing,Runnable after){

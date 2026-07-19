@@ -1,3 +1,23 @@
+# LathaBulk v3.23.46 – Saved Ledger Party List & Schedule
+
+## v3.23.46
+
+- Save a small reusable party list inside Ledger Customers.
+- Open the saved list later with one tap and send every mapped Ledger.
+- Added Weekly and Monthly recurring Ledger schedules with date and time selection.
+- Scheduled runs use the latest mapped PDF for every saved party and continue after phone reboot/app update.
+- Missing Ledger PDFs and Do Not Send parties are skipped safely.
+
+# LathaBulk v3.23.45 – Multiple Party Ledger Send
+
+## v3.23.45
+
+- Ledger Customers now supports checkbox-based multiple party selection.
+- Added Select All, Clear and Send Selected Ledgers actions with search-aware selection.
+- Every selected party receives only its own mapped Ledger PDF in the automated WhatsApp queue.
+- Parties with a missing PDF, invalid phone number or Do Not Send status are skipped before confirmation.
+- Long-press a Ledger customer to edit or delete it; normal tap now selects/deselects it.
+
 # LathaBulk v3.23.44 – Free-form Camera AI & Zoom Preview
 
 ## v3.23.44

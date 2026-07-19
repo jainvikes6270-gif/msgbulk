@@ -122,6 +122,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".LedgerScheduleReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".ScheduleRestoreReceiver"
             android:enabled="true"
             android:exported="true">

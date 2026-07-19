@@ -30,6 +30,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String CATALOG_QUEUE="catalog_share_queue", CATALOG_QUEUE_INDEX="catalog_share_index";
     public static final String CATALOG_QUEUE_CAPTION="catalog_share_caption", CATALOG_QUEUE_PACKAGE="catalog_share_package", CATALOG_QUEUE_PHONE="catalog_share_phone";
     public static final String CATALOG_QUEUE_CONTACT="catalog_share_contact", SHARE_PICKER_STAGE="catalog_share_picker_stage", SHARE_PICKER_TRIES="catalog_share_picker_tries";
+    public static final String CATALOG_QUEUE_PHONES="catalog_share_phones", CATALOG_QUEUE_CONTACTS="catalog_share_contacts", CATALOG_QUEUE_CAPTIONS="catalog_share_captions", CATALOG_QUEUE_LABEL="catalog_share_label";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
     private static final String APP_PREFS="latha_bulk_prefs";
     private static final String PRICE_SOURCE_FILES="price_source_files";
@@ -514,8 +515,28 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             .putString(CATALOG_QUEUE_PACKAGE,pkg==null?"com.whatsapp":pkg)
             .putString(CATALOG_QUEUE_PHONE,phone==null?"":phone)
             .putString(CATALOG_QUEUE_CONTACT,contact==null?"":contact)
+            .remove(CATALOG_QUEUE_PHONES).remove(CATALOG_QUEUE_CONTACTS).remove(CATALOG_QUEUE_CAPTIONS).remove(CATALOG_QUEUE_LABEL)
             .putInt(SHARE_PICKER_STAGE,0).putInt(SHARE_PICKER_TRIES,0)
             .putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();
+    }
+
+    /** Creates one attachment/recipient pair for every selected Ledger customer. */
+    public static boolean prepareLedgerBatchQueue(android.content.Context context,ArrayList<Uri> uris,ArrayList<String> phones,ArrayList<String> contacts){
+        if(uris==null||phones==null||contacts==null||uris.isEmpty()||uris.size()!=phones.size()||uris.size()!=contacts.size())return false;
+        JSONArray files=new JSONArray(),numbers=new JSONArray(),names=new JSONArray(),captions=new JSONArray();
+        for(int i=0;i<uris.size();i++){
+            files.put(uris.get(i).toString());numbers.put(phones.get(i));names.put(contacts.get(i));
+            captions.put("LATHA EPS Ledger • "+(contacts.get(i).trim().isEmpty()?phones.get(i):contacts.get(i)));
+        }
+        String pkg=context.getPackageManager().getLaunchIntentForPackage("com.whatsapp.w4b")!=null?"com.whatsapp.w4b":"com.whatsapp";
+        context.getSharedPreferences(PREFS,android.content.Context.MODE_PRIVATE).edit()
+            .putString(CATALOG_QUEUE,files.toString()).putString(CATALOG_QUEUE_PHONES,numbers.toString())
+            .putString(CATALOG_QUEUE_CONTACTS,names.toString()).putString(CATALOG_QUEUE_CAPTIONS,captions.toString())
+            .putString(CATALOG_QUEUE_LABEL,"Ledger").putInt(CATALOG_QUEUE_INDEX,0)
+            .putString(CATALOG_QUEUE_PACKAGE,pkg).putString(CATALOG_QUEUE_PHONE,phones.get(0)).putString(CATALOG_QUEUE_CONTACT,contacts.get(0))
+            .putInt(SHARE_PICKER_STAGE,0).putInt(SHARE_PICKER_TRIES,0).putBoolean(PENDING_SHARE,true)
+            .putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();
+        return shareNextCatalogFile(context);
     }
 
     public static boolean shareNextCatalogFile(android.content.Context context){
@@ -531,15 +552,21 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                 p.edit().putString("last_business_status",TaskDeviceController.autoUnlockEnabled(context)?"Screen awake • unlock to continue task":"Phone locked • Auto Unlock is OFF").putLong("last_business_status_at",System.currentTimeMillis()).apply();
                 return true;
             }
-            Uri uri=Uri.parse(queue.getString(index));String pkg=p.getString(CATALOG_QUEUE_PACKAGE,"com.whatsapp");String phone=p.getString(CATALOG_QUEUE_PHONE,"");
+            Uri uri=Uri.parse(queue.getString(index));String pkg=p.getString(CATALOG_QUEUE_PACKAGE,"com.whatsapp");
+            JSONArray phones=new JSONArray(p.getString(CATALOG_QUEUE_PHONES,"[]")),contacts=new JSONArray(p.getString(CATALOG_QUEUE_CONTACTS,"[]")),captions=new JSONArray(p.getString(CATALOG_QUEUE_CAPTIONS,"[]"));
+            String phone=index<phones.length()?phones.optString(index):p.getString(CATALOG_QUEUE_PHONE,"");
+            String contact=index<contacts.length()?contacts.optString(index):p.getString(CATALOG_QUEUE_CONTACT,"");
+            String caption=index<captions.length()?captions.optString(index):(index==0?p.getString(CATALOG_QUEUE_CAPTION,""):"");
+            p.edit().putString(CATALOG_QUEUE_PHONE,phone).putString(CATALOG_QUEUE_CONTACT,contact).apply();
             Intent i=new Intent(Intent.ACTION_SEND);i.setType(context.getContentResolver().getType(uri)==null?"application/octet-stream":context.getContentResolver().getType(uri));
             i.putExtra(Intent.EXTRA_STREAM,uri);
-            if(index==0){String caption=p.getString(CATALOG_QUEUE_CAPTION,"");if(!caption.isEmpty())i.putExtra(Intent.EXTRA_TEXT,caption);}
+            if(!caption.isEmpty())i.putExtra(Intent.EXTRA_TEXT,caption);
             i.setClipData(ClipData.newRawUri("catalog file",uri));
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
             i.setPackage(pkg);if(phone!=null&&!phone.isEmpty())i.putExtra("jid",digits(phone)+"@s.whatsapp.net");
             context.grantUriPermission(pkg,uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);context.startActivity(i);
-            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putInt(SHARE_PICKER_STAGE,0).putInt(SHARE_PICKER_TRIES,0).putString("last_business_status","Sending catalog file "+(index+1)+" / "+queue.length()).apply();
+            String label=p.getString(CATALOG_QUEUE_LABEL,"Catalog");
+            p.edit().putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).putInt(SHARE_PICKER_STAGE,0).putInt(SHARE_PICKER_TRIES,0).putString("last_business_status","Sending "+label+" "+(index+1)+" / "+queue.length()).apply();
             return true;
         }catch(Exception error){clearCatalogQueue(p);TaskDeviceController.cancel(context);p.edit().putString("last_business_status","Catalog/Ledger send failed • "+error.getClass().getSimpleName()).apply();return false;}
     }
@@ -548,13 +575,13 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
         try{
             JSONArray queue=new JSONArray(p.getString(CATALOG_QUEUE,"[]"));int next=p.getInt(CATALOG_QUEUE_INDEX,0)+1;
-            if(next>=queue.length()){clearCatalogQueue(p);p.edit().putString("last_business_status","Catalog sent • "+queue.length()+" files").putLong("last_business_status_at",System.currentTimeMillis()).apply();return false;}
+            if(next>=queue.length()){String label=p.getString(CATALOG_QUEUE_LABEL,"Catalog");clearCatalogQueue(p);p.edit().putString("last_business_status",label+" sent • "+queue.length()+" parties").putLong("last_business_status_at",System.currentTimeMillis()).apply();return false;}
             p.edit().putInt(CATALOG_QUEUE_INDEX,next).putBoolean(PENDING_SHARE,true).putLong(PENDING_SHARE_AT,System.currentTimeMillis()).apply();return true;
         }catch(Exception e){clearCatalogQueue(p);return false;}
     }
 
     private static void clearCatalogQueue(SharedPreferences p){
-        p.edit().putBoolean(PENDING_SHARE,false).putBoolean(PREPARING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).remove(CATALOG_QUEUE_CONTACT).remove(SHARE_PICKER_STAGE).remove(SHARE_PICKER_TRIES).apply();
+        p.edit().putBoolean(PENDING_SHARE,false).putBoolean(PREPARING_SHARE,false).remove(CATALOG_QUEUE).remove(CATALOG_QUEUE_INDEX).remove(CATALOG_QUEUE_CAPTION).remove(CATALOG_QUEUE_PACKAGE).remove(CATALOG_QUEUE_PHONE).remove(CATALOG_QUEUE_CONTACT).remove(CATALOG_QUEUE_PHONES).remove(CATALOG_QUEUE_CONTACTS).remove(CATALOG_QUEUE_CAPTIONS).remove(CATALOG_QUEUE_LABEL).remove(SHARE_PICKER_STAGE).remove(SHARE_PICKER_TRIES).apply();
     }
 
     public static void cancelPendingShare(android.content.Context context,String status){

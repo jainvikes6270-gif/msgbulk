@@ -1,4 +1,22 @@
-# LathaBulk v3.23.44 QA Checklist
+# LathaBulk v3.23.46 QA Checklist
+
+## v3.23.46 Saved Ledger List & Schedule QA
+
+- Select a small set of Ledger parties and tap **SAVE SMALL LIST**.
+- Clear selection, tap **OPEN SAVED LIST**, and confirm the same parties are selected.
+- Choose **WEEKLY / MONTHLY**, set a future date/time, and confirm the scheduled notification.
+- Verify the scheduled run sends each saved party its latest mapped Ledger PDF.
+- Verify the next Weekly/Monthly alarm is created and restored after reboot/app update.
+- Verify missing PDFs and Do Not Send parties are skipped.
+
+## v3.23.45 Multiple Party Ledger Send QA
+
+- Import/prepare a Master Ledger and open **Business Files → Manage Ledger Customers**.
+- Search parties, select multiple checkboxes, and verify the selected-party count.
+- Check **SELECT ALL**, **CLEAR**, and selection persistence while changing the search text.
+- Tap **SEND SELECTED LEDGERS**, confirm the count, and verify each WhatsApp recipient receives only their own mapped PDF.
+- Verify missing-PDF, invalid-phone and Do Not Send parties are skipped and reported in confirmation.
+- Long-press a party and verify Edit/Delete still works.
 
 ## v3.23.44 Camera AI Free-form Note + Zoom QA
 
