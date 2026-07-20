@@ -1266,7 +1266,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.67";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.68";}}
 
     private void shareApp(){
         try{
@@ -1422,19 +1422,14 @@ public class MainActivity extends Activity {
     private void openCatalogPhoneGallery(){
         persistPendingCatalog();
         try{
-            Intent i;
-            if(Build.VERSION.SDK_INT>=33){
-                i=new Intent(MediaStore.ACTION_PICK_IMAGES);
-                i.setType("image/*");
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-                i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX,Math.min(50,MediaStore.getPickImagesMaxLimit()));
-            }else{
-                i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-                i.setType("image/*");
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-            }
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivityForResult(i,PICK_CATALOG_FILE);
+            // OPEN_DOCUMENT is reliable for multi-select on Vivo/Android 13+ and
+            // still opens the phone's Photos/Gallery providers without broad storage access.
+            Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("image/*");
+            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(Intent.createChooser(i,"Phone Gallery • select one or more pictures"),PICK_CATALOG_FILE);
         }catch(Exception first){
             try{
                 Intent fallback=new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -1547,13 +1542,14 @@ public class MainActivity extends Activity {
         restorePendingCatalog();
         List<Uri> selected=new ArrayList<>();
         android.content.ClipData clips=data.getClipData();
-        if(clips!=null){for(int i=0;i<clips.getItemCount();i++){Uri uri=clips.getItemAt(i).getUri();if(uri!=null)selected.add(uri);}}
+        if(clips!=null){for(int i=0;i<clips.getItemCount();i++){Uri uri=clips.getItemAt(i).getUri();if(uri!=null&&!selected.contains(uri))selected.add(uri);}}
         else if(data.getData()!=null)selected.add(data.getData());
         if(selected.isEmpty()){toast("No Catalog file selected");return;}
         int saved=0;
         for(int i=0;i<selected.size();i++)if(saveCatalog(selected.get(i),i,selected.size()))saved++;
         String category=pendingCatalogCategory.trim().isEmpty()?"Other":pendingCatalogCategory.trim();
         clearPendingCatalog();
+        if(saved==0){toast("Catalog save failed • files dobara select karein");return;}
         toast(saved+" / "+selected.size()+" "+category+" files saved ✓");
         uiHandler.postDelayed(this::showCatalogScreen,250);
     }
@@ -1599,8 +1595,10 @@ public class MainActivity extends Activity {
         for(String category:categories){
             LinearLayout sectionHead=row();sectionHead.setGravity(Gravity.CENTER_VERTICAL);
             TextView heading=new TextView(this);heading.setText(category.toUpperCase(Locale.ROOT)+"  •  "+countCatalogCategory(a,category)+" files");heading.setTextColor(Color.rgb(80,170,255));heading.setTextSize(18);heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setPadding(dp(3),dp(9),dp(3),dp(9));
-            Button edit=button("EDIT");edit.setTextSize(12);edit.setTextColor(Color.WHITE);edit.setBackground(rounded(Color.rgb(25,105,185),12));
-            sectionHead.addView(heading,new LinearLayout.LayoutParams(0,dp(48),1f));sectionHead.addView(edit,new LinearLayout.LayoutParams(dp(72),dp(38)));parent.addView(sectionHead);
+            Button sendType=button("SEND ALL");sendType.setTextSize(11);sendType.setTextColor(Color.WHITE);sendType.setBackground(rounded(Color.rgb(18,135,76),12));
+            Button edit=button("EDIT");edit.setTextSize(11);edit.setTextColor(Color.WHITE);edit.setBackground(rounded(Color.rgb(25,105,185),12));
+            sectionHead.addView(heading,new LinearLayout.LayoutParams(0,dp(48),1f));sectionHead.addView(sendType,new LinearLayout.LayoutParams(dp(84),dp(38)));sectionHead.addView(edit,new LinearLayout.LayoutParams(dp(66),dp(38)));parent.addView(sectionHead);
+            sendType.setOnClickListener(v->shareCatalogCategory(category));
             edit.setOnClickListener(v->{dialog.dismiss();showEditCatalogType(category);});
             for(int i=0;i<a.length();i++){
                 JSONObject item=a.optJSONObject(i);if(item==null||!category.equals(item.optString("category","Other")))continue;final int index=i;
@@ -1635,8 +1633,28 @@ public class MainActivity extends Activity {
         try{
             Uri uri=Uri.parse(item.optString("uri"));Intent i=new Intent(Intent.ACTION_SEND);i.setType(item.optString("type","application/pdf"));i.putExtra(Intent.EXTRA_STREAM,uri);i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS "+item.optString("category","Catalog")+" • "+item.optString("name","Catalog"));i.setClipData(android.content.ClipData.newRawUri("catalog file",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             grantUriPermission("com.whatsapp",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);grantUriPermission("com.whatsapp.w4b",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception normal){try{i.setPackage("com.whatsapp.w4b");startActivity(i);}catch(Exception business){i.setPackage(null);startActivity(Intent.createChooser(i,"Send Catalog"));}}
+            try{i.setPackage("com.whatsapp.w4b");startActivity(i);}catch(Exception business){try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception normal){i.setPackage(null);startActivity(Intent.createChooser(i,"Send Catalog"));}}
         }catch(Exception e){toast("Catalog send nahi hua • file dobara save karein");}
+    }
+
+    private void shareCatalogCategory(String category){
+        try{
+            JSONArray items=readCatalogs();ArrayList<Uri> files=new ArrayList<>();boolean sameType=true;String type="";
+            for(int i=0;i<items.length();i++){
+                JSONObject item=items.optJSONObject(i);if(item==null||!category.equals(item.optString("category","Other")))continue;
+                String raw=item.optString("uri","");if(raw.isEmpty())continue;Uri uri=Uri.parse(raw);files.add(uri);
+                String current=item.optString("type","application/octet-stream");if(type.isEmpty())type=current;else if(!type.equals(current))sameType=false;
+            }
+            if(files.isEmpty()){toast("Is Catalog type me koi file nahi hai");return;}
+            Intent i=new Intent(files.size()==1?Intent.ACTION_SEND:Intent.ACTION_SEND_MULTIPLE);
+            i.setType(sameType?type:"*/*");
+            if(files.size()==1)i.putExtra(Intent.EXTRA_STREAM,files.get(0));else i.putParcelableArrayListExtra(Intent.EXTRA_STREAM,files);
+            i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS "+category+" Catalog • "+files.size()+" files");
+            ClipData clip=ClipData.newRawUri("catalog file",files.get(0));for(int n=1;n<files.size();n++)clip.addItem(new ClipData.Item(files.get(n)));i.setClipData(clip);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            for(Uri uri:files){grantUriPermission("com.whatsapp.w4b",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);grantUriPermission("com.whatsapp",uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}
+            try{i.setPackage("com.whatsapp.w4b");startActivity(i);}catch(Exception business){try{i.setPackage("com.whatsapp");startActivity(i);}catch(Exception normal){i.setPackage(null);startActivity(Intent.createChooser(i,"Send "+category+" Catalog"));}}
+        }catch(Exception e){toast("Full Catalog send nahi hua • files dobara save karein");}
     }
 
     private void showWhatsAppBroadcastScreen(){

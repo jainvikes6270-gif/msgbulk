@@ -91,13 +91,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             }else if(!autoCaption.isEmpty())sendRemoteReply(n,autoCaption);
             return;
         }
-        // Strict mode: unmatched WhatsApp messages must never trigger business
-        // files. Only a user-saved Auto Reply rule above may send automatically.
-        // Price List, Catalog and Ledger stay available for manual sending.
-        if(strictSavedAutoReplyOnly()){
-            saveStatus(p,"No saved Auto Reply rule matched • ignored");
-            return;
-        }
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         boolean explicitPriceRequest=isExplicitPriceListRequest(lower);
         JSONArray priceFiles=findPriceSourcesForMessage(lower,explicitPriceRequest);
@@ -129,13 +122,21 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             startShareWhenReady(files,caption,pkg,senderPhone,cleanContactTitle(title),n.contentIntent,0);
             return;
         }
+        JSONArray matchedCatalogs=findCatalogsForMessage(lower,ck);
+        boolean catalogRequest=matchedCatalogs.length()>0;
+        if(!catalogRequest&&strictSavedAutoReplyOnly()){
+            // Strict still means "do nothing" for unrelated chat. Saved Catalog
+            // keywords remain an explicit rule and are allowed through.
+            saveStatus(p,"No saved Auto Reply or Catalog keyword matched • ignored");
+            return;
+        }
         String senderIdentity=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
-        String eventKey=pkg+"|"+senderIdentity+"|"+text.trim()+"|"+(messageTime>0?messageTime:0);
-        if(!markNotificationEventOnce(p,eventKey,messageTime>0))return;
+        String eventKey=pkg+"|catalog|"+senderIdentity+"|"+normaliseSearch(text);
+        if(!markNotificationEventOnce(p,eventKey,false,LOGICAL_REPLY_WINDOW_MS))return;
         String file="", type="", caption="";
         ArrayList<Uri> catalogFiles=new ArrayList<>();
-        if(findCatalogsForMessage(lower,ck).length()>0||matchesBusinessKeyword(lower,ck,"catalog","catalogue","catlog")){
-            JSONArray catalogs=findCatalogsForMessage(lower,ck);
+        if(catalogRequest){
+            JSONArray catalogs=matchedCatalogs;
             if(catalogs.length()==0){sendRemoteReply(n,"Catalog abhi save nahi hai.");return;}
             JSONObject first=catalogs.optJSONObject(0);if(first==null)return;
             for(int i=0;i<catalogs.length();i++){JSONObject item=catalogs.optJSONObject(i);if(item==null)continue;String uri=item.optString("uri","");if(!uri.isEmpty())catalogFiles.add(Uri.parse(uri));}
