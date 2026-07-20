@@ -1,3 +1,12 @@
+# LathaBulk v3.23.55 – Payment Reminder List UI Fix
+
+## v3.23.55
+
+- Payment Reminder customer names, phone numbers and due-date text are now clearly visible on the dark screen.
+- `ADD NEW LIST` moved inside `SAVED LISTS`, with a required list-name field.
+- Every saved payment list card now has visible `EDIT LIST` and `DELETE` buttons.
+- Version increased to `3.23.55` (`versionCode 112`) and APK/AAB artifact names updated.
+
 # LathaBulk v3.23.54 – Short Ledger Folder Name
 
 ## v3.23.54

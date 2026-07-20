@@ -1,3 +1,13 @@
+# LathaBulk v3.23.55 QA Checklist
+
+## v3.23.55 Payment Reminder List UI QA
+
+- Payment Reminder screen par customer name, phone number, due date aur filter text dark background par clearly visible hona chahiye.
+- Main Payment Reminder screen par separate `SAVE LIST` button nahi dikhna chahiye.
+- `SAVED LISTS` ke andar `ADD NEW LIST` tap karke list name enter karein aur parties select/save karein.
+- Har saved card par `OPEN`, `EDIT LIST` aur `DELETE` buttons verify karein.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.55_RELEASE_SIGNED.apk`.
+
 # LathaBulk v3.23.54 QA Checklist
 
 ## v3.23.54 Short Folder Name QA
