@@ -1,4 +1,32 @@
-# LathaBulk v3.23.56 – Payment Reminder Saved List Direct Message
+# LathaBulk v3.23.59 – Flexible Hindi/Hinglish Voice Search
+
+## v3.23.59
+
+- Hindi/Hinglish search now ignores harmless extra request words and word order.
+- Two core words such as brand + product are enough in a longer spoken sentence.
+- Added more Hindi pronunciations for Mylinc, Polycab, Finolex, Havells, Anchor, modular, RCCB and DB.
+- Added common speech variants and misspellings such as `swich`, `swtich`, `थोड़ा`, `जरा`, `दे दो` and `भाव`.
+- Version increased to `3.23.59` (`versionCode 116`) and signed APK/AAB artifact names updated.
+
+# LathaBulk v3.23.58 – Hindi/Hinglish Smart Voice Search
+
+## v3.23.58
+
+- Voice Search now listens in Hindi/Hinglish and also understands English brand/product names.
+- Added Hindi product words such as स्विच, तार/वायर, केबल, लाइट, सॉकेट, पाइप, पंखा, MCB and DB.
+- Common request words such as “लिस्ट भेजो”, “दिखाओ”, “चाहिए”, “please”, “latest” and “rate” no longer block the real product match.
+- Search tolerates word-order changes, extra words and small speech/typing mistakes.
+- Multiple speech-recognition alternatives are checked against saved price data and the strongest result is used.
+- Version increased to `3.23.58` (`versionCode 115`) and APK/AAB artifact names updated.
+
+## v3.23.57
+
+- Payment Reminder now uses the Auto Reply-style mint, white and green color design instead of a black background.
+- Master Ledger no longer bulk-adds every party with one tap; a searchable multi-select picker imports only chosen parties.
+- Untouched legacy bulk-imported Ledger rows are removed once on upgrade, while saved-list, due-date and previously sent parties remain protected.
+- Added `LEDGER • ADD / CLEAR` with a safe clear option for imported Ledger parties.
+- Payment customer rows, filters, checkboxes, saved lists and direct-message textbox are clearly visible.
+- Version increased to `3.23.57` (`versionCode 114`) and APK/AAB artifact names updated.
 
 ## v3.23.56
 

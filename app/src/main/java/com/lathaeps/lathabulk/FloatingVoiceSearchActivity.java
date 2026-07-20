@@ -22,9 +22,10 @@ public class FloatingVoiceSearchActivity extends Activity {
         try {
             Intent speech = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag());
-            speech.putExtra(RecognizerIntent.EXTRA_PROMPT, "LATHAEPS Voice Search • brand, item or command boliye");
-            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN");
+            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN");
+            speech.putExtra(RecognizerIntent.EXTRA_PROMPT, "Hindi / English me brand, item ya command boliye");
+            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
             startActivityForResult(speech, REQUEST_SPEECH);
         } catch (Exception error) {
             Toast.makeText(this, "Google voice search phone me available nahi hai", Toast.LENGTH_LONG).show();
@@ -40,6 +41,7 @@ public class FloatingVoiceSearchActivity extends Activity {
                 Intent open = new Intent(this, MainActivity.class)
                         .setAction(MainActivity.ACTION_FLOATING_VOICE_RESULT)
                         .putExtra(MainActivity.EXTRA_FLOATING_VOICE_QUERY, heard.get(0))
+                        .putStringArrayListExtra(MainActivity.EXTRA_FLOATING_VOICE_ALTERNATIVES, heard)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                 startActivity(open);
             }

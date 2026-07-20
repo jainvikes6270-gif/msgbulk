@@ -1,4 +1,34 @@
-# LathaBulk v3.23.56 QA Checklist
+# LathaBulk v3.23.59 QA Checklist
+
+## v3.23.59 Flexible Hindi/Hinglish Voice QA
+
+- Save a Mylinc Switch section and verify `Mylinc switch`, `switch Mylinc`, `माइलिंक स्विच दिखा दो`, and `please Mylinc ka latest modular switch rate list bhejo na` all return it.
+- Verify a harmless extra word does not hide a result when the brand and product both match.
+- Verify `Mylink swich`, `Mylinc swtich`, `पॉलीकैब तार`, `फिनोलेक्स केबल`, and `डीबी बॉक्स` match their saved sections.
+- Verify a longer unrelated sentence with fewer than two matching core words does not match a wrong section.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.59_RELEASE_SIGNED.apk`.
+
+# LathaBulk v3.23.58 QA Checklist
+
+## v3.23.58 Hindi/Hinglish Smart Voice QA
+
+- Save a Mylinc Switch price-source section and confirm all these commands find the same section: `Mylinc switch`, `Mylinc switch ki list bhejo`, `माइलिंक स्विच की लिस्ट दिखाओ` and `switch Mylinc latest rate`.
+- Say a small pronunciation/typing variation such as `Mylink swich list` and confirm the saved Mylinc Switch section still appears.
+- Add one harmless extra word and reverse the brand/product order; confirm search still works.
+- Say `तार की लिस्ट दिखाओ`, `केबल भेजो`, `लाइट चाहिए`, `सॉकेट लिस्ट` and confirm their corresponding saved sections appear.
+- From the floating mic, repeat one Hindi and one Hinglish command and confirm both route to the main Voice Search correctly.
+- For a send/share command, confirm the matching section is shown in a confirmation dialog before WhatsApp/file sharing starts.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.58_RELEASE_SIGNED.apk`.
+
+## v3.23.57 Payment Reminder Ledger + Color QA
+
+- Payment Reminder window must use Auto Reply-style mint background, white cards and green header/buttons.
+- Customer names, phone numbers, due dates, filter, checkboxes and selected state must be clearly visible.
+- `LEDGER • ADD / CLEAR` → Add should open a searchable Ledger-party picker and import only checked parties.
+- Unchecked Master Ledger parties must not appear in Payment Reminder.
+- After upgrading from v3.23.56, untouched old bulk-imported Ledger rows should disappear once; saved-list/due-date/sent customers should remain.
+- Clear Imported Ledger should remove imported Ledger parties after confirmation without clearing normal phone contacts where possible.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.57_RELEASE_SIGNED.apk`.
 
 ## v3.23.56 Saved List Direct Message QA
 
