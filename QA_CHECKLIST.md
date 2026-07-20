@@ -1,4 +1,22 @@
-# LathaBulk v3.23.62 QA Checklist
+# LathaBulk v3.23.64 QA Checklist
+
+## v3.23.64 Separate Auto Reply Routing QA
+
+- Create a WhatsApp Auto Reply keyword with a unique text response and confirm exactly that response is sent.
+- Use Auto Reply text containing `price list`, `catalog` or `ledger` and confirm no other module replaces the saved response.
+- Send a Catalog request that does not match an Auto Reply rule and confirm only the saved Catalog files are sent.
+- Send a Ledger request that does not match an Auto Reply rule and confirm only the Ledger flow runs.
+- Send an Anchor Roma Price List request that does not match an Auto Reply rule and confirm only the Price List flow runs.
+- Run `Build Android APK` and confirm `LATHAEPS_SMART_v3.23.64_RELEASE_SIGNED.apk`.
+
+## v3.23.63 Smart Price List Reply QA
+
+- Save a Price List image/PDF with Brand `Anchor` and Section/keyword `Roma`.
+- Send `anchor roma discount and price list` from an individual WhatsApp chat.
+- Confirm the correct Anchor Roma file batch is shared and the not-found reply is not sent.
+- Confirm repeated notification updates for the same incoming message start only one reply/share task.
+- Confirm a different range such as `Anchor Penta price list` does not incorrectly send Anchor Roma.
+- Run `Build Android APK` and confirm `LATHAEPS_SMART_v3.23.63_RELEASE_SIGNED.apk`.
 
 ## v3.23.62 Voice Business Tools QA
 

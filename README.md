@@ -1,3 +1,23 @@
+# LathaBulk v3.23.64 – Separate WhatsApp Auto Reply Routing
+
+## v3.23.64
+
+- User-saved WhatsApp Auto Reply rules now run before Ledger, Catalog and Price List smart routing.
+- A matched Auto Reply sends only its configured text/image instead of an unrelated business-module response.
+- Catalog, Ledger and Price List continue to handle their own requests when no saved Auto Reply rule matches.
+- Duplicate protection remains active per incoming message.
+- Version increased to `3.23.64` (`versionCode 121`) and APK/AAB workflow names updated.
+
+# LathaBulk v3.23.63 – Smart Price List WhatsApp Matching
+
+## v3.23.63
+
+- Fixed WhatsApp Price List matching for natural requests such as `anchor roma discount and price list`.
+- Discount, conjunctions, and common Hinglish request words no longer block the correct brand/product match.
+- Added typo-tolerant brand/product matching while still requiring brand + range/product for multi-word searches.
+- Duplicate WhatsApp notification updates for the same Price List request now produce only one reply/share task.
+- Version increased to `3.23.63` (`versionCode 120`) and signed APK/AAB artifact names updated.
+
 # LathaBulk v3.23.62 – Voice Quotation, Favorites & Calculator
 
 ## v3.23.62

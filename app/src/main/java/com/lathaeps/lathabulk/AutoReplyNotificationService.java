@@ -60,15 +60,36 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String titleLower=title.trim().toLowerCase(Locale.ROOT);
         if((n.flags&Notification.FLAG_GROUP_SUMMARY)!=0||titleLower.equals("whatsapp")||titleLower.matches("[0-9]+\\s+new messages?"))return;
         long messageTime=extractLatestMessageTime(e);
+        // A user-created WhatsApp Auto Reply rule is an explicit instruction and
+        // must win before the Ledger, Catalog or Price List smart routers. This
+        // keeps every module isolated: the saved reply sends exactly what was set.
+        JSONObject savedAutoReply=findSavedAutoReply(p,text);
+        if(savedAutoReply!=null){
+            String senderIdentity=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
+            String stableAutoId=messageTime>0?String.valueOf(messageTime):senderIdentity;
+            String autoEventKey=pkg+"|auto|"+normaliseSearch(text)+"|"+stableAutoId;
+            if(!markNotificationEventOnce(p,autoEventKey,messageTime>0))return;
+            String autoCaption=savedAutoReply.optString("reply","").trim();
+            String autoFile=savedAutoReply.optString("image","").trim();
+            if(!autoFile.isEmpty()){
+                ArrayList<Uri> autoFiles=new ArrayList<>();autoFiles.add(Uri.parse(autoFile));
+                startShareWhenReady(autoFiles,autoCaption,pkg,senderPhone,cleanContactTitle(title),n.contentIntent,0);
+            }else if(!autoCaption.isEmpty())sendRemoteReply(n,autoCaption);
+            return;
+        }
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         JSONArray priceFiles=findPriceSourcesForMessage(lower);
         boolean explicitPriceRequest=isExplicitPriceListRequest(lower);
         boolean explicitLedgerRequest=keywordMatches(lower,lk);
         if(explicitPriceRequest||(priceFiles.length()>0&&!explicitLedgerRequest)){
-            String stablePriceId=messageTime>0?String.valueOf(messageTime):sbn.getKey();
-            String priceEventKey=pkg+"|price|"+text.trim()+"|"+stablePriceId;
-            if(!markNotificationEventOnce(p,priceEventKey,messageTime>0))return;
+            // WhatsApp can repost one incoming message with a different notification
+            // key while attachment actions are being prepared. Use the logical sender
+            // + request as the fallback identity so one request produces one reply.
+            String priceSender=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
+            String stablePriceId=messageTime>0?String.valueOf(messageTime):priceSender;
+            String priceEventKey=pkg+"|price|"+normaliseSearch(text)+"|"+stablePriceId;
+            if(!markNotificationEventOnce(p,priceEventKey,messageTime>0,120000L))return;
             if(priceFiles.length()==0){
                 sendRemoteReply(n,"Requested price list nahi mili. Kripya LATHAEPS se contact karein.");
                 return;
@@ -245,12 +266,16 @@ public class AutoReplyNotificationService extends NotificationListenerService {
 
     /** Ignore reposts/updates of one logical WhatsApp message without adding a general reply cooldown. */
     private boolean markNotificationEventOnce(SharedPreferences p,String fingerprint,boolean hasStableMessageTime){
+        return markNotificationEventOnce(p,fingerprint,hasStableMessageTime,EVENT_FALLBACK_WINDOW_MS);
+    }
+
+    private boolean markNotificationEventOnce(SharedPreferences p,String fingerprint,boolean hasStableMessageTime,long fallbackWindowMs){
         long now=System.currentTimeMillis();
         String key=Integer.toHexString(fingerprint.hashCode())+"_"+fingerprint.length();
         try{
             JSONObject recent=new JSONObject(p.getString(RECENT_EVENTS,"{}"));
             long previous=recent.optLong(key,0L);
-            long duplicateWindow=hasStableMessageTime?EVENT_HISTORY_MS:EVENT_FALLBACK_WINDOW_MS;
+            long duplicateWindow=hasStableMessageTime?EVENT_HISTORY_MS:fallbackWindowMs;
             if(previous>0&&now-previous<duplicateWindow)return false;
             JSONArray names=recent.names();
             if(names!=null)for(int i=0;i<names.length();i++){
@@ -268,6 +293,31 @@ public class AutoReplyNotificationService extends NotificationListenerService {
 
     private void saveStatus(SharedPreferences p,String status){
         p.edit().putString("last_business_status",status).putLong("last_business_status_at",System.currentTimeMillis()).apply();
+    }
+
+    /** Returns only a user-saved Auto Reply action; business module keywords are not considered here. */
+    private JSONObject findSavedAutoReply(SharedPreferences p,String message){
+        try{
+            JSONArray rules=new JSONArray(p.getString("rules","[]"));
+            for(int i=0;i<rules.length();i++){
+                JSONObject rule=rules.optJSONObject(i);if(rule==null)continue;
+                String key=rule.optString("keyword","").trim();if(key.isEmpty())continue;
+                boolean caseSensitive=rule.optBoolean("case",false);
+                String source=caseSensitive?message:message.toLowerCase(Locale.ROOT);
+                String target=caseSensitive?key:key.toLowerCase(Locale.ROOT);
+                int mode=rule.optInt("match",0);
+                boolean matched=mode==1?source.trim().equals(target):mode==2?source.startsWith(target):mode==3?source.endsWith(target):source.contains(target);
+                if(matched&&(!rule.optString("reply","").trim().isEmpty()||!rule.optString("image","").trim().isEmpty()))return rule;
+            }
+            String legacyKey=p.getString(KEYWORD,"").trim();
+            if(!legacyKey.isEmpty()&&message.toLowerCase(Locale.ROOT).contains(legacyKey.toLowerCase(Locale.ROOT))){
+                String reply=p.getString(REPLY,"").trim(),image=p.getString(IMAGE,"").trim();
+                if(!reply.isEmpty()||!image.isEmpty()){
+                    JSONObject legacy=new JSONObject();legacy.put("reply",reply);legacy.put("image",image);legacy.put("type",p.getString(IMAGE+"_type","image/*"));return legacy;
+                }
+            }
+        }catch(Exception ignored){}
+        return null;
     }
 
     private JSONArray findCatalogsForMessage(String message,String genericKeyword){
@@ -301,10 +351,13 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             for(int i=0;i<items.length();i++){
                 JSONObject item=items.optJSONObject(i);if(item==null||item.optString("uri","").isEmpty())continue;
                 String hay=normaliseSearch(item.optString("search_text","")+" "+item.optString("name","")+" "+item.optString("brand","")+" "+item.optString("category","")+" "+item.optString("keywords",""));
-                int score=0;boolean all=true;
-                for(String word:words){if((" "+hay+" ").contains(" "+word+" "))score++;else all=false;}
+                int score=0;
+                for(String word:words)if(priceWordMatchesAny(word,hay))score++;
                 if(words.isEmpty())continue;
-                if(all&&score>bestScore){best=item;bestScore=score;}
+                // Extra conversational words are harmless. With two or more useful
+                // terms, two matches (normally brand + range/product) are enough.
+                int required=words.size()==1?1:2;
+                if(score>=required&&score>bestScore){best=item;bestScore=score;}
             }
             if(best==null)return found;
             String batch=best.optString("batch_id","");
@@ -323,12 +376,48 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     }
 
     private boolean isGenericPriceWord(String word){
-        return "price".equals(word)||"pricelist".equals(word)||"rate".equals(word)||"rates".equals(word)||"list".equals(word)||"send".equals(word)||"please".equals(word)||"pls".equals(word)||"chahiye".equals(word)||"bhejo".equals(word)||"ka".equals(word)||"ki".equals(word)||"do".equals(word);
+        return "price".equals(word)||"prices".equals(word)||"pricelist".equals(word)||"rate".equals(word)||"rates".equals(word)||"list".equals(word)
+                ||"discount".equals(word)||"discounts".equals(word)||"disc".equals(word)||"offer".equals(word)||"offers".equals(word)||"scheme".equals(word)
+                ||"send".equals(word)||"share".equals(word)||"show".equals(word)||"give".equals(word)||"please".equals(word)||"pls".equals(word)
+                ||"chahiye".equals(word)||"chaiye".equals(word)||"bhejo".equals(word)||"bhej".equals(word)||"dikhao".equals(word)||"batao".equals(word)
+                ||"and".equals(word)||"or".equals(word)||"with".equals(word)||"latest".equals(word)||"current".equals(word)||"new".equals(word)
+                ||"ka".equals(word)||"ki".equals(word)||"ke".equals(word)||"ko".equals(word)||"aur".equals(word)||"do".equals(word)||"de".equals(word);
+    }
+
+    private boolean priceWordMatchesAny(String query,String hay){
+        for(String candidate:hay.split("\\s+"))if(priceWordsMatch(query,candidate))return true;
+        return false;
+    }
+
+    private boolean priceWordsMatch(String query,String candidate){
+        if(query.equals(candidate))return true;
+        if(query.length()>=4&&(candidate.contains(query)||query.contains(candidate)))return true;
+        int longest=Math.max(query.length(),candidate.length());
+        int allowed=longest>=8?2:longest>=4?1:0;
+        return allowed>0&&Math.abs(query.length()-candidate.length())<=allowed&&priceEditDistanceAtMost(query,candidate,allowed);
+    }
+
+    private boolean priceEditDistanceAtMost(String a,String b,int limit){
+        int[] previous=new int[b.length()+1],current=new int[b.length()+1];
+        for(int j=0;j<=b.length();j++)previous[j]=j;
+        for(int i=1;i<=a.length();i++){
+            current[0]=i;int rowMin=current[0];
+            for(int j=1;j<=b.length();j++){
+                int cost=a.charAt(i-1)==b.charAt(j-1)?0:1;
+                current[j]=Math.min(Math.min(current[j-1]+1,previous[j]+1),previous[j-1]+cost);
+                rowMin=Math.min(rowMin,current[j]);
+            }
+            if(rowMin>limit)return false;
+            int[] swap=previous;previous=current;current=swap;
+        }
+        return previous[b.length()]<=limit;
     }
 
     private String normaliseSearch(String value){
         if(value==null)return "";
-        String clean=value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+"," ").trim().replaceAll("\\s+"," ");
+        String clean=value.toLowerCase(Locale.ROOT)
+                .replace("एंकर","anchor").replace("रोमा","roma").replace("डिस्काउंट","discount").replace("प्राइस","price").replace("लिस्ट","list")
+                .replaceAll("[^a-z0-9]+"," ").trim().replaceAll("\\s+"," ");
         return clean.replaceAll("\\b([0-9]+)\\s*(?:mtr|meter|metre|meters|metres)\\b","$1mtr");
     }
 
