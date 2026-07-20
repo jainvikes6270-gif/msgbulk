@@ -1,4 +1,13 @@
-# LathaBulk v3.23.55 QA Checklist
+# LathaBulk v3.23.56 QA Checklist
+
+## v3.23.56 Saved List Direct Message QA
+
+- Payment Reminder → Saved Lists me every list card par `SEND MESSAGE` button dikhna chahiye.
+- Button tap karne par selected list count aur message textbox khulna chahiye.
+- Textbox ka white text, cursor aur blue focused border dark background par clearly visible hona chahiye.
+- `{Name}` preview aur WhatsApp messages me individual party name se replace hona chahiye.
+- Confirm send ke baad only saved-list parties queue me aani chahiye; balance message me nahi aana chahiye.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.56_RELEASE_SIGNED.apk`.
 
 ## v3.23.55 Payment Reminder List UI QA
 

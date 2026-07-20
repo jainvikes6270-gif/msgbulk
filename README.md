@@ -1,4 +1,12 @@
-# LathaBulk v3.23.55 – Payment Reminder List UI Fix
+# LathaBulk v3.23.56 – Payment Reminder Saved List Direct Message
+
+## v3.23.56
+
+- Every saved Payment Reminder list now has a dedicated `SEND MESSAGE` button.
+- Type and confirm a custom list message without first opening the customer-selection screen.
+- `{Name}` personalizes the message for every saved party; balance is never added.
+- The dark message box now has visible white text, cursor and a blue focused/selected border.
+- Version increased to `3.23.56` (`versionCode 113`) and APK/AAB artifact names updated.
 
 ## v3.23.55
 
