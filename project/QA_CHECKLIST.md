@@ -1,4 +1,20 @@
-# LathaBulk v3.23.60 QA Checklist
+# LathaBulk v3.23.62 QA Checklist
+
+## v3.23.62 Voice Business Tools QA
+
+- Speak `Quotation banao Polycab 1.5 wire 10 coil, 2.5 wire 5 coil, discount 40`; review and import both items.
+- Confirm saved Price List rates match voice quotation items when available.
+- Add a Favorite manually, long-press a Recent command to save it, tap to run and long-press to delete.
+- Speak `Calculate 50000 discount 41.5 GST 18` and verify the complete calculation breakup.
+- Run `Build Android APK` and confirm `LATHAEPS_SMART_v3.23.62_RELEASE_SIGNED.apk`.
+
+## v3.23.61 Voice Command QA
+
+- Confirm `RECENT VOICE` stores up to 8 unique searches and repeats a selected search.
+- Confirm `VOICE HELP` opens and `START VOICE` launches the language chooser.
+- Test Hindi/Hinglish commands for Quotation, Price List, Catalog, Ledger, Payment Reminder and Settings.
+- Test `Polycab 90 meter wire` and `Finolex 1.5 sq mm` against saved price files.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.61_RELEASE_SIGNED.apk`.
 
 ## v3.23.60 Proper Hindi Voice QA
 

@@ -1,3 +1,22 @@
+# LathaBulk v3.23.62 – Voice Quotation, Favorites & Calculator
+
+## v3.23.62
+
+- Added Voice Quotation Maker with Hindi/Hinglish language choice, editable recognition review and automatic Price List rate matching.
+- Added up to 12 Favorite Voice Commands with tap-to-run, manual add, recent-search long-press save and long-press delete.
+- Added Voice Discount/GST Calculator with base amount, discount, taxable value, GST and grand-total breakup.
+- Version increased to `3.23.62` (`versionCode 119`) and signed APK/AAB artifact names updated.
+
+# LathaBulk v3.23.61 – Voice Commands & Recent Search
+
+## v3.23.61
+
+- Added `RECENT VOICE` with the last 8 unique searches and one-tap repeat.
+- Added an in-app `VOICE HELP` screen with Hindi/Hinglish command examples.
+- Voice commands can directly open Business Quotation, Price List, Catalog, Ledger Customers, Payment Reminder, Settings, Update Check and Backup/Restore.
+- Improved spoken unit matching for `90 meter`, `1.5 sq mm`, coil/roll, pieces and Hindi digits.
+- Version increased to `3.23.61` (`versionCode 118`) and signed APK/AAB artifact names updated.
+
 # LathaBulk v3.23.60 – Proper Hindi Voice Recognition
 
 ## v3.23.60

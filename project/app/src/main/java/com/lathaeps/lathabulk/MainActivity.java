@@ -124,6 +124,8 @@ public class MainActivity extends Activity {
     static final String PRICE_LIST_ITEMS_KEY = "price_list_items";
     static final String PRICE_SOURCE_FILES_KEY = "price_source_files";
     static final String PRICE_BRAND_FOLDERS_KEY = "price_brand_folders";
+    private static final String VOICE_HISTORY_KEY = "voice_search_history";
+    private static final String VOICE_FAVORITES_KEY = "voice_command_favorites";
     private static final String PENDING_CATALOG_NAME_KEY="pending_catalog_name";
     private static final String PENDING_CATALOG_CATEGORY_KEY="pending_catalog_category";
     private static final String PENDING_CATALOG_KEYWORDS_KEY="pending_catalog_keywords";
@@ -451,6 +453,15 @@ public class MainActivity extends Activity {
         mainPriceVoice.setTextSize(16);mainPriceVoice.setTypeface(Typeface.DEFAULT_BOLD);mainPriceVoice.setTextColor(Color.WHITE);mainPriceVoice.setBackground(rounded(Color.rgb(21,73,126),15));
         LinearLayout.LayoutParams priceVoiceLp=new LinearLayout.LayoutParams(-1,dp(48));priceVoiceLp.setMargins(dp(2),dp(3),dp(2),dp(3));root.addView(mainPriceVoice,priceVoiceLp);
         mainPriceVoice.setOnClickListener(v->startPriceVoiceSearch(true));
+
+        LinearLayout voiceTools=row();
+        Button voiceRecent=button("🕘 RECENT");Button voiceFavorites=button("★ FAVORITES");Button voiceHelp=button("? HELP");
+        voiceRecent.setTextSize(11);voiceFavorites.setTextSize(11);voiceHelp.setTextSize(11);
+        voiceRecent.setTextColor(Color.rgb(21,73,126));voiceFavorites.setTextColor(Color.rgb(170,95,0));voiceHelp.setTextColor(Color.rgb(0,110,65));
+        voiceTools.addView(voiceRecent,weighted(1f,36));voiceTools.addView(voiceFavorites,weighted(1f,36));voiceTools.addView(voiceHelp,weighted(.75f,36));root.addView(voiceTools);
+        voiceRecent.setOnClickListener(v->showVoiceHistory());
+        voiceFavorites.setOnClickListener(v->showVoiceFavorites());
+        voiceHelp.setOnClickListener(v->showVoiceCommandHelp());
 
         LinearLayout messageShell=row();
         messageShell.setGravity(Gravity.CENTER_VERTICAL);
@@ -1255,7 +1266,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.60";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.62";}}
 
     private void shareApp(){
         try{
@@ -1753,8 +1764,15 @@ public class MainActivity extends Activity {
     }
 
     private void handleMainVoiceCommand(String spoken){
-        String raw=spoken==null?"":spoken.trim(),command=raw.toLowerCase(Locale.ROOT).replace("बिजनेस","business").replace("व्यापार","business").replace("फाइल्स","files").replace("फाइल","file").replace("कैटलॉग","catalog").replace("सेटिंग्स","settings").replace("बैकअप","backup").replace("रिस्टोर","restore").replace("पेमेंट","payment").replace("भुगतान","payment").replace("रिमाइंडर","reminder").replace("लेजर","ledger").replace("खाता","ledger").replace("ग्राहक","customer");
+        String raw=spoken==null?"":spoken.trim();if(raw.isEmpty()){toast("Voice result empty • dobara try karein");return;}rememberVoiceSearch(raw);
+        String command=raw.toLowerCase(Locale.ROOT).replace("बिजनेस","business").replace("व्यापार","business").replace("फाइल्स","files").replace("फाइल","file").replace("कैटलॉग","catalog").replace("सेटिंग्स","settings").replace("बैकअप","backup").replace("रिस्टोर","restore").replace("पेमेंट","payment").replace("भुगतान","payment").replace("रिमाइंडर","reminder").replace("लेजर","ledger").replace("खाता","ledger").replace("ग्राहक","customer").replace("कोटेशन","quotation").replace("क्वोटेशन","quotation").replace("प्राइस","price").replace("मूल्य सूची","price list");
+        if(command.contains("voice help")||command.contains("वॉइस हेल्प")||command.contains("आवाज मदद")){showVoiceCommandHelp();return;}
+        if(command.contains("recent voice")||command.contains("voice history")||command.contains("पिछली खोज")){showVoiceHistory();return;}
+        if(command.contains("voice favorite")||command.contains("favourite command")||command.contains("favorite command")){showVoiceFavorites();return;}
+        if(isVoiceCalculation(command)){showVoiceCalculator(raw);return;}
         if(command.contains("business file")){toast("Opening Business Files");showBusinessFilesDialog();return;}
+        if(command.contains("quotation")){String quoteVoice=command.replace("business"," ").replace("quotation"," ").replace("bana do"," ").replace("banao"," ").replace("create"," ").replace("open"," ").replace("kholo"," ").replace("khol"," ").trim();Intent quoteIntent=new Intent(this,QuotationActivity.class);if(!quoteVoice.isEmpty())quoteIntent.putExtra(QuotationActivity.EXTRA_VOICE_QUOTATION,quoteVoice);toast(quoteVoice.isEmpty()?"Opening Business Quotation":"Creating voice quotation");startActivity(quoteIntent);return;}
+        if((command.contains("price list")||command.contains("rate list"))&&!command.contains("share")&&!command.contains("send")&&!command.contains("bhejo")&&!command.contains("भेजो")){toast("Opening Price List Manager");showPriceListScreen();return;}
         if(command.contains("auto reply")||command.contains("autoreply")){toast("Opening Auto Reply");showAutoReplyScreen();return;}
         if(command.contains("catalog")||command.contains("catlog")){String q=cleanVoiceCommandQuery(command,"catalog","catlog","open","khol","kholo","dikhao","show");toast(q.isEmpty()?"Opening Catalog":"Catalog search: "+q);showCatalogScreen(q);return;}
         if(command.contains("payment")&&command.contains("reminder")){toast("Opening Payment Reminder");showPaymentReminderScreen();return;}
@@ -1768,6 +1786,30 @@ public class MainActivity extends Activity {
         toast("Price search: "+raw);showPriceListScreen(raw);
     }
 
+    private void rememberVoiceSearch(String spoken){
+        try{JSONArray old=new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(VOICE_HISTORY_KEY,"[]"));JSONArray out=new JSONArray();out.put(spoken);for(int i=0;i<old.length()&&out.length()<8;i++){String item=old.optString(i,"").trim();if(!item.isEmpty()&&!item.equalsIgnoreCase(spoken))out.put(item);}getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(VOICE_HISTORY_KEY,out.toString()).apply();}catch(Exception ignored){}
+    }
+
+    private void showVoiceHistory(){
+        try{JSONArray saved=new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(VOICE_HISTORY_KEY,"[]"));if(saved.length()==0){toast("Abhi koi recent voice search nahi hai");return;}String[] items=new String[saved.length()];for(int i=0;i<saved.length();i++)items[i]="🎤  "+saved.optString(i);AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Recent Voice • Long press to favorite").setItems(items,(d,w)->handleMainVoiceCommand(saved.optString(w))).setNeutralButton("CLEAR HISTORY",(d,w)->getSharedPreferences(PREFS,MODE_PRIVATE).edit().remove(VOICE_HISTORY_KEY).apply()).setNegativeButton("CANCEL",null).create();dialog.setOnShowListener(v->dialog.getListView().setOnItemLongClickListener((p,row,pos,id)->{addVoiceFavorite(saved.optString(pos));dialog.dismiss();return true;}));dialog.show();}catch(Exception e){toast("Voice history open nahi hui");}
+    }
+
+    private JSONArray readVoiceFavorites(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(VOICE_FAVORITES_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
+    private void writeVoiceFavorites(JSONArray value){getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString(VOICE_FAVORITES_KEY,value.toString()).apply();}
+    private void addVoiceFavorite(String command){String clean=command==null?"":command.trim();if(clean.isEmpty())return;JSONArray old=readVoiceFavorites();for(int i=0;i<old.length();i++)if(clean.equalsIgnoreCase(old.optString(i))){toast("Command already favorite hai");return;}JSONArray out=new JSONArray();out.put(clean);for(int i=0;i<old.length()&&out.length()<12;i++)out.put(old.optString(i));writeVoiceFavorites(out);toast("Favorite voice command saved ★");}
+    private void showAddVoiceFavorite(){EditText input=new EditText(this);input.setHint("Example: Polycab 90 meter wire dikhao");input.setSingleLine(false);input.setMinLines(2);input.setPadding(dp(18),0,dp(18),0);AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Add Favorite Voice Command").setView(input).setPositiveButton("SAVE",null).setNegativeButton("CANCEL",null).create();dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(x->{String command=input.getText().toString().trim();if(command.isEmpty()){input.setError("Command required");return;}addVoiceFavorite(command);dialog.dismiss();}));dialog.show();}
+    private void showVoiceFavorites(){JSONArray saved=readVoiceFavorites();String[] items=new String[saved.length()];for(int i=0;i<saved.length();i++)items[i]="★  "+saved.optString(i);AlertDialog dialog=new AlertDialog.Builder(this).setTitle(saved.length()==0?"Favorite Voice Commands • Empty":"Favorites • Tap run, long press delete").setItems(items,(d,w)->handleMainVoiceCommand(saved.optString(w))).setPositiveButton("+ ADD COMMAND",(d,w)->showAddVoiceFavorite()).setNegativeButton("CLOSE",null).create();dialog.setOnShowListener(v->{if(saved.length()>0)dialog.getListView().setOnItemLongClickListener((p,row,pos,id)->{String name=saved.optString(pos);new AlertDialog.Builder(this).setTitle("Delete favorite?").setMessage(name).setPositiveButton("DELETE",(x,y)->{JSONArray out=new JSONArray();for(int i=0;i<saved.length();i++)if(i!=pos)out.put(saved.optString(i));writeVoiceFavorites(out);toast("Favorite deleted");dialog.dismiss();}).setNegativeButton("CANCEL",null).show();return true;});});dialog.show();}
+
+    private boolean isVoiceCalculation(String command){String c=command.replace("हिसाब","calculate").replace("कैलकुलेट","calculate").replace("गणना","calculate").replace("डिस्काउंट","discount").replace("छूट","discount").replace("जीएसटी","gst");Matcher m=Pattern.compile("\\d[\\d,]*(?:\\.\\d+)?").matcher(transliterateHindiDigits(c));int numbers=0;while(m.find())numbers++;return c.contains("calculate")||c.contains("calculator")||(c.contains("discount")&&c.contains("gst")&&numbers>=3);}
+    private double voiceNumberNear(String value,String keyword,double fallback){Matcher after=Pattern.compile("(?i)"+keyword+"\\s*(?:is|hai|of|ka|ki|par|at|[:=])?\\s*(\\d[\\d,]*(?:\\.\\d+)?)").matcher(value);if(after.find())return parseVoiceNumber(after.group(1),fallback);Matcher before=Pattern.compile("(?i)(\\d[\\d,]*(?:\\.\\d+)?)\\s*%?\\s*"+keyword).matcher(value);return before.find()?parseVoiceNumber(before.group(1),fallback):fallback;}
+    private double parseVoiceNumber(String value,double fallback){try{return Double.parseDouble(value.replace(",",""));}catch(Exception e){return fallback;}}
+    private void showVoiceCalculator(String spoken){String value=transliterateHindiDigits(spoken.toLowerCase(Locale.ROOT)).replace("डिस्काउंट","discount").replace("छूट","discount").replace("जीएसटी","gst");List<Double> numbers=new ArrayList<>();Matcher m=Pattern.compile("\\d[\\d,]*(?:\\.\\d+)?").matcher(value);while(m.find())numbers.add(parseVoiceNumber(m.group(),0));if(numbers.isEmpty()){toast("Amount nahi mila • example: calculate 50000 discount 41.5 GST 18");return;}double amount=numbers.get(0),discount=voiceNumberNear(value,"(?:discount|disc|less)",numbers.size()>1?numbers.get(1):0),gst=voiceNumberNear(value,"gst",numbers.size()>2?numbers.get(2):0);discount=Math.max(0,Math.min(100,discount));gst=Math.max(0,gst);double discountAmount=amount*discount/100.0,taxable=amount-discountAmount,gstAmount=taxable*gst/100.0,grand=taxable+gstAmount;String result="Base Amount       ₹"+voiceMoney(amount)+"\nDiscount "+formatVoiceNumber(discount)+"%   -₹"+voiceMoney(discountAmount)+"\nAfter Discount   ₹"+voiceMoney(taxable)+"\nGST "+formatVoiceNumber(gst)+"%          +₹"+voiceMoney(gstAmount)+"\n\nGRAND TOTAL   ₹"+voiceMoney(grand);new AlertDialog.Builder(this).setTitle("Voice Calculator Result").setMessage(result).setPositiveButton("DONE",null).setNeutralButton("★ SAVE COMMAND",(d,w)->addVoiceFavorite(spoken)).show();}
+    private String voiceMoney(double value){return String.format(new Locale("en","IN"),"%,.2f",value);}private String formatVoiceNumber(double value){return Math.abs(value-Math.rint(value))<0.00001?String.valueOf((long)Math.rint(value)):String.format(Locale.US,"%.2f",value);}
+
+    private void showVoiceCommandHelp(){
+        new AlertDialog.Builder(this).setTitle("Voice Commands • Hindi / Hinglish").setMessage("Examples बोलें:\n\n• Polycab 90 meter wire dikhao\n• Quotation banao Polycab 1.5 wire 10 coil, 2.5 wire 5 coil, discount 40\n• Calculate 50000 discount 41.5 GST 18\n• Catalog kholo\n• Ledger customer Ramesh dhundo\n• Payment reminder kholo\n• Price list kholo\n• Settings kholo\n• Check new update\n• Backup banao\n\nRecent command को long-press करके Favorite बनाएं।").setPositiveButton("START VOICE",(d,w)->startPriceVoiceSearch(true)).setNegativeButton("CLOSE",null).show();
+    }
+
     private String cleanVoiceCommandQuery(String command,String... remove){String q=command;for(String word:remove){if(word.matches("[a-z0-9 ]+"))q=q.replaceAll("\\b"+Pattern.quote(word)+"\\b"," ");else q=q.replace(word," ");}return normalizePriceSearch(q);}
 
     private void confirmVoicePriceShare(String query){
@@ -1778,13 +1820,20 @@ public class MainActivity extends Activity {
 
     private String normalizePriceSearch(String value){
         String s=value==null?"":value.toLowerCase(Locale.ROOT).trim();
+        s=transliterateHindiDigits(s);
         s=s.replace("my link","mylinc").replace("my-link","mylinc").replace("mylink","mylinc").replace("my linc","mylinc").replace("माइलिंक","mylinc").replace("मायलिंक","mylinc").replace("माइलिन्क","mylinc").replace("माइलिन्क्स","mylinc");
         s=s.replace("पॉलीकैब","polycab").replace("पोलिकैब","polycab").replace("पॉली केब","polycab").replace("फिनोलेक्स","finolex").replace("फिनोलेक्स","finolex").replace("हैवेल्स","havells").replace("एंकर","anchor");
-        s=s.replace("स्विचेस"," switch ").replace("स्विच"," switch ").replace("मॉड्यूलर"," modular ").replace("मॉड्यूल"," module ").replace("तारों"," wire ").replace("तार"," wire ").replace("वायर"," wire ").replace("केबल"," cable ").replace("लाइट्स"," light ").replace("लाइट"," light ").replace("बल्ब"," bulb ").replace("सॉकेट"," socket ").replace("प्लेट"," plate ").replace("पाइप"," pipe ").replace("पंखा"," fan ").replace("फैन"," fan ").replace("एमसीबी"," mcb ").replace("आरसीसीबी"," rccb ").replace("डीबी बॉक्स"," db ").replace("डीबी"," db ");
+        s=s.replace("स्विचेस"," switch ").replace("स्विच"," switch ").replace("मॉड्यूलर"," modular ").replace("मॉड्यूल"," module ").replace("तारों"," wire ").replace("तार"," wire ").replace("वायर"," wire ").replace("केबल"," cable ").replace("लाइट्स"," light ").replace("लाइट"," light ").replace("बल्ब"," bulb ").replace("सॉकेट"," socket ").replace("प्लेट"," plate ").replace("पाइप"," pipe ").replace("पंखा"," fan ").replace("फैन"," fan ").replace("एमसीबी"," mcb ").replace("आरसीसीबी"," rccb ").replace("डीबी बॉक्स"," db ").replace("डीबी"," db ").replace("कॉइल"," coil ").replace("कोयल"," coil ").replace("रोल"," coil ").replace("पीस"," pcs ").replace("बॉक्स"," box ").replace("मीटर"," meter ").replace("एसक्यू एमएम"," sqmm ");
+        s=s.replaceAll("\\b(\\d+(?:\\.\\d+)?)\\s*(?:meter|metre|meters|metres|mtr)\\b","$1mtr");
+        s=s.replaceAll("\\b(\\d+(?:\\.\\d+)?)\\s*(?:sq\\s*mm|sqmm|square\\s*mm|sqm)\\b","$1sqmm");
         s=s.replaceAll("\\bswitches\\b","switch").replaceAll("\\bswich\\b","switch").replaceAll("\\bswtich\\b","switch").replaceAll("\\bwires\\b","wire").replaceAll("\\blights\\b","light").replaceAll("\\bcables\\b","cable").replaceAll("\\bsockets\\b","socket").replaceAll("\\bdistribution board\\b","db");
         s=s.replaceAll("(दिखाओ|दिखा दो|दिखा देना|बताओ|निकालो|खोलो|चाहिए|चाहिये|भेजो|भेज दीजिए|भेज देना|दे दो|देदो|लिस्ट|रेट|कीमत|भाव|कृपया|प्लीज|मुझे|हमको|वाला|वाली|वाले|नया|नयी|नई|पुराना|सभी|पूरी|पूरा|थोड़ा|थोडा|जरा|ज़रा|का|की|के|को|में|से|और|एक|ना)"," ");
         s=s.replaceAll("[^a-z0-9.%]+"," ").replaceAll("\\b(show|display|open|find|search|send|share|give|need|want|me|us|please|price|prices|rate|rates|list|details|file|files|dikhao|dikha|batao|nikalo|kholo|khol|bhejo|bhej|chahiye|chaiye|jara|zara|ka|ki|ke|ko|mein|mai|se|aur|ek|wala|wali|wale|item|items|product|products|latest|today|new|naya|nayi|purana|current|all|sab|full|pura|puri)\\b"," ");
         return s.trim().replaceAll("\\s+"," ");
+    }
+
+    private String transliterateHindiDigits(String value){
+        StringBuilder out=new StringBuilder(value.length());String hindi="०१२३४५६७८९";for(int i=0;i<value.length();i++){char c=value.charAt(i);int digit=hindi.indexOf(c);out.append(digit>=0?(char)('0'+digit):c);}return out.toString();
     }
 
     private String priceSourceSearchText(JSONObject source){return normalizePriceSearch(source.optString("search_text","")+" "+source.optString("name","")+" "+priceBrand(source)+" "+priceCategory(source)+" "+source.optString("keywords","")+" "+source.optString("original_name",""));}
