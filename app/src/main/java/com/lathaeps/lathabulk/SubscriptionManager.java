@@ -73,10 +73,18 @@ final class SubscriptionManager {
         if (!p.getBoolean(ALLOWED, false)) return p.getString(LAST_MESSAGE, "Plan expired • Payment required");
         if ("lifetime".equals(plan)) return "Lifetime Free • Online verified";
         long leftMs = p.getLong(ACCESS_UNTIL, 0) - estimatedServerNow(p);
-        int days = leftMs <= 0 ? 0 : (int)Math.ceil(leftMs / 86400000d);
-        if ("yearly".equals(plan)) return "₹800/year • Active • " + days + " day(s) left";
-        if ("custom".equals(plan)) return "Custom validity • Active • " + days + " day(s) left";
-        return "Free trial • " + days + " day(s) left";
+        String remaining = remainingDaysAndHours(leftMs);
+        if ("yearly".equals(plan)) return "₹800/year • Active • " + remaining;
+        if ("custom".equals(plan)) return "Custom validity • Active • " + remaining;
+        return "Free trial • " + remaining;
+    }
+
+    private static String remainingDaysAndHours(long leftMs) {
+        long totalHours = leftMs <= 0 ? 0 : (long)Math.ceil(leftMs / 3600000d);
+        long days = totalHours / 24L;
+        long hours = totalHours % 24L;
+        return days + " Day" + (days == 1 ? "" : "s") + " "
+                + hours + " Hour" + (hours == 1 ? "" : "s") + " Remaining";
     }
 
     static void refresh(Context context, Callback callback) {

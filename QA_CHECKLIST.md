@@ -1,4 +1,31 @@
-# LathaBulk v3.23.50 QA Checklist
+# LathaBulk v3.23.54 QA Checklist
+
+## v3.23.54 Short Folder Name QA
+
+- Business Files button and opened folder title should show `LEDGER & CONTACTS`.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.54_RELEASE_SIGNED.apk`.
+
+## v3.23.53 Master Ledger Folder QA
+
+- Business Files me four ledger utility buttons bahar nahi dikhne chahiye; `MASTER LEDGER & CONTACTS` folder button dikhna chahiye.
+- Folder me PDF to Excel, Upload PDF, Import Contact Excel and View File History verify karein.
+- `SAVE SETTINGS` keyword save kare aur Auto Reply state change na kare.
+- `AUTO REPLY ON/OFF` button independently state toggle kare; PDF upload ke baad chosen state same rahe.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.53_RELEASE_SIGNED.apk`.
+
+## v3.23.52 Subscription Remaining Time QA
+
+- Subscription screen par online refresh ke baad remaining validity days aur hours dono me dikhni chahiye.
+- Trial, yearly aur custom plan me `X Days Y Hours Remaining` format verify karein.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.52_RELEASE_SIGNED.apk`.
+
+## v3.23.51 Payment Reminder Saved Lists QA
+
+- Payment Reminder me parties select karke `SAVE LIST` se named list save karein.
+- `SAVED LISTS` kholkar list card `OPEN` karein; saved parties selected dikhne chahiye.
+- Three-dot menu se parties add/remove, rename aur delete verify karein.
+- Dark background, cards aur buttons Recipient Lists style me clearly visible hone chahiye.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.51_RELEASE_SIGNED.apk`.
 
 ## v3.23.50 UPI + WhatsApp Confirmation QA
 

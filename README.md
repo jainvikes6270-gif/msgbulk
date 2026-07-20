@@ -1,4 +1,31 @@
-# LathaBulk v3.23.50 – UPI Payment + WhatsApp Confirmation
+# LathaBulk v3.23.54 – Short Ledger Folder Name
+
+## v3.23.54
+
+- Business Files folder button and screen title shortened to `LEDGER & CONTACTS`.
+- Version increased to `3.23.54` (`versionCode 111`) and APK/AAB artifact names updated.
+
+## v3.23.53
+
+- Business Files ke four Master Ledger tools ab ek `MASTER LEDGER & CONTACTS` folder button ke andar hain.
+- Folder contains Master PDF to Phone/Balance Excel, Upload PDF, Import Contact Excel and View File History.
+- `SAVE SETTINGS` and independent `AUTO REPLY ON/OFF` buttons added.
+- Uploading a ledger no longer silently turns Auto Reply on; ON/OFF remains under user control.
+- Version increased to `3.23.53` (`versionCode 110`) and APK/AAB artifact names updated.
+
+## v3.23.52
+
+- Subscription status now shows exact remaining validity in days and hours.
+- Example: `Free trial • 11 Days 6 Hours Remaining`.
+- Works for free trial, yearly plan and custom validity.
+- Version increased to `3.23.52` (`versionCode 109`) and APK/AAB artifact names updated.
+
+## v3.23.51
+
+- Payment Reminder me selected parties ko named list ke roop me save aur dobara open kar sakte hain.
+- Saved list me parties add/remove, list rename aur list delete options add kiye gaye.
+- Payment Reminder screen aur saved list cards ko Recipient Lists jaisa dark background/button design diya gaya.
+- Version increased to `3.23.51` (`versionCode 108`) and APK/AAB artifact names updated.
 
 ## v3.23.50
 
