@@ -77,10 +77,17 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             }else if(!autoCaption.isEmpty())sendRemoteReply(n,autoCaption);
             return;
         }
+        // Strict mode: unmatched WhatsApp messages must never trigger business
+        // files. Only a user-saved Auto Reply rule above may send automatically.
+        // Price List, Catalog and Ledger stay available for manual sending.
+        if(strictSavedAutoReplyOnly()){
+            saveStatus(p,"No saved Auto Reply rule matched • ignored");
+            return;
+        }
         String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
-        JSONArray priceFiles=findPriceSourcesForMessage(lower);
         boolean explicitPriceRequest=isExplicitPriceListRequest(lower);
+        JSONArray priceFiles=findPriceSourcesForMessage(lower,explicitPriceRequest);
         boolean explicitLedgerRequest=keywordMatches(lower,lk);
         if(explicitPriceRequest||(priceFiles.length()>0&&!explicitLedgerRequest)){
             // WhatsApp can repost one incoming message with a different notification
@@ -295,6 +302,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         p.edit().putString("last_business_status",status).putLong("last_business_status_at",System.currentTimeMillis()).apply();
     }
 
+    private boolean strictSavedAutoReplyOnly(){return true;}
+
     /** Returns only a user-saved Auto Reply action; business module keywords are not considered here. */
     private JSONObject findSavedAutoReply(SharedPreferences p,String message){
         try{
@@ -335,8 +344,14 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return found;
     }
 
-    /** Matches saved Price List Manager image/PDF sources before Ledger routing. */
-    private JSONArray findPriceSourcesForMessage(String message){
+    /**
+     * Matches Price List sources without treating arbitrary words found inside a
+     * PDF as a request. Normal chat may contain words such as "bill", "ready" or
+     * "transfer" which are also present in extracted PDF text. Extracted text is
+     * therefore searched only when the customer explicitly asks for a price/rate
+     * list. An implicit request must match the saved brand, section or keywords.
+     */
+    private JSONArray findPriceSourcesForMessage(String message,boolean explicitRequest){
         JSONArray found=new JSONArray();
         try{
             JSONArray items=new JSONArray(getSharedPreferences(APP_PREFS,MODE_PRIVATE).getString(PRICE_SOURCE_FILES,"[]"));
@@ -348,15 +363,24 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                 if(!words.contains(word))words.add(word);
             }
             JSONObject best=null;int bestScore=0;
-            for(int i=0;i<items.length();i++){
+            for(int i=items.length()-1;i>=0;i--){
                 JSONObject item=items.optJSONObject(i);if(item==null||item.optString("uri","").isEmpty())continue;
-                String hay=normaliseSearch(item.optString("search_text","")+" "+item.optString("name","")+" "+item.optString("brand","")+" "+item.optString("category","")+" "+item.optString("keywords",""));
-                int score=0;
-                for(String word:words)if(priceWordMatchesAny(word,hay))score++;
-                if(words.isEmpty())continue;
-                // Extra conversational words are harmless. With two or more useful
-                // terms, two matches (normally brand + range/product) are enough.
-                int required=words.size()==1?1:2;
+                String brand=normaliseSearch(item.optString("brand",""));
+                String category=normaliseSearch(item.optString("category",""));
+                String keywords=normaliseSearch(item.optString("keywords",""));
+                String name=normaliseSearch(item.optString("name","")+" "+item.optString("original_name",""));
+                String metadata=normaliseSearch(brand+" "+category+" "+keywords+" "+name);
+                String searchable=explicitRequest?normaliseSearch(metadata+" "+item.optString("search_text","")):metadata;
+                int score=0,metadataScore=0;
+                for(String word:words){
+                    if(priceWordMatchesAny(word,searchable))score++;
+                    if(priceWordMatchesAny(word,metadata))metadataScore++;
+                }
+                boolean brandRequest=isStrongPriceLabel(brand)&&containsPricePhrase(query,brand);
+                boolean structuredRequest=brandRequest||(words.size()>=2&&metadataScore>=2);
+                if(!explicitRequest&&!structuredRequest)continue;
+                if(explicitRequest&&words.isEmpty())score=1; // plain "price list": latest saved batch
+                int required=words.size()<=1?1:2;
                 if(score>=required&&score>bestScore){best=item;bestScore=score;}
             }
             if(best==null)return found;
@@ -368,6 +392,15 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             }
         }catch(Exception ignored){}
         return found;
+    }
+
+    private boolean isStrongPriceLabel(String value){
+        return value!=null&&!value.isEmpty()&&!"other".equals(value)&&!"general".equals(value)&&!"price".equals(value)&&!"price list".equals(value);
+    }
+
+    private boolean containsPricePhrase(String query,String phrase){
+        if(query==null||phrase==null||phrase.isEmpty())return false;
+        return (" "+query+" ").contains(" "+phrase+" ");
     }
 
     private boolean isExplicitPriceListRequest(String message){

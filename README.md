@@ -1,3 +1,23 @@
+# LathaBulk v3.23.66 – Strict Saved Auto Reply Only
+
+## v3.23.66
+
+- WhatsApp automation now runs only when a user-saved Auto Reply rule matches.
+- Every unmatched message is ignored; it cannot trigger Price List, Catalog or Ledger files.
+- Business files remain available for manual sending from their own app screens.
+- Each rule still follows its selected Contains, Exact, Starts with or Ends with match mode.
+- Version increased to `3.23.66` (`versionCode 123`) and APK/AAB workflow names updated.
+
+# LathaBulk v3.23.65 – Safe Price List Auto Routing
+
+## v3.23.65
+
+- Fixed normal WhatsApp messages such as `Sir bill` and `Transfer ready` incorrectly sending saved Price List PDFs.
+- Extracted PDF text is now searched only when the customer explicitly asks for a Price List or Rate List.
+- Requests without `price list` continue to work only when they match a saved Brand, Section or Price keyword.
+- Saved Auto Reply rules still run first and send only their configured text/image.
+- Version increased to `3.23.65` (`versionCode 122`) and APK/AAB workflow names updated.
+
 # LathaBulk v3.23.64 – Separate WhatsApp Auto Reply Routing
 
 ## v3.23.64

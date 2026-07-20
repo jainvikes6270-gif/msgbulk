@@ -1,3 +1,24 @@
+# LathaBulk v3.23.66 QA Checklist
+
+## v3.23.66 Strict Saved Auto Reply QA
+
+- Save one Auto Reply rule and confirm only its matching message sends the configured text/image.
+- Send `Sir bill`, `Transfer ready`, `Anchor Roma`, `price list`, `catalog` and `ledger`; confirm all are ignored unless separately saved as Auto Reply rules.
+- Confirm an unmatched message never opens WhatsApp share or sends any Price List, Catalog or Ledger file.
+- Confirm manual sends from Price List, Catalog and Ledger screens still work.
+- Run `Build Android APK` and confirm `LATHAEPS_SMART_v3.23.66_RELEASE_SIGNED.apk`.
+
+# LathaBulk v3.23.65 QA Checklist
+
+## v3.23.65 Safe Price Trigger QA
+
+- Send `Sir bill` and confirm no Price List PDF is sent.
+- Send `Transfer ready` and confirm no Price List PDF is sent.
+- Send `Anchor Roma` and confirm the saved Anchor Roma Price List batch is sent.
+- Send `Anchor Roma price list` and confirm the same correct Price List batch is sent once.
+- Create a matching Auto Reply rule and confirm its configured text/image wins over Price List routing.
+- Run `Build Android APK` and confirm `LATHAEPS_SMART_v3.23.65_RELEASE_SIGNED.apk`.
+
 # LathaBulk v3.23.64 QA Checklist
 
 ## v3.23.64 Separate Auto Reply Routing QA
