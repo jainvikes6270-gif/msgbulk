@@ -60,11 +60,11 @@ jobs:
             -digestalg SHA-256 \
             "$AAB" "$KEY_ALIAS"
           jarsigner -verify -verbose -certs "$AAB"
-          cp "$AAB" "LATHAEPS_SMART_v3.23.68_Play_Signed.aab"
+          cp "$AAB" "LATHAEPS_SMART_v3.23.69_Play_Signed.aab"
 
       - name: Upload Play Store bundle
         uses: actions/upload-artifact@v4
         with:
-          name: LATHAEPS-SMART-Play-AAB-v3.23.68
-          path: LATHAEPS_SMART_v3.23.68_Play_Signed.aab
+          name: LATHAEPS-SMART-Play-AAB-v3.23.69
+          path: LATHAEPS_SMART_v3.23.69_Play_Signed.aab
           if-no-files-found: error

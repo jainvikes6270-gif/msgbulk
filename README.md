@@ -1,3 +1,12 @@
+# LathaBulk v3.23.69 – Catalog Auto Reply ON/OFF
+
+## v3.23.69
+
+- Added a saved ON/OFF switch in the Catalog header.
+- When OFF, Catalog keywords do not send any PDF or image automatically.
+- Manual Catalog browsing and sending remain available.
+- Version increased to `3.23.69` (`versionCode 126`) and APK/AAB workflow names updated.
+
 # LathaBulk v3.23.67 – Auto Reply + Ledger Routing Fix
 
 ## v3.23.67

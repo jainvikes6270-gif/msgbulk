@@ -24,6 +24,7 @@ import org.json.JSONObject;
 public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String PREFS="auto_reply_prefs", ENABLED="enabled", KEYWORD="keyword", REPLY="reply", IMAGE="image";
     public static final String LEDGER_URI="ledger_uri", CATALOG_URI="catalog_uri";
+    public static final String CATALOG_ENABLED="catalog_enabled";
     public static final String LEDGER_KEY="ledger_key", CATALOG_KEY="catalog_key";
     public static final String PENDING_SHARE="pending_share", PENDING_SHARE_AT="pending_share_at";
     public static final String PREPARING_SHARE="preparing_share";
@@ -122,12 +123,13 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             startShareWhenReady(files,caption,pkg,senderPhone,cleanContactTitle(title),n.contentIntent,0);
             return;
         }
-        JSONArray matchedCatalogs=findCatalogsForMessage(lower,ck);
+        boolean catalogEnabled=p.getBoolean(CATALOG_ENABLED,true);
+        JSONArray matchedCatalogs=catalogEnabled?findCatalogsForMessage(lower,ck):new JSONArray();
         boolean catalogRequest=matchedCatalogs.length()>0;
         if(!catalogRequest&&strictSavedAutoReplyOnly()){
             // Strict still means "do nothing" for unrelated chat. Saved Catalog
             // keywords remain an explicit rule and are allowed through.
-            saveStatus(p,"No saved Auto Reply or Catalog keyword matched • ignored");
+            saveStatus(p,catalogEnabled?"No saved Auto Reply or Catalog keyword matched • ignored":"Catalog Auto Reply OFF • ignored");
             return;
         }
         String senderIdentity=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
