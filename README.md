@@ -1,3 +1,11 @@
+# LathaBulk v3.23.70 – Catalog Toggle Position
+
+## v3.23.70
+
+- Moved the Catalog Auto Reply ON/OFF switch out of the top title bar.
+- Added a large Auto Reply-style `Enable Catalog Auto Reply` row below the Catalog header.
+- Version increased to `3.23.70` (`versionCode 127`) and APK/AAB workflow names updated.
+
 # LathaBulk v3.23.69 – Catalog Auto Reply ON/OFF
 
 ## v3.23.69
