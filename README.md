@@ -1,4 +1,11 @@
-# LathaBulk v3.23.66 – Strict Saved Auto Reply Only
+# LathaBulk v3.23.67 – Auto Reply + Ledger Routing Fix
+
+## v3.23.67
+
+- Same WhatsApp notification is deduplicated by conversation and message, so a saved Auto Reply sends only once.
+- The configured Ledger keyword has priority over saved Auto Reply rules and now opens the matched customer's Ledger PDF route.
+- WhatsApp shortcut/JID identity is used when available for more reliable exact phone matching.
+- Version increased to `3.23.67` (`versionCode 124`) and APK/AAB workflow names updated.
 
 ## v3.23.66
 

@@ -36,6 +36,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     private static final String PRICE_SOURCE_FILES="price_source_files";
     private static final String RECENT_EVENTS="recent_notification_events";
     private static final long EVENT_FALLBACK_WINDOW_MS=20000L;
+    private static final long LOGICAL_REPLY_WINDOW_MS=60000L;
     private static final long EVENT_HISTORY_MS=600000L;
     private final Handler handler=new Handler(Looper.getMainLooper());
 
@@ -60,15 +61,28 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         String titleLower=title.trim().toLowerCase(Locale.ROOT);
         if((n.flags&Notification.FLAG_GROUP_SUMMARY)!=0||titleLower.equals("whatsapp")||titleLower.matches("[0-9]+\\s+new messages?"))return;
         long messageTime=extractLatestMessageTime(e);
+        String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
+        boolean explicitLedgerRequest=keywordMatches(lower,lk);
+        // Ledger is a separate business route. It must run before saved Auto Reply
+        // rules, otherwise a broad rule such as "ledger" can hide the PDF reply.
+        if(explicitLedgerRequest){
+            String ledgerSender=logicalSenderIdentity(title,senderPhone);
+            String ledgerEventKey=pkg+"|ledger|"+ledgerSender+"|"+normaliseSearch(text);
+            if(!markNotificationEventOnce(p,ledgerEventKey,false,LOGICAL_REPLY_WINDOW_MS))return;
+            resolveAndSendLedger(sbn,n,pkg,text,messageTime,senderPhone,title,0);
+            return;
+        }
         // A user-created WhatsApp Auto Reply rule is an explicit instruction and
         // must win before the Ledger, Catalog or Price List smart routers. This
         // keeps every module isolated: the saved reply sends exactly what was set.
         JSONObject savedAutoReply=findSavedAutoReply(p,text);
         if(savedAutoReply!=null){
-            String senderIdentity=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
-            String stableAutoId=messageTime>0?String.valueOf(messageTime):senderIdentity;
-            String autoEventKey=pkg+"|auto|"+normaliseSearch(text)+"|"+stableAutoId;
-            if(!markNotificationEventOnce(p,autoEventKey,messageTime>0))return;
+            // WhatsApp reposts the same incoming message while its notification is
+            // updated. Message timestamps/keys can change, so dedupe on the visible
+            // conversation plus message instead of those unstable notification IDs.
+            String senderIdentity=logicalSenderIdentity(title,senderPhone);
+            String autoEventKey=pkg+"|auto|"+senderIdentity+"|"+normaliseSearch(text);
+            if(!markNotificationEventOnce(p,autoEventKey,false,LOGICAL_REPLY_WINDOW_MS))return;
             String autoCaption=savedAutoReply.optString("reply","").trim();
             String autoFile=savedAutoReply.optString("image","").trim();
             if(!autoFile.isEmpty()){
@@ -84,11 +98,9 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             saveStatus(p,"No saved Auto Reply rule matched • ignored");
             return;
         }
-        String lk=p.getString(LEDGER_KEY,"ledger").trim().toLowerCase(Locale.ROOT);
         String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
         boolean explicitPriceRequest=isExplicitPriceListRequest(lower);
         JSONArray priceFiles=findPriceSourcesForMessage(lower,explicitPriceRequest);
-        boolean explicitLedgerRequest=keywordMatches(lower,lk);
         if(explicitPriceRequest||(priceFiles.length()>0&&!explicitLedgerRequest)){
             // WhatsApp can repost one incoming message with a different notification
             // key while attachment actions are being prepared. Use the logical sender
@@ -115,17 +127,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             String section=first==null?"":first.optString("category","").trim();
             String caption="LATHA EPS Price List"+(brand.isEmpty()?"":" • "+brand)+(section.isEmpty()?"":" • "+section);
             startShareWhenReady(files,caption,pkg,senderPhone,cleanContactTitle(title),n.contentIntent,0);
-            return;
-        }
-        if(explicitLedgerRequest){
-            // WhatsApp often posts the same message several times. The first post can
-            // contain only a display name, while a later update contains the real JID.
-            // Deduplicate by the logical message (not by the changing sender identity)
-            // and wait briefly for the notification identity to settle before replying.
-            String stableLedgerId=messageTime>0?String.valueOf(messageTime):sbn.getKey();
-            String ledgerEventKey=pkg+"|ledger|"+text.trim()+"|"+stableLedgerId;
-            if(!markNotificationEventOnce(p,ledgerEventKey,messageTime>0))return;
-            resolveAndSendLedger(sbn,n,pkg,text,messageTime,senderPhone,title,0);
             return;
         }
         String senderIdentity=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
@@ -525,6 +526,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     private String resolvePhoneFromNotification(StatusBarNotification sbn,Notification n,Bundle extras,String title){
         ArrayList<String> candidates=new ArrayList<>();
         candidates.add(title);
+        if(n!=null&&Build.VERSION.SDK_INT>=26)addTrustedPersonCandidate(candidates,n.getShortcutId());
+        if(sbn!=null){addTrustedPersonCandidate(candidates,sbn.getTag());addTrustedPersonCandidate(candidates,sbn.getKey());}
         if(extras!=null){
             candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_SUB_TEXT,"")));
             if(Build.VERSION.SDK_INT>=24)candidates.add(String.valueOf(extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE,"")));
@@ -590,6 +593,13 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         if(value==null)return "";
         return value.replaceAll("(?i)\\s*\\([0-9]+\\s+messages?\\)\\s*$","")
                 .toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+"," ").trim();
+    }
+
+    private String logicalSenderIdentity(String title,String phone){
+        String visible=normaliseContactName(cleanContactTitle(title));
+        if(!visible.isEmpty())return visible;
+        String ten=last10(phone);
+        return ten.isEmpty()?"unknown":ten;
     }
 
     private void shareFile(Uri uri,String mime,String caption,String pkg,String phone){

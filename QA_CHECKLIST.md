@@ -1,4 +1,13 @@
-# LathaBulk v3.23.66 QA Checklist
+# LathaBulk v3.23.67 QA Checklist
+
+## v3.23.67 Auto Reply + Ledger Routing QA
+
+- Send one saved Auto Reply keyword once and confirm exactly one response is sent.
+- Confirm WhatsApp notification reposts/updates do not send duplicate responses for 60 seconds.
+- Send the configured Ledger keyword and confirm the saved Auto Reply text does not intercept it.
+- Confirm an exact imported customer phone receives its mapped Ledger PDF.
+- Confirm an unmatched phone receives only one Ledger mismatch message.
+- Run `Build Android APK` and confirm `LATHAEPS_SMART_v3.23.67_RELEASE_SIGNED.apk`.
 
 ## v3.23.66 Strict Saved Auto Reply QA
 
