@@ -1,6 +1,7 @@
 package com.lathaeps.lathabulk;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
@@ -15,20 +16,31 @@ public class FloatingVoiceSearchActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        if (state == null) startSpeech();
+        if (state == null) showLanguageChooser();
     }
 
-    private void startSpeech() {
+    private void showLanguageChooser() {
+        String[] languages = {"हिंदी  •  Hindi words", "HINGLISH / ENGLISH"};
+        new AlertDialog.Builder(this)
+                .setTitle("Voice language चुनें")
+                .setItems(languages, (dialog, which) -> startSpeech(which == 0 ? "hi-IN" : "en-IN"))
+                .setOnCancelListener(dialog -> finish())
+                .show();
+    }
+
+    private void startSpeech(String language) {
         try {
             Intent speech = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN");
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "hi-IN");
-            speech.putExtra(RecognizerIntent.EXTRA_PROMPT, "Hindi / English me brand, item ya command boliye");
-            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
+            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language);
+            speech.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false);
+            speech.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            speech.putExtra(RecognizerIntent.EXTRA_PROMPT, "hi-IN".equals(language) ? "हिंदी में ब्रांड और सामान बोलिए" : "Speak brand and product in Hinglish / English");
+            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 10);
             startActivityForResult(speech, REQUEST_SPEECH);
         } catch (Exception error) {
-            Toast.makeText(this, "Google voice search phone me available nahi hai", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Google Speech Services में Hindi voice उपलब्ध नहीं है", Toast.LENGTH_LONG).show();
             finish();
         }
     }

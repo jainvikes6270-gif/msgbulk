@@ -1,3 +1,14 @@
+# LathaBulk v3.23.60 QA Checklist
+
+## v3.23.60 Proper Hindi Voice QA
+
+- Tap main `VOICE SEARCH`, select `हिंदी`, and confirm the Google listening prompt is in Hindi.
+- Say `माइलिंक स्विच की लिस्ट दिखाओ` and confirm the Mylinc Switch section appears.
+- Say `पॉलीकैब तार का रेट बताओ` and confirm the Polycab Wire section appears.
+- Select `HINGLISH / ENGLISH`, say `Mylinc switch ki list`, and confirm it still works.
+- Repeat both language modes from the floating mic.
+- Run `Build Android APK` and confirm the file is `LATHAEPS_SMART_v3.23.60_RELEASE_SIGNED.apk`.
+
 # LathaBulk v3.23.59 QA Checklist
 
 ## v3.23.59 Flexible Hindi/Hinglish Voice QA

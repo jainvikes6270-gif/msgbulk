@@ -1255,7 +1255,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.59";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.60";}}
 
     private void shareApp(){
         try{
@@ -1732,7 +1732,25 @@ public class MainActivity extends Activity {
         voice.setOnClickListener(v->startPriceVoiceSearch(false));back.setOnClickListener(v->{if(!selectedBrand[0].equalsIgnoreCase("ALL BRANDS")&&search.getText().toString().trim().isEmpty()){selectedBrand[0]="ALL BRANDS";brandFilter.setText("BRAND: ALL BRANDS ▼");refresh[0].run();}else d.dismiss();});addBrand.setOnClickListener(v->showAddPriceBrandDialog(refresh[0]));addSource.setOnClickListener(v->showAddPriceSourceDialog(selectedBrand[0].equalsIgnoreCase("ALL BRANDS")?"":selectedBrand[0],"",""));addItem.setOnClickListener(v->showPriceItemEditor(null,selectedBrand[0].equalsIgnoreCase("ALL BRANDS")?"":selectedBrand[0],refresh[0]));sharePrice.setOnClickListener(v->showPriceShareOptions());d.setOnDismissListener(v->{if(priceListSearchBox==search)priceListSearchBox=null;if(pendingPriceListRefresh==refresh[0])pendingPriceListRefresh=null;});if(initialSearch!=null&&!initialSearch.trim().isEmpty())search.setText(initialSearch);refresh[0].run();d.setContentView(page);d.show();
     }
 
-    private void startPriceVoiceSearch(boolean fromHome){priceVoiceFromHome=fromHome;try{Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"hi-IN");i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,"hi-IN");i.putExtra(RecognizerIntent.EXTRA_PROMPT,fromHome?"Hindi / English me boliye • Polycab list, Business Files":"Hindi / English me brand aur item boliye • Mylinc switch list");i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,5);startActivityForResult(i,PRICE_VOICE_SEARCH);}catch(Exception e){priceVoiceFromHome=false;toast("Google voice search phone me available nahi hai");}}
+    private void startPriceVoiceSearch(boolean fromHome){
+        String[] languages={"हिंदी  •  Hindi words","HINGLISH / ENGLISH"};
+        new AlertDialog.Builder(this).setTitle("Voice language चुनें").setItems(languages,(dialog,which)->launchPriceVoiceRecognizer(fromHome,which==0?"hi-IN":"en-IN")).setNegativeButton("CANCEL",null).show();
+    }
+
+    private void launchPriceVoiceRecognizer(boolean fromHome,String language){
+        priceVoiceFromHome=fromHome;
+        try{
+            Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,language);
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,language);
+            i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,false);
+            i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,false);
+            i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,10);
+            i.putExtra(RecognizerIntent.EXTRA_PROMPT,"hi-IN".equals(language)?"हिंदी में ब्रांड और सामान बोलिए":"Speak brand and product in Hinglish / English");
+            startActivityForResult(i,PRICE_VOICE_SEARCH);
+        }catch(Exception e){priceVoiceFromHome=false;toast("Google Speech Services में Hindi voice उपलब्ध नहीं है");}
+    }
 
     private void handleMainVoiceCommand(String spoken){
         String raw=spoken==null?"":spoken.trim(),command=raw.toLowerCase(Locale.ROOT).replace("बिजनेस","business").replace("व्यापार","business").replace("फाइल्स","files").replace("फाइल","file").replace("कैटलॉग","catalog").replace("सेटिंग्स","settings").replace("बैकअप","backup").replace("रिस्टोर","restore").replace("पेमेंट","payment").replace("भुगतान","payment").replace("रिमाइंडर","reminder").replace("लेजर","ledger").replace("खाता","ledger").replace("ग्राहक","customer");

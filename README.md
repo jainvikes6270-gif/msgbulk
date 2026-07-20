@@ -1,3 +1,14 @@
+# LathaBulk v3.23.60 – Proper Hindi Voice Recognition
+
+## v3.23.60
+
+- Voice Search now asks for `हिंदी` or `HINGLISH / ENGLISH` before listening.
+- Hindi mode explicitly forces the recognizer to `hi-IN` and shows a Hindi listening prompt.
+- Online recognition is preferred so Hindi works even when the offline Hindi language pack is missing.
+- Up to 10 recognition alternatives are checked against saved Price List data.
+- The floating mic uses the same Hindi/Hinglish language selector.
+- Version increased to `3.23.60` (`versionCode 117`) and signed APK/AAB artifact names updated.
+
 # LathaBulk v3.23.59 – Flexible Hindi/Hinglish Voice Search
 
 ## v3.23.59
