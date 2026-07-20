@@ -1266,7 +1266,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.70";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.71";}}
 
     private void shareApp(){
         try{
@@ -1422,14 +1422,19 @@ public class MainActivity extends Activity {
     private void openCatalogPhoneGallery(){
         persistPendingCatalog();
         try{
-            // OPEN_DOCUMENT is reliable for multi-select on Vivo/Android 13+ and
-            // still opens the phone's Photos/Gallery providers without broad storage access.
-            Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            i.addCategory(Intent.CATEGORY_OPENABLE);
+            // Android 13+ Photo Picker opens the phone photo UI instead of the
+            // PDF/Documents picker and supports selecting multiple pictures.
+            Intent i;
+            if(Build.VERSION.SDK_INT>=33){
+                i=new Intent(MediaStore.ACTION_PICK_IMAGES);
+                i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX,MediaStore.getPickImagesMaxLimit());
+            }else{
+                i=new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+            }
             i.setType("image/*");
-            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-            startActivityForResult(Intent.createChooser(i,"Phone Gallery • select one or more pictures"),PICK_CATALOG_FILE);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(i,PICK_CATALOG_FILE);
         }catch(Exception first){
             try{
                 Intent fallback=new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -1442,10 +1447,22 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openCatalogPdfFiles(){
+        persistPendingCatalog();
+        try{
+            Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("application/pdf");
+            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(Intent.createChooser(i,"PDF Files • select one or more PDFs"),PICK_CATALOG_FILE);
+        }catch(Exception e){toast("PDF Files open nahi hui");}
+    }
+
     private void chooseCatalogSource(){
         String[] choices={"Phone Gallery Images","PDF / Files"};
         new AlertDialog.Builder(this).setTitle("Add Catalog Files").setItems(choices,(d,which)->{
-            if(which==0)openCatalogPhoneGallery();else pickBusinessFile(PICK_CATALOG_FILE);
+            if(which==0)openCatalogPhoneGallery();else openCatalogPdfFiles();
         }).setNegativeButton("Cancel",null).show();
     }
 
@@ -1591,7 +1608,7 @@ public class MainActivity extends Activity {
         box.addView(category);box.addView(name);box.addView(words);box.addView(help);
         AlertDialog d=new AlertDialog.Builder(this).setTitle("Add Catalog Type").setView(box).setPositiveButton("PDF / FILES",null).setNeutralButton("PHONE GALLERY",null).setNegativeButton("Cancel",null).create();
         d.setOnShowListener(x->{
-            View.OnClickListener select=v->{String c=category.getText().toString().trim();String n=name.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Enter Wires, Switch, DB or another type");return;}if(n.isEmpty()){name.setError("Enter catalog name");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);pendingCatalogCategory=c;pendingCatalogName=n;pendingCatalogKeywords=k;boolean gallery=v==d.getButton(AlertDialog.BUTTON_NEUTRAL);d.dismiss();if(gallery)openCatalogPhoneGallery();else pickBusinessFile(PICK_CATALOG_FILE);};
+            View.OnClickListener select=v->{String c=category.getText().toString().trim();String n=name.getText().toString().trim();String k=words.getText().toString().trim();if(c.isEmpty()){category.setError("Enter Wires, Switch, DB or another type");return;}if(n.isEmpty()){name.setError("Enter catalog name");return;}if(k.isEmpty())k=c.toLowerCase(Locale.ROOT);pendingCatalogCategory=c;pendingCatalogName=n;pendingCatalogKeywords=k;boolean gallery=v==d.getButton(AlertDialog.BUTTON_NEUTRAL);d.dismiss();if(gallery)openCatalogPhoneGallery();else openCatalogPdfFiles();};
             d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(select);
             d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(select);
         });d.show();

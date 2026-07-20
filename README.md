@@ -1,4 +1,11 @@
-# LathaBulk v3.23.70 – Catalog Toggle Position
+# LathaBulk v3.23.71 – Catalog Gallery + PDF Picker Fix
+
+## v3.23.71
+
+- Catalog **PHONE GALLERY** now opens the Android photo picker instead of the PDF/Documents screen.
+- Gallery supports selecting one or multiple phone images.
+- Catalog **PDF / FILES** now opens a separate PDF-only picker with multiple selection.
+- Version increased to `3.23.71` (`versionCode 128`).
 
 ## v3.23.70
 
