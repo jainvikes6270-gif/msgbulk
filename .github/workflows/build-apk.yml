@@ -1,19 +1,13 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
-
-permissions:
-  contents: read
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -22,20 +16,23 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      - name: Set up Gradle 8.7
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.7"
+          gradle-version: '8.7'
 
       - name: Build debug APK
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: gradle --no-daemon clean assembleDebug
 
-      - name: Upload APK artifact
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk LATHAEPS_SMART_v3.23.72_DEBUG.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LathaBulk-v3.23.72-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: LATHAEPS-SMART-APK-v3.23.72
+          path: LATHAEPS_SMART_v3.23.72_DEBUG.apk
           if-no-files-found: error
-          retention-days: 30
+

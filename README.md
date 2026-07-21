@@ -1,11 +1,18 @@
-# LathaBulk v3.23.72 – Catalog Gallery + PDF Picker Fix
+# LathaBulk v3.23.72 – Price Manager Auto-Send Isolation Fix
 
 ## v3.23.72
+
+- Removed the hidden WhatsApp auto-send route from Price List Manager. Its PDFs/images are now only available for in-app search, voice search and quotation workflows.
+- Catalog auto-reply now sends only when a word explicitly saved in the Catalog editor matches the received message.
+- Catalog category, filename and generic `catalog` text can no longer select a file automatically.
+- Version increased to `3.23.72` (`versionCode 129`).
+
+## v3.23.71
 
 - Catalog **PHONE GALLERY** now opens the Android photo picker instead of the PDF/Documents screen.
 - Gallery supports selecting one or multiple phone images.
 - Catalog **PDF / FILES** now opens a separate PDF-only picker with multiple selection.
-- Version increased to `3.23.72` (`versionCode 129`).
+- Version increased to `3.23.71` (`versionCode 128`).
 
 ## v3.23.70
 

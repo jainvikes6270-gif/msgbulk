@@ -33,8 +33,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     public static final String CATALOG_QUEUE_CONTACT="catalog_share_contact", SHARE_PICKER_STAGE="catalog_share_picker_stage", SHARE_PICKER_TRIES="catalog_share_picker_tries";
     public static final String CATALOG_QUEUE_PHONES="catalog_share_phones", CATALOG_QUEUE_CONTACTS="catalog_share_contacts", CATALOG_QUEUE_CAPTIONS="catalog_share_captions", CATALOG_QUEUE_LABEL="catalog_share_label";
     public static final String LEDGER_CUSTOMERS="ledger_customers";
-    private static final String APP_PREFS="latha_bulk_prefs";
-    private static final String PRICE_SOURCE_FILES="price_source_files";
     private static final String RECENT_EVENTS="recent_notification_events";
     private static final long EVENT_FALLBACK_WINDOW_MS=20000L;
     private static final long LOGICAL_REPLY_WINDOW_MS=60000L;
@@ -74,7 +72,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             return;
         }
         // A user-created WhatsApp Auto Reply rule is an explicit instruction and
-        // must win before the Ledger, Catalog or Price List smart routers. This
+        // must win before the Ledger or Catalog routers. This
         // keeps every module isolated: the saved reply sends exactly what was set.
         JSONObject savedAutoReply=findSavedAutoReply(p,text);
         if(savedAutoReply!=null){
@@ -92,39 +90,8 @@ public class AutoReplyNotificationService extends NotificationListenerService {
             }else if(!autoCaption.isEmpty())sendRemoteReply(n,autoCaption);
             return;
         }
-        String ck=p.getString(CATALOG_KEY,"catalog").trim().toLowerCase(Locale.ROOT);
-        boolean explicitPriceRequest=isExplicitPriceListRequest(lower);
-        JSONArray priceFiles=findPriceSourcesForMessage(lower,explicitPriceRequest);
-        if(explicitPriceRequest||(priceFiles.length()>0&&!explicitLedgerRequest)){
-            // WhatsApp can repost one incoming message with a different notification
-            // key while attachment actions are being prepared. Use the logical sender
-            // + request as the fallback identity so one request produces one reply.
-            String priceSender=!last10(senderPhone).isEmpty()?last10(senderPhone):normaliseContactName(cleanContactTitle(title));
-            String stablePriceId=messageTime>0?String.valueOf(messageTime):priceSender;
-            String priceEventKey=pkg+"|price|"+normaliseSearch(text)+"|"+stablePriceId;
-            if(!markNotificationEventOnce(p,priceEventKey,messageTime>0,120000L))return;
-            if(priceFiles.length()==0){
-                sendRemoteReply(n,"Requested price list nahi mili. Kripya LATHAEPS se contact karein.");
-                return;
-            }
-            ArrayList<Uri> files=new ArrayList<>();
-            JSONObject first=priceFiles.optJSONObject(0);
-            for(int i=0;i<priceFiles.length();i++){
-                JSONObject item=priceFiles.optJSONObject(i);if(item==null)continue;
-                String uri=item.optString("uri","");if(!uri.isEmpty())files.add(Uri.parse(uri));
-            }
-            if(files.isEmpty()){
-                sendRemoteReply(n,"Requested price list file available nahi hai. Kripya LATHAEPS se contact karein.");
-                return;
-            }
-            String brand=first==null?"":first.optString("brand","").trim();
-            String section=first==null?"":first.optString("category","").trim();
-            String caption="LATHA EPS Price List"+(brand.isEmpty()?"":" • "+brand)+(section.isEmpty()?"":" • "+section);
-            startShareWhenReady(files,caption,pkg,senderPhone,cleanContactTitle(title),n.contentIntent,0);
-            return;
-        }
         boolean catalogEnabled=p.getBoolean(CATALOG_ENABLED,true);
-        JSONArray matchedCatalogs=catalogEnabled?findCatalogsForMessage(lower,ck):new JSONArray();
+        JSONArray matchedCatalogs=catalogEnabled?findCatalogsForMessage(lower):new JSONArray();
         boolean catalogRequest=matchedCatalogs.length()>0;
         if(!catalogRequest&&strictSavedAutoReplyOnly()){
             // Strict still means "do nothing" for unrelated chat. Saved Catalog
@@ -240,12 +207,6 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         },1200L);
     }
 
-    private boolean matchesBusinessKeyword(String message,String saved,String... aliases){
-        if(saved!=null&&!saved.trim().isEmpty()&&message.contains(saved.trim().toLowerCase(Locale.ROOT)))return true;
-        for(String alias:aliases)if(message.contains(alias))return true;
-        return false;
-    }
-
     private JSONObject findLedgerCustomer(SharedPreferences p,String senderPhone,String senderTitle){
         String sp=last10(senderPhone);
         try{
@@ -333,121 +294,21 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         return null;
     }
 
-    private JSONArray findCatalogsForMessage(String message,String genericKeyword){
+    private JSONArray findCatalogsForMessage(String message){
         JSONArray found=new JSONArray();
         try{
             JSONArray items=new JSONArray(getSharedPreferences("latha_bulk_prefs",MODE_PRIVATE).getString("catalog_items","[]"));
             JSONObject matched=null;
-            for(int i=items.length()-1;i>=0&&matched==null;i--){JSONObject item=items.optJSONObject(i);if(item==null)continue;String terms=item.optString("keywords","")+","+item.optString("category","");for(String term:terms.split("[,;|]"))if(keywordMatches(message,term)){matched=item;break;}}
-            if(matched==null&&matchesBusinessKeyword(message,genericKeyword,"catalog","catalogue","catlog")&&items.length()>0)matched=items.optJSONObject(items.length()-1);
+            // Catalog auto-send is intentionally limited to the words saved in
+            // the Catalog editor. Category names, file names and the generic word
+            // "catalog" must never select a file implicitly.
+            for(int i=items.length()-1;i>=0&&matched==null;i--){JSONObject item=items.optJSONObject(i);if(item==null)continue;String terms=item.optString("keywords","");for(String term:terms.split("[,;|]"))if(keywordMatches(message,term)){matched=item;break;}}
             if(matched==null)return found;
             String category=matched.optString("category","Other");
             for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item!=null&&category.equalsIgnoreCase(item.optString("category","Other"))&&!item.optString("uri","").isEmpty())found.put(item);}
             if(found.length()==0)found.put(matched);
         }catch(Exception ignored){}
         return found;
-    }
-
-    /**
-     * Matches Price List sources without treating arbitrary words found inside a
-     * PDF as a request. Normal chat may contain words such as "bill", "ready" or
-     * "transfer" which are also present in extracted PDF text. Extracted text is
-     * therefore searched only when the customer explicitly asks for a price/rate
-     * list. An implicit request must match the saved brand, section or keywords.
-     */
-    private JSONArray findPriceSourcesForMessage(String message,boolean explicitRequest){
-        JSONArray found=new JSONArray();
-        try{
-            JSONArray items=new JSONArray(getSharedPreferences(APP_PREFS,MODE_PRIVATE).getString(PRICE_SOURCE_FILES,"[]"));
-            if(items.length()==0)return found;
-            String query=normaliseSearch(message);
-            ArrayList<String> words=new ArrayList<>();
-            for(String word:query.split("\\s+")){
-                if(word.length()<2||isGenericPriceWord(word))continue;
-                if(!words.contains(word))words.add(word);
-            }
-            JSONObject best=null;int bestScore=0;
-            for(int i=items.length()-1;i>=0;i--){
-                JSONObject item=items.optJSONObject(i);if(item==null||item.optString("uri","").isEmpty())continue;
-                String brand=normaliseSearch(item.optString("brand",""));
-                String category=normaliseSearch(item.optString("category",""));
-                String keywords=normaliseSearch(item.optString("keywords",""));
-                String name=normaliseSearch(item.optString("name","")+" "+item.optString("original_name",""));
-                String metadata=normaliseSearch(brand+" "+category+" "+keywords+" "+name);
-                String searchable=explicitRequest?normaliseSearch(metadata+" "+item.optString("search_text","")):metadata;
-                int score=0,metadataScore=0;
-                for(String word:words){
-                    if(priceWordMatchesAny(word,searchable))score++;
-                    if(priceWordMatchesAny(word,metadata))metadataScore++;
-                }
-                boolean brandRequest=isStrongPriceLabel(brand)&&containsPricePhrase(query,brand);
-                boolean structuredRequest=brandRequest||(words.size()>=2&&metadataScore>=2);
-                if(!explicitRequest&&!structuredRequest)continue;
-                if(explicitRequest&&words.isEmpty())score=1; // plain "price list": latest saved batch
-                int required=words.size()<=1?1:2;
-                if(score>=required&&score>bestScore){best=item;bestScore=score;}
-            }
-            if(best==null)return found;
-            String batch=best.optString("batch_id","");
-            if(batch.isEmpty()){found.put(best);return found;}
-            for(int i=0;i<items.length();i++){
-                JSONObject item=items.optJSONObject(i);
-                if(item!=null&&batch.equals(item.optString("batch_id",""))&&!item.optString("uri","").isEmpty())found.put(item);
-            }
-        }catch(Exception ignored){}
-        return found;
-    }
-
-    private boolean isStrongPriceLabel(String value){
-        return value!=null&&!value.isEmpty()&&!"other".equals(value)&&!"general".equals(value)&&!"price".equals(value)&&!"price list".equals(value);
-    }
-
-    private boolean containsPricePhrase(String query,String phrase){
-        if(query==null||phrase==null||phrase.isEmpty())return false;
-        return (" "+query+" ").contains(" "+phrase+" ");
-    }
-
-    private boolean isExplicitPriceListRequest(String message){
-        String q=normaliseSearch(message);
-        return q.contains("price list")||q.contains("pricelist")||q.contains("rate list")||q.contains("rates list");
-    }
-
-    private boolean isGenericPriceWord(String word){
-        return "price".equals(word)||"prices".equals(word)||"pricelist".equals(word)||"rate".equals(word)||"rates".equals(word)||"list".equals(word)
-                ||"discount".equals(word)||"discounts".equals(word)||"disc".equals(word)||"offer".equals(word)||"offers".equals(word)||"scheme".equals(word)
-                ||"send".equals(word)||"share".equals(word)||"show".equals(word)||"give".equals(word)||"please".equals(word)||"pls".equals(word)
-                ||"chahiye".equals(word)||"chaiye".equals(word)||"bhejo".equals(word)||"bhej".equals(word)||"dikhao".equals(word)||"batao".equals(word)
-                ||"and".equals(word)||"or".equals(word)||"with".equals(word)||"latest".equals(word)||"current".equals(word)||"new".equals(word)
-                ||"ka".equals(word)||"ki".equals(word)||"ke".equals(word)||"ko".equals(word)||"aur".equals(word)||"do".equals(word)||"de".equals(word);
-    }
-
-    private boolean priceWordMatchesAny(String query,String hay){
-        for(String candidate:hay.split("\\s+"))if(priceWordsMatch(query,candidate))return true;
-        return false;
-    }
-
-    private boolean priceWordsMatch(String query,String candidate){
-        if(query.equals(candidate))return true;
-        if(query.length()>=4&&(candidate.contains(query)||query.contains(candidate)))return true;
-        int longest=Math.max(query.length(),candidate.length());
-        int allowed=longest>=8?2:longest>=4?1:0;
-        return allowed>0&&Math.abs(query.length()-candidate.length())<=allowed&&priceEditDistanceAtMost(query,candidate,allowed);
-    }
-
-    private boolean priceEditDistanceAtMost(String a,String b,int limit){
-        int[] previous=new int[b.length()+1],current=new int[b.length()+1];
-        for(int j=0;j<=b.length();j++)previous[j]=j;
-        for(int i=1;i<=a.length();i++){
-            current[0]=i;int rowMin=current[0];
-            for(int j=1;j<=b.length();j++){
-                int cost=a.charAt(i-1)==b.charAt(j-1)?0:1;
-                current[j]=Math.min(Math.min(current[j-1]+1,previous[j]+1),previous[j-1]+cost);
-                rowMin=Math.min(rowMin,current[j]);
-            }
-            if(rowMin>limit)return false;
-            int[] swap=previous;previous=current;current=swap;
-        }
-        return previous[b.length()]<=limit;
     }
 
     private String normaliseSearch(String value){
