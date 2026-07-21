@@ -23,16 +23,16 @@ jobs:
 
       - name: Restore permanent signing keystore
         env:
-          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
+          SIGNING_KEY_BASE64: ${{ secrets.LATHAEPS_KEYSTORE_BASE64 }}
         run: |
           test -n "$SIGNING_KEY_BASE64" || { echo "Missing SIGNING_KEY_BASE64 repository secret"; exit 1; }
           printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/lathaeps-release.jks"
 
       - name: Build permanently signed release APK
         env:
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.LATHAEPS_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LATHAEPS_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LATHAEPS_KEY_PASSWORD }}
         run: |
           test -n "$STORE_PASSWORD" || { echo "Missing STORE_PASSWORD repository secret"; exit 1; }
           test -n "$KEY_ALIAS" || { echo "Missing KEY_ALIAS repository secret"; exit 1; }
@@ -52,4 +52,3 @@ jobs:
           name: LATHAEPS-SMART-Signed-Release-APK-v3.23.72
           path: LATHAEPS_SMART_v3.23.72_RELEASE_SIGNED.apk
           if-no-files-found: error
-

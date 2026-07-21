@@ -16,10 +16,10 @@ Do not commit a keystore or its passwords to the repository.
 
 In the repository, open **Settings → Secrets and variables → Actions** and add:
 
-1. `SIGNING_KEY_BASE64` — Base64 text of the permanent keystore file.
-2. `STORE_PASSWORD` — Keystore password.
-3. `KEY_ALIAS` — Key alias.
-4. `KEY_PASSWORD` — Key password.
+1. `LATHAEPS_KEYSTORE_BASE64` — Base64 text of the permanent keystore file.
+2. `LATHAEPS_KEYSTORE_PASSWORD` — Keystore password.
+3. `LATHAEPS_KEY_ALIAS` — Key alias.
+4. `LATHAEPS_KEY_PASSWORD` — Key password.
 
 Then open **Actions → Build Signed Play AAB → Run workflow**. When the job is green, download the `LATHAEPS-SMART-Play-AAB-v3.23.72` artifact and unzip it. Upload the `.aab` file to Play Console.
 
