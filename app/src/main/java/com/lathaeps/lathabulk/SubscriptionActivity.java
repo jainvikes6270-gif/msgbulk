@@ -47,7 +47,7 @@ public class SubscriptionActivity extends Activity {
         root.setBackgroundColor(Color.rgb(245,250,249));
         scroll.addView(root);
 
-        TextView title = text("LATHAEPS SMART",27,true,Color.rgb(0,91,78));
+        TextView title = text("Business Dost",27,true,Color.rgb(0,91,78));
         title.setGravity(Gravity.CENTER);
         title.setOnLongClickListener(v -> { startActivity(new Intent(this,AdminActivity.class)); return true; });
         root.addView(title);
@@ -118,7 +118,7 @@ public class SubscriptionActivity extends Activity {
     }
 
     private String paymentUri() {
-        String note = "LathaBulk 1 Year - " + SubscriptionManager.deviceId(this);
+        String note = "Business Dost 1 Year - " + SubscriptionManager.deviceId(this);
         return new Uri.Builder()
                 .scheme("upi")
                 .authority("pay")

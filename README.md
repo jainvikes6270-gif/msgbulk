@@ -1,3 +1,47 @@
+# Business Dost v3.23.77 – Floating Mic Portrait Return Fix
+
+## v3.23.77
+
+- Fixed the floating mic disappearing after closing a landscape/full-screen
+  media player or video.
+- The mic position is clamped inside the visible screen after every orientation
+  change and whenever Business Dost returns to the foreground.
+- Dragged mic coordinates are corrected and saved safely for the next launch.
+
+# Business Dost v3.23.76 – Customer WhatsApp Voice Note Router
+
+## v3.23.76
+
+- A WhatsApp customer voice note can now be long-pressed and shared to
+  **Business Dost Voice Note** without using the WhatsApp Cloud API.
+- Android 13+ decodes the shared OGG/Opus audio locally to mono 16 kHz speech
+  audio and passes it to the phone's installed speech-recognition service.
+- The editable transcript uses a strict route: quotation/estimate requests open
+  Quotation Manager; price-list/rate-list/brand requests open Price List Manager.
+- Hindi/Hinglish and English retry buttons are included. The user must review
+  the transcript and confirm the existing WhatsApp share flow before anything
+  is sent.
+- Package name remains `com.lathaeps.lathabulk`; Recipient List/Ledger route
+  isolation and manual-campaign priority from v3.23.74 are preserved.
+- Version increased to `3.23.76` (`versionCode 133`).
+
+## v3.23.74
+
+- Recipient List and manual bulk campaigns clear old pending Ledger/Catalog attachments before starting.
+- Auto Reply attachment routing pauses while a manual campaign or broadcast is running.
+- Manual list sending has priority if a stale attachment task overlaps.
+- Final navigation: Home, Quotation, Price List, Voice and Settings.
+
+# Business Dost v3.23.73 – Premium Dashboard & Floating Mic Fix
+
+## v3.23.73
+
+- Renamed the app to **Business Dost** with caption **Har Business Ka Digital Dost**, while keeping package `com.lathaeps.lathabulk` unchanged.
+- Added a premium dark card-based home dashboard with fixed Home, Auto Reply, Business Files and Settings navigation.
+- Grouped Ledger, Payment Reminder, Price List Manager and Quotation Maker inside Business Files.
+- Strengthened floating mic restoration and retained its draggable saved position.
+- Updated signed APK/AAB artifact names to Business Dost v3.23.73.
+
 # LathaBulk v3.23.72 – Price Manager Auto-Send Isolation Fix
 
 ## v3.23.72

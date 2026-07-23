@@ -77,6 +77,10 @@ public class WhatsAppAccessibilityService extends AccessibilityService {
         SharedPreferences p = getSharedPreferences(MainActivity.AUTO_PREFS, MODE_PRIVATE);
         pendingShare = pendingShare && autoReply.getBoolean(AutoReplyNotificationService.PENDING_SHARE, false);
         bulkRunning = bulkRunning && p.getBoolean(MainActivity.AUTO_RUNNING, false);
+        if(bulkRunning&&pendingShare){
+            AutoReplyNotificationService.cancelPendingShare(this,"Pending Ledger/Catalog cleared • manual list has priority");
+            pendingShare=false;
+        }
         if (!pendingShare && !bulkRunning) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) { scheduleSendRetry(pkg); return; }

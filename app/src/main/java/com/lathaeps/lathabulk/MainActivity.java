@@ -255,7 +255,7 @@ public class MainActivity extends Activity {
     }
 
     private void consumeFloatingVoiceQuery(){
-        if(pendingFloatingVoiceQuery.isEmpty()||messageBox==null)return;
+        if(pendingFloatingVoiceQuery.isEmpty())return;
         String query=pendingFloatingVoiceQuery;pendingFloatingVoiceQuery="";
         uiHandler.postDelayed(()->handleMainVoiceCommand(query),180);
     }
@@ -283,7 +283,7 @@ public class MainActivity extends Activity {
 
     private void showUnlockDialog(String savedPin){
         EditText input=new EditText(this); input.setHint("Enter PIN"); input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        AlertDialog d=new AlertDialog.Builder(this).setTitle("LathaBulk Login").setMessage("4-digit PIN enter kare").setView(input).setCancelable(false)
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("Business Dost Login").setMessage("4-digit PIN enter kare").setView(input).setCancelable(false)
             .setPositiveButton("Login",null).setNeutralButton("Forgot PIN",(a,b)->showForgotPinDialog()).setNegativeButton("Exit",(a,b)->finish()).create();
         d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(savedPin.equals(input.getText().toString().trim())){d.dismiss();setContentView(buildUi());consumeFloatingVoiceQuery();}else input.setError("Wrong PIN");}));
         d.show();
@@ -294,7 +294,7 @@ public class MainActivity extends Activity {
     }
 
     private void showBiometricUnlock(String savedPin){
-        if(Build.VERSION.SDK_INT<28||!fingerprintAvailable()){toast("Fingerprint available nahi hai • App PIN use karein");showUnlockDialog(savedPin);return;}biometricFallbackShown=false;try{BiometricPrompt prompt=new BiometricPrompt.Builder(this).setTitle("LATHAEPS SMART").setSubtitle("App open karne ke liye fingerprint lagayein").setDescription("Fingerprint nahi chale to App PIN use karein").setNegativeButton("USE APP PIN",getMainExecutor(),(dialog,which)->{if(!biometricFallbackShown){biometricFallbackShown=true;showUnlockDialog(savedPin);}}).build();prompt.authenticate(new CancellationSignal(),getMainExecutor(),new BiometricPrompt.AuthenticationCallback(){@Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result){super.onAuthenticationSucceeded(result);biometricFallbackShown=true;setContentView(buildUi());consumeFloatingVoiceQuery();toast("Fingerprint unlock successful ✓");}@Override public void onAuthenticationFailed(){super.onAuthenticationFailed();toast("Fingerprint match nahi hua • dobara try karein");}@Override public void onAuthenticationError(int errorCode,CharSequence errString){super.onAuthenticationError(errorCode,errString);if(!biometricFallbackShown){biometricFallbackShown=true;showUnlockDialog(savedPin);}}});}catch(Exception e){showUnlockDialog(savedPin);}
+        if(Build.VERSION.SDK_INT<28||!fingerprintAvailable()){toast("Fingerprint available nahi hai • App PIN use karein");showUnlockDialog(savedPin);return;}biometricFallbackShown=false;try{BiometricPrompt prompt=new BiometricPrompt.Builder(this).setTitle("Business Dost").setSubtitle("App open karne ke liye fingerprint lagayein").setDescription("Fingerprint nahi chale to App PIN use karein").setNegativeButton("USE APP PIN",getMainExecutor(),(dialog,which)->{if(!biometricFallbackShown){biometricFallbackShown=true;showUnlockDialog(savedPin);}}).build();prompt.authenticate(new CancellationSignal(),getMainExecutor(),new BiometricPrompt.AuthenticationCallback(){@Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result){super.onAuthenticationSucceeded(result);biometricFallbackShown=true;setContentView(buildUi());consumeFloatingVoiceQuery();toast("Fingerprint unlock successful ✓");}@Override public void onAuthenticationFailed(){super.onAuthenticationFailed();toast("Fingerprint match nahi hua • dobara try karein");}@Override public void onAuthenticationError(int errorCode,CharSequence errString){super.onAuthenticationError(errorCode,errString);if(!biometricFallbackShown){biometricFallbackShown=true;showUnlockDialog(savedPin);}}});}catch(Exception e){showUnlockDialog(savedPin);}
     }
 
     @Override protected void onResume() {
@@ -315,14 +315,56 @@ public class MainActivity extends Activity {
         checkForAppUpdate(false);
     }
 
-    private View buildUi() {
+    private View buildUi(){
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(Color.rgb(12,16,47));
+
+        LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(22),dp(9),dp(14),dp(5));
+        GradientDrawable headerBg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{Color.rgb(12,20,58),Color.rgb(0,69,110)});header.setBackground(headerBg);
+        LinearLayout brand=new LinearLayout(this);brand.setOrientation(LinearLayout.VERTICAL);
+        TextView name=new TextView(this);name.setText("Business Dost");name.setTextSize(27);name.setTypeface(Typeface.DEFAULT_BOLD);name.setTextColor(Color.rgb(0,225,170));
+        TextView caption=new TextView(this);caption.setText("Har Business Ka Digital Dost");caption.setTextSize(12);caption.setTextColor(Color.rgb(200,214,235));
+        brand.addView(name);brand.addView(caption);header.addView(brand,new LinearLayout.LayoutParams(0,dp(68),1f));
+        Button voice=button("🎤");voice.setTextSize(22);voice.setTextColor(Color.WHITE);voice.setBackground(rounded(Color.rgb(25,78,140),28));header.addView(voice,new LinearLayout.LayoutParams(dp(52),dp(52)));
+        Button settings=button("⚙");settings.setTextSize(22);settings.setTextColor(Color.WHITE);settings.setBackgroundColor(Color.TRANSPARENT);header.addView(settings,new LinearLayout.LayoutParams(dp(52),dp(52)));
+        root.addView(header,new LinearLayout.LayoutParams(-1,dp(82)));voice.setOnClickListener(v->startPriceVoiceSearch(true));settings.setOnClickListener(v->showSettingsScreen());
+
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(16),dp(14),dp(16),dp(24));scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
+
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.HORIZONTAL);hero.setGravity(Gravity.CENTER_VERTICAL);hero.setPadding(dp(20),dp(12),dp(14),dp(12));
+        GradientDrawable heroBg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{Color.rgb(91,115,242),Color.rgb(137,72,218),Color.rgb(82,91,245)});heroBg.setCornerRadius(dp(26));hero.setBackground(heroBg);
+        LinearLayout heroText=new LinearLayout(this);heroText.setOrientation(LinearLayout.VERTICAL);TextView heroTitle=new TextView(this);heroTitle.setText("Send Message");heroTitle.setTextSize(23);heroTitle.setTypeface(Typeface.DEFAULT_BOLD);heroTitle.setTextColor(Color.WHITE);TextView heroSub=new TextView(this);heroSub.setText("Create campaign and send bulk messages");heroSub.setTextSize(13);heroSub.setTextColor(Color.WHITE);heroSub.setPadding(0,dp(3),0,0);heroText.addView(heroTitle);heroText.addView(heroSub);hero.addView(heroText,new LinearLayout.LayoutParams(0,dp(76),1f));Button start=button("Start");start.setTextSize(16);start.setTypeface(Typeface.DEFAULT_BOLD);start.setTextColor(Color.rgb(88,105,225));start.setBackground(rounded(Color.WHITE,32));hero.addView(start,new LinearLayout.LayoutParams(dp(96),dp(52)));LinearLayout.LayoutParams heroLp=new LinearLayout.LayoutParams(-1,dp(108));heroLp.setMargins(0,0,0,dp(10));content.addView(hero,heroLp);start.setOnClickListener(v->setContentView(buildSenderUi()));
+
+        LinearLayout accessStatus=row();accessStatus.setPadding(0,0,0,dp(8));
+        accessibilityButton=button("Accessibility: OFF");accessibilityButton.setTextSize(12);accessibilityButton.setTypeface(Typeface.DEFAULT_BOLD);accessibilityButton.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception e){toast("Accessibility settings open nahi hui");}});
+        notificationAccessButton=button("Notification Access: OFF");notificationAccessButton.setTextSize(12);notificationAccessButton.setTypeface(Typeface.DEFAULT_BOLD);notificationAccessButton.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}});
+        accessStatus.addView(accessibilityButton,weighted(1f,48));accessStatus.addView(notificationAccessButton,weighted(1f,48));content.addView(accessStatus,new LinearLayout.LayoutParams(-1,dp(58)));
+
+        TextView campaign=dashboardSection("▣  Campaign Manager");content.addView(campaign,new LinearLayout.LayoutParams(-1,dp(48)));
+        android.widget.HorizontalScrollView cardScroll=new android.widget.HorizontalScrollView(this);cardScroll.setHorizontalScrollBarEnabled(false);LinearLayout cards=row();cards.setPadding(0,0,dp(8),0);cardScroll.addView(cards);
+        Button autoReply=dashboardCard("✉\n\nAuto Reply",new int[]{Color.rgb(91,96,240),Color.rgb(167,72,224)});Button catalog=dashboardCard("▧\n\nCatalog",new int[]{Color.rgb(0,188,105),Color.rgb(0,210,101)});Button recipients=dashboardCard("👥\n\nRecipient Lists",new int[]{Color.rgb(0,160,190),Color.rgb(0,205,154)});
+        LinearLayout.LayoutParams cardLp=new LinearLayout.LayoutParams(dp(174),dp(168));cardLp.setMargins(0,0,dp(12),0);cards.addView(autoReply,cardLp);LinearLayout.LayoutParams cardLp2=new LinearLayout.LayoutParams(dp(174),dp(168));cardLp2.setMargins(0,0,dp(12),0);cards.addView(catalog,cardLp2);cards.addView(recipients,new LinearLayout.LayoutParams(dp(174),dp(168)));content.addView(cardScroll,new LinearLayout.LayoutParams(-1,dp(180)));autoReply.setOnClickListener(v->showAutoReplyScreen());catalog.setOnClickListener(v->showCatalogScreen());recipients.setOnClickListener(v->showRecipientListsScreen());
+
+        TextView businessTitle=dashboardSection("▣  Business Tools");content.addView(businessTitle,new LinearLayout.LayoutParams(-1,dp(54)));
+        Button businessFiles=dashboardWideCard("📁", "Business Files", "Ledger • Payment • Price List • Quotation",new int[]{Color.rgb(27,43,91),Color.rgb(23,71,104)});content.addView(businessFiles,new LinearLayout.LayoutParams(-1,dp(112)));businessFiles.setOnClickListener(v->showBusinessFilesDialog());
+        Button statusScheduler=dashboardWideCard("◷", "Message Scheduler", "Set timer for your bulk campaign",new int[]{Color.rgb(0,101,75),Color.rgb(0,156,91)});LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,dp(96));statusLp.setMargins(0,dp(14),0,0);content.addView(statusScheduler,statusLp);statusScheduler.setOnClickListener(v->{setContentView(buildSenderUi());uiHandler.postDelayed(this::showScheduleDialog,150);});
+
+        LinearLayout bottom=row();bottom.setGravity(Gravity.CENTER);bottom.setPadding(dp(5),dp(5),dp(5),dp(7));bottom.setBackgroundColor(Color.rgb(13,44,82));Button home=bottomNav("⌂\nHome",true);Button bottomQuotation=bottomNav("✎\nQuotation",false);Button bottomPriceList=bottomNav("▦\nPrice List",false);Button bottomVoice=bottomNav("🎤\nVoice",false);Button bottomSettings=bottomNav("⚙\nSettings",false);bottom.addView(home,weighted(1f,62));bottom.addView(bottomQuotation,weighted(1f,62));bottom.addView(bottomPriceList,weighted(1f,62));bottom.addView(bottomVoice,weighted(1f,62));bottom.addView(bottomSettings,weighted(1f,62));root.addView(bottom,new LinearLayout.LayoutParams(-1,dp(74)));bottomQuotation.setOnClickListener(v->startActivity(new Intent(this,QuotationActivity.class)));bottomPriceList.setOnClickListener(v->showPriceListScreen());bottomVoice.setOnClickListener(v->startPriceVoiceSearch(true));bottomSettings.setOnClickListener(v->showSettingsScreen());
+        uiHandler.post(this::refreshAccessButtons);return root;
+    }
+
+    private TextView dashboardSection(String text){TextView title=new TextView(this);title.setText(text);title.setTextSize(20);title.setTypeface(Typeface.DEFAULT_BOLD);title.setTextColor(Color.WHITE);title.setGravity(Gravity.CENTER_VERTICAL);return title;}
+    private Button dashboardCard(String text,int[] colors){Button b=button(text);b.setTextSize(18);b.setTypeface(Typeface.DEFAULT_BOLD);b.setTextColor(Color.WHITE);b.setGravity(Gravity.CENTER);GradientDrawable bg=new GradientDrawable(GradientDrawable.Orientation.TL_BR,colors);bg.setCornerRadius(dp(23));b.setBackground(bg);return b;}
+    private Button dashboardWideCard(String icon,String title,String subtitle,int[] colors){Button b=button(icon+"   "+title+"\n      "+subtitle+"                         ›");b.setTextSize(16);b.setTypeface(Typeface.DEFAULT_BOLD);b.setTextColor(Color.WHITE);b.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);b.setPadding(dp(22),0,dp(15),0);GradientDrawable bg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,colors);bg.setCornerRadius(dp(22));bg.setStroke(dp(2),Color.rgb(75,78,190));b.setBackground(bg);return b;}
+    private Button bottomNav(String text,boolean selected){Button b=button(text);b.setTextSize(12);b.setTypeface(Typeface.DEFAULT_BOLD);b.setTextColor(selected?Color.WHITE:Color.rgb(190,199,220));b.setGravity(Gravity.CENTER);b.setBackground(selected?rounded(Color.rgb(55,70,155),18):rounded(Color.TRANSPARENT,18));return b;}
+
+    private View buildSenderUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(10), dp(6), dp(10), dp(8));
         root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
 
         TextView title = new TextView(this);
-        title.setText("LATHAEPS SMART");
+        title.setText("‹  Business Dost • Send Message");
         title.setTextSize(21);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
@@ -330,6 +372,7 @@ public class MainActivity extends Activity {
         GradientDrawable headerBg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{Color.rgb(25,80,180),Color.rgb(125,55,190),Color.rgb(218,156,25)});
         headerBg.setCornerRadius(dp(14)); title.setBackground(headerBg);
         root.addView(title, new LinearLayout.LayoutParams(-1, dp(34)));
+        title.setOnClickListener(v->setContentView(buildUi()));
 
         LinearLayout tools = row();
         contactsButton = button("Contacts");
@@ -403,23 +446,6 @@ public class MainActivity extends Activity {
         root.addView(myGroups,myListLp);
         myGroups.setOnClickListener(v -> showRecipientListsScreen());
         editGroupButton.setOnClickListener(v -> editActiveGroupContacts());
-
-        LinearLayout accessRow=row();
-        accessibilityButton = button("Accessibility: OFF");
-        accessibilityButton.setTextSize(13);
-        accessibilityButton.setOnClickListener(v -> {
-            try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
-            catch (Exception e) { toast("Accessibility settings open nahi hui"); }
-        });
-        notificationAccessButton=button("Notification Access: OFF");
-        notificationAccessButton.setTextSize(12);
-        notificationAccessButton.setOnClickListener(v->{
-            try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}
-            catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}
-        });
-        accessRow.addView(accessibilityButton,weighted(1f,42));
-        accessRow.addView(notificationAccessButton,weighted(1f,42));
-        root.addView(accessRow);
 
         automaticLockButton=button("AUTO UNLOCK + LOCK: ON");
         automaticLockButton.setTextSize(13);
@@ -789,6 +815,7 @@ public class MainActivity extends Activity {
 
     private void startRecipientMediaQueue(String listName,List<String> numbers,String message,Uri image){
         List<String> safeNumbers=new ArrayList<>();Set<String> seen=new LinkedHashSet<>();for(String raw:numbers){String n=normalize(raw);if(!n.isEmpty()&&!isDoNotSend(n)&&seen.add(n))safeNumbers.add(n);}if(safeNumbers.isEmpty()){toast("All contacts invalid or in Do Not Send List");return;}int skipped=numbers.size()-safeNumbers.size();
+        AutoReplyNotificationService.cancelPendingShare(this,"Manual recipient list started • pending attachment cleared");
         JSONArray nums=new JSONArray(),names=new JSONArray();for(String n:safeNumbers){nums.put(n);names.put(findName(n));}
         SharedPreferences settings=getSharedPreferences(PREFS,MODE_PRIVATE);SharedPreferences.Editor ed=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putString(AUTO_NUMBERS,nums.toString()).putString(AUTO_NAMES,names.toString()).putString(AUTO_MESSAGE,message).remove(AUTO_MESSAGES).putString(AUTO_QUEUE_TOKEN,String.valueOf(System.currentTimeMillis())).putString(AUTO_FAILED,"[]").putInt(AUTO_INDEX,0).putInt(AUTO_MIN_DELAY,settings.getInt(AUTO_MIN_DELAY,3)).putInt(AUTO_MAX_DELAY,settings.getInt(AUTO_MAX_DELAY,7)).putBoolean(AUTO_RUNNING,true);
         if(image==null)ed.remove(AUTO_IMAGE_URI).remove(AUTO_IMAGE_TYPE);else ed.putString(AUTO_IMAGE_URI,image.toString()).putString(AUTO_IMAGE_TYPE,"image/jpeg");ed.apply();
@@ -998,6 +1025,7 @@ public class MainActivity extends Activity {
     }
 
     private void beginTextAutoSend(List<String> validNumbers,String message,int skipped){
+        AutoReplyNotificationService.cancelPendingShare(this,"Manual campaign started • pending attachment cleared");
         JSONArray nums=new JSONArray();
         JSONArray names=new JSONArray();
         for(String n:validNumbers){
@@ -1176,7 +1204,7 @@ public class MainActivity extends Activity {
         addSettingsButton(list,"◐  Dark / Light Theme",isDark()?"Currently Dark":"Currently Light",v->{getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(DARK_KEY,!isDark()).apply();d.dismiss();recreate();});
         boolean floatingMicOn=getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean(FloatingMicService.PREF_ENABLED,false)&&Settings.canDrawOverlays(this);
         addSettingsButton(list,"🎤  Floating Voice Mic",floatingMicOn?"ON • app ke bahar draggable voice shortcut":"OFF • tap karke floating shortcut ON karein",v->showFloatingMicSettings());
-        addSettingsButton(list,"ⓘ  Current Version","LathaBulk v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("LathaBulk v"+appVersion()+"\nLATHAEPS SMART").setPositiveButton("OK",null).show());
+        addSettingsButton(list,"ⓘ  Current Version","Business Dost v"+appVersion(),v->new AlertDialog.Builder(this).setTitle("Current Version").setMessage("Business Dost v"+appVersion()+"\nHar Business Ka Digital Dost").setPositiveButton("OK",null).show());
         addSettingsButton(list,"↗  Share App APK","Direct APK share karein • GitHub username ya source code nahi dikhega",v->shareApp());
         addSettingsButton(list,"₹  Subscription & Payment","Plan details, UPI payment & activation",v->startActivity(new Intent(this,SubscriptionActivity.class)));
         addSettingsButton(list,"👥  Contact Settings","Queue controls, Do Not Send & recipient list templates",v->{d.dismiss();showContactSettingsScreen();});
@@ -1266,13 +1294,13 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.72";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.76";}}
 
     private void shareApp(){
         try{
             File folder=new File(getCacheDir(),"shared_apk");
             if(!folder.exists()&&!folder.mkdirs())throw new Exception("Share folder unavailable");
-            File apk=new File(folder,"LATHAEPS_Smart_v"+appVersion()+".apk");
+            File apk=new File(folder,"Business_Dost_v"+appVersion()+".apk");
             try(InputStream in=new FileInputStream(getApplicationInfo().sourceDir);OutputStream out=new FileOutputStream(apk)){
                 byte[] buffer=new byte[64*1024];int read;
                 while((read=in.read(buffer))!=-1)out.write(buffer,0,read);
@@ -1281,10 +1309,10 @@ public class MainActivity extends Activity {
             Intent share=new Intent(Intent.ACTION_SEND);
             share.setType("application/vnd.android.package-archive");
             share.putExtra(Intent.EXTRA_STREAM,uri);
-            share.putExtra(Intent.EXTRA_TEXT,"LATHAEPS Smart App v"+appVersion());
-            share.setClipData(android.content.ClipData.newRawUri("LATHAEPS Smart APK",uri));
+            share.putExtra(Intent.EXTRA_TEXT,"Business Dost App v"+appVersion()+" • Har Business Ka Digital Dost");
+            share.setClipData(android.content.ClipData.newRawUri("Business Dost APK",uri));
             share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(share,"Share LATHAEPS Smart App APK"));
+            startActivity(Intent.createChooser(share,"Share Business Dost App APK"));
         }catch(Exception e){toast("APK share nahi hua: "+e.getMessage());}
     }
     private void showScreenOffHelp(){
@@ -1296,19 +1324,19 @@ public class MainActivity extends Activity {
     private void contactSupport(){
         try{
             Intent i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:lathaeps@gmail.com"));
-            i.putExtra(Intent.EXTRA_SUBJECT,"LathaBulk Support • v"+appVersion());
+            i.putExtra(Intent.EXTRA_SUBJECT,"Business Dost Support • v"+appVersion());
             startActivity(Intent.createChooser(i,"Contact LATHAEPS"));
         }catch(Exception e){toast("Email: lathaeps@gmail.com");}
     }
-    private void createDriveBackupFile(){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Drive_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(Intent.createChooser(i,"Choose Google Drive and save backup"),CREATE_BACKUP);}
+    private void createDriveBackupFile(){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"Business_Dost_Drive_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(Intent.createChooser(i,"Choose Google Drive and save backup"),CREATE_BACKUP);}
     private void confirmClearAllData(Dialog settings){new AlertDialog.Builder(this).setTitle("Clear all app data?").setMessage("Contacts, recipient lists, catalogs, auto-reply rules, images, templates, ledgers and history delete honge. Login PIN aur recovery word safe rahenge.").setPositiveButton("Clear All",(d,w)->{clearAllUserData();settings.dismiss();recreate();}).setNegativeButton("Cancel",null).show();}
     private void clearAllUserData(){SharedPreferences main=getSharedPreferences(PREFS,MODE_PRIVATE);String pin=main.getString(PIN_KEY,"");String recovery=main.getString(RECOVERY_KEY,"");boolean login=main.getBoolean(LOGIN_ENABLED_KEY,true);boolean dark=main.getBoolean(DARK_KEY,false);main.edit().clear().putString(PIN_KEY,pin).putString(RECOVERY_KEY,recovery).putBoolean(LOGIN_ENABLED_KEY,login).putBoolean(DARK_KEY,dark).apply();getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences(AutoReplyNotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();getSharedPreferences("lathaeps_quotation_manager",MODE_PRIVATE).edit().clear().apply();deleteAppFiles(getFilesDir());selectedNumbers.clear();allContacts.clear();visibleContacts.clear();toast("All data cleared • PIN kept safe");}
     private void deleteAppFiles(File dir){File[] files=dir.listFiles();if(files==null)return;for(File f:files){if(f.isDirectory())deleteAppFiles(f);f.delete();}}
 
     private void createBackupFile(){
-        Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"LathaBulk_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(i,CREATE_BACKUP);
+        Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"Business_Dost_Backup_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".json");startActivityForResult(i,CREATE_BACKUP);
     }
-    private void chooseRestoreFile(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");startActivityForResult(Intent.createChooser(i,"Select LathaBulk backup from phone or Drive"),PICK_RESTORE);}
+    private void chooseRestoreFile(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");startActivityForResult(Intent.createChooser(i,"Select Business Dost backup from phone or Drive"),PICK_RESTORE);}
 
     private JSONObject prefsToJson(String name)throws Exception{
         JSONObject o=new JSONObject(); Map<String,?> all=getSharedPreferences(name,MODE_PRIVATE).getAll();
@@ -1709,6 +1737,7 @@ public class MainActivity extends Activity {
     }
 
     private void startWhatsAppBroadcast(String listName,String message,Uri file,String type){
+        AutoReplyNotificationService.cancelPendingShare(this,"Manual broadcast started • pending attachment cleared");
         SharedPreferences.Editor ed=getSharedPreferences(AUTO_PREFS,MODE_PRIVATE).edit().putBoolean(BROADCAST_RUNNING,true).putString(BROADCAST_LIST_NAME,listName).putString(BROADCAST_MESSAGE,message).putInt(BROADCAST_STAGE,0);
         if(file==null)ed.putString(BROADCAST_MODE,"text").remove(BROADCAST_FILE_URI).remove(BROADCAST_FILE_TYPE);else ed.putString(BROADCAST_MODE,"share").putString(BROADCAST_FILE_URI,file.toString()).putString(BROADCAST_FILE_TYPE,type==null||type.isEmpty()?"application/octet-stream":type);ed.apply();
         try{
@@ -1730,25 +1759,20 @@ public class MainActivity extends Activity {
         LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(12),dp(8),dp(10),dp(8));header.setBackgroundColor(Color.rgb(0,91,78));
         Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
         TextView title=new TextView(this);title.setText("Business Files");title.setTextColor(Color.WHITE);title.setTextSize(23);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);
-        TextView badge=new TextView(this);badge.setText("LEDGER");badge.setTextSize(11);badge.setTextColor(Color.rgb(0,91,78));badge.setGravity(Gravity.CENTER);badge.setTypeface(Typeface.DEFAULT_BOLD);badge.setBackground(rounded(Color.rgb(210,244,238),30));
+        TextView badge=new TextView(this);badge.setText("4 TOOLS");badge.setTextSize(11);badge.setTextColor(Color.rgb(0,91,78));badge.setGravity(Gravity.CENTER);badge.setTypeface(Typeface.DEFAULT_BOLD);badge.setBackground(rounded(Color.rgb(210,244,238),30));
         header.addView(back,new LinearLayout.LayoutParams(dp(48),dp(54)));header.addView(title,new LinearLayout.LayoutParams(0,dp(54),1f));header.addView(badge,new LinearLayout.LayoutParams(dp(72),dp(32)));page.addView(header);
         back.setOnClickListener(v->dialog.dismiss());
         ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(14),dp(16),dp(24));scroll.addView(box);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
-        Button customers=button("LEDGER PARTY LISTS ("+ledgerCustomerCount()+" CUSTOMERS)");
-        Button ledgerFolder=button("📁  LEDGER & CONTACTS");
-        Button paymentReminder=button("PAYMENT REMINDER");
-        Button quotation=button("BUSINESS QUOTATION MANAGER");
-        Button priceList=button("PRICE LIST MANAGER");
-        Button[] featureButtons={quotation,priceList,paymentReminder,ledgerFolder,customers};for(Button feature:featureButtons){feature.setTypeface(Typeface.DEFAULT_BOLD);feature.setTextColor(Color.rgb(0,91,78));feature.setBackground(rounded(Color.rgb(210,244,238),16));}
-        quotation.setTextColor(Color.WHITE);quotation.setBackground(rounded(Color.rgb(111,45,165),16));
-        priceList.setTextColor(Color.WHITE);priceList.setBackground(rounded(Color.rgb(0,91,78),16));paymentReminder.setTextColor(Color.WHITE);paymentReminder.setBackground(rounded(Color.rgb(18,128,78),16));
-        box.addView(quotation,new LinearLayout.LayoutParams(-1,dp(52)));box.addView(priceList,new LinearLayout.LayoutParams(-1,dp(50)));box.addView(paymentReminder,new LinearLayout.LayoutParams(-1,dp(50)));box.addView(ledgerFolder,new LinearLayout.LayoutParams(-1,dp(54)));box.addView(customers,new LinearLayout.LayoutParams(-1,dp(46)));
+        Button ledgerFolder=dashboardWideCard("▤","Ledger","Master PDF, contacts & "+ledgerCustomerCount()+" parties",new int[]{Color.rgb(20,91,150),Color.rgb(41,62,171)});
+        Button paymentReminder=dashboardWideCard("₹","Payment Reminder","Daily • Weekly • Monthly",new int[]{Color.rgb(0,132,91),Color.rgb(12,177,104)});
+        Button priceList=dashboardWideCard("▦","Price List Manager","Brand-wise images, PDF & items",new int[]{Color.rgb(30,91,145),Color.rgb(0,137,151)});
+        Button quotation=dashboardWideCard("✎","Quotation Maker","Voice, camera, calculation & preview",new int[]{Color.rgb(104,46,166),Color.rgb(150,61,191)});
+        Button[] featureButtons={ledgerFolder,paymentReminder,priceList,quotation};for(Button feature:featureButtons){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(96));lp.setMargins(0,0,0,dp(12));box.addView(feature,lp);}
         paymentReminder.setOnClickListener(v->showPaymentReminderScreen());
         quotation.setOnClickListener(v->startActivity(new Intent(this,QuotationActivity.class)));
         priceList.setOnClickListener(v->showPriceListScreen());
         ledgerFolder.setOnClickListener(v->showMasterLedgerFolderDialog());
-        customers.setOnClickListener(v->showLedgerListsScreen());
-        TextView help=new TextView(this);help.setText("Master PDF, Excel import, file history aur Auto Reply settings ab Master Ledger folder ke andar hain.");help.setTextSize(13);help.setTextColor(Color.DKGRAY);help.setPadding(dp(5),dp(12),dp(5),dp(8));box.addView(help);
+        TextView help=new TextView(this);help.setText("Har tool apni alag window me khulega. Price List Items, Price List Manager ke brand folders me available hain.");help.setTextSize(13);help.setTextColor(Color.DKGRAY);help.setPadding(dp(5),dp(4),dp(5),dp(8));box.addView(help);
         dialog.setContentView(page);dialog.show();
     }
 
@@ -1757,9 +1781,9 @@ public class MainActivity extends Activity {
         LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setBackground(rounded(Color.rgb(0,91,78),17));Button back=button("‹");back.setTextSize(31);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);TextView title=new TextView(this);title.setText("Ledger & Contacts");title.setTextSize(21);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);head.addView(back,new LinearLayout.LayoutParams(dp(50),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);
         ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(4),dp(12),dp(4),dp(24));scroll.addView(box);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));String savedLedgerName=p.getString(AutoReplyNotificationService.LEDGER_URI+"_name","");TextView fileLabel=new TextView(this);fileLabel.setText("SAVED MASTER LEDGER PDF");fileLabel.setTextSize(13);fileLabel.setTypeface(Typeface.DEFAULT_BOLD);fileLabel.setTextColor(Color.rgb(12,52,49));fileLabel.setPadding(dp(4),dp(4),dp(4),dp(5));box.addView(fileLabel);
         ledgerFileNameText=new TextView(this);ledgerFileNameText.setText(savedLedgerName.isEmpty()?"No Ledger file saved":savedLedgerName);ledgerFileNameText.setTextSize(17);ledgerFileNameText.setTypeface(Typeface.DEFAULT_BOLD);ledgerFileNameText.setTextColor(savedLedgerName.isEmpty()?Color.rgb(190,45,45):Color.rgb(0,125,70));ledgerFileNameText.setBackground(rounded(savedLedgerName.isEmpty()?Color.rgb(255,235,235):Color.rgb(225,248,235),12));ledgerFileNameText.setPadding(dp(12),dp(10),dp(12),dp(10));box.addView(ledgerFileNameText,new LinearLayout.LayoutParams(-1,-2));TextView current=new TextView(this);current.setPadding(dp(12),dp(10),dp(12),dp(10));current.setText("Customers: "+ledgerCustomerCount()+"\nLast status: "+p.getString("last_business_status","No send attempt yet"));current.setTextColor(Color.rgb(28,28,28));current.setBackground(rounded(Color.WHITE,16));LinearLayout.LayoutParams currentLp=new LinearLayout.LayoutParams(-1,-2);currentLp.setMargins(0,dp(8),0,dp(10));box.addView(current,currentLp);
-        Button convertPdf=button("MASTER PDF → PHONE + BALANCE EXCEL");Button uploadPdf=button(savedLedgerName.isEmpty()?"UPLOAD & PREPARE MASTER LEDGER PDF":"UPDATE & PREPARE MASTER LEDGER PDF ✓");Button importExcel=button("IMPORT CONTACT EXCEL");Button history=button("VIEW FILE HISTORY");Button[] folderButtons={convertPdf,uploadPdf,importExcel,history};for(Button b:folderButtons){b.setTypeface(Typeface.DEFAULT_BOLD);b.setTextColor(Color.rgb(0,91,78));b.setBackground(rounded(Color.rgb(210,244,238),15));box.addView(b,new LinearLayout.LayoutParams(-1,dp(48)));}
+        Button customers=button("LEDGER PARTY LISTS ("+ledgerCustomerCount()+" CUSTOMERS)");Button convertPdf=button("MASTER PDF → PHONE + BALANCE EXCEL");Button uploadPdf=button(savedLedgerName.isEmpty()?"UPLOAD & PREPARE MASTER LEDGER PDF":"UPDATE & PREPARE MASTER LEDGER PDF ✓");Button importExcel=button("IMPORT CONTACT EXCEL");Button history=button("VIEW FILE HISTORY");Button[] folderButtons={customers,convertPdf,uploadPdf,importExcel,history};for(Button b:folderButtons){b.setTypeface(Typeface.DEFAULT_BOLD);b.setTextColor(Color.rgb(0,91,78));b.setBackground(rounded(Color.rgb(210,244,238),15));box.addView(b,new LinearLayout.LayoutParams(-1,dp(48)));}
         EditText ledgerKey=new EditText(this);ledgerKey.setHint("Auto Reply keyword • Example: ledger");ledgerKey.setText(p.getString(AutoReplyNotificationService.LEDGER_KEY,"ledger"));ledgerKey.setSingleLine(true);box.addView(ledgerKey,new LinearLayout.LayoutParams(-1,dp(54)));LinearLayout actions=row();Button save=button("SAVE SETTINGS");Button toggle=button("");save.setTypeface(Typeface.DEFAULT_BOLD);save.setTextColor(Color.WHITE);save.setBackground(rounded(Color.rgb(40,95,175),14));actions.addView(save,weighted(1f,52));actions.addView(toggle,weighted(1.15f,52));box.addView(actions);Runnable updateToggle=()->{boolean enabled=p.getBoolean(AutoReplyNotificationService.ENABLED,false);toggle.setText(enabled?"AUTO REPLY ON ✓":"AUTO REPLY OFF");toggle.setTextColor(Color.WHITE);toggle.setTypeface(Typeface.DEFAULT_BOLD);toggle.setBackground(rounded(enabled?Color.rgb(20,125,70):Color.rgb(185,55,55),14));};updateToggle.run();TextView note=new TextView(this);note.setText("SAVE SETTINGS sirf keyword save karega. AUTO REPLY button se service ON/OFF alag control hogi. Notification Access bhi ON hona chahiye.");note.setTextSize(13);note.setTextColor(Color.DKGRAY);note.setPadding(dp(5),dp(10),dp(5),0);box.addView(note);
-        back.setOnClickListener(v->dialog.dismiss());convertPdf.setOnClickListener(v->chooseMasterPdfForExcel());uploadPdf.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));importExcel.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select customer Excel"),PICK_LEDGER_CUSTOMERS_XLSX);});history.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("File update history").setMessage(p.getString("file_history","No file updates yet")).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->p.edit().remove("file_history").apply()).show());save.setOnClickListener(v->{String keyword=ledgerKey.getText().toString().trim();if(keyword.isEmpty()){ledgerKey.setError("Keyword required");return;}p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,keyword).apply();toast("Ledger settings saved");});toggle.setOnClickListener(v->{boolean enabled=!p.getBoolean(AutoReplyNotificationService.ENABLED,false);p.edit().putBoolean(AutoReplyNotificationService.ENABLED,enabled).apply();updateToggle.run();toast(enabled?"Auto Reply ON":"Auto Reply OFF");});dialog.setContentView(page);dialog.show();
+        back.setOnClickListener(v->dialog.dismiss());customers.setOnClickListener(v->showLedgerListsScreen());convertPdf.setOnClickListener(v->chooseMasterPdfForExcel());uploadPdf.setOnClickListener(v->pickBusinessFile(PICK_LEDGER_FILE));importExcel.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");startActivityForResult(Intent.createChooser(i,"Select customer Excel"),PICK_LEDGER_CUSTOMERS_XLSX);});history.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("File update history").setMessage(p.getString("file_history","No file updates yet")).setPositiveButton("Close",null).setNeutralButton("Clear",(d,w)->p.edit().remove("file_history").apply()).show());save.setOnClickListener(v->{String keyword=ledgerKey.getText().toString().trim();if(keyword.isEmpty()){ledgerKey.setError("Keyword required");return;}p.edit().putString(AutoReplyNotificationService.LEDGER_KEY,keyword).apply();toast("Ledger settings saved");});toggle.setOnClickListener(v->{boolean enabled=!p.getBoolean(AutoReplyNotificationService.ENABLED,false);p.edit().putBoolean(AutoReplyNotificationService.ENABLED,enabled).apply();updateToggle.run();toast(enabled?"Auto Reply ON":"Auto Reply OFF");});dialog.setContentView(page);dialog.show();
     }
 
     private JSONArray readPriceList(){try{return new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(PRICE_LIST_ITEMS_KEY,"[]"));}catch(Exception e){return new JSONArray();}}
@@ -1807,7 +1831,7 @@ public class MainActivity extends Activity {
 
     private void handleMainVoiceCommand(String spoken){
         String raw=spoken==null?"":spoken.trim();if(raw.isEmpty()){toast("Voice result empty • dobara try karein");return;}rememberVoiceSearch(raw);
-        String command=raw.toLowerCase(Locale.ROOT).replace("बिजनेस","business").replace("व्यापार","business").replace("फाइल्स","files").replace("फाइल","file").replace("कैटलॉग","catalog").replace("सेटिंग्स","settings").replace("बैकअप","backup").replace("रिस्टोर","restore").replace("पेमेंट","payment").replace("भुगतान","payment").replace("रिमाइंडर","reminder").replace("लेजर","ledger").replace("खाता","ledger").replace("ग्राहक","customer").replace("कोटेशन","quotation").replace("क्वोटेशन","quotation").replace("प्राइस","price").replace("मूल्य सूची","price list");
+        String command=raw.toLowerCase(Locale.ROOT).replace("बिजनेस","business").replace("व्यापार","business").replace("फाइल्स","files").replace("फाइल","file").replace("कैटलॉग","catalog").replace("सेटिंग्स","settings").replace("बैकअप","backup").replace("रिस्टोर","restore").replace("पेमेंट","payment").replace("भुगतान","payment").replace("रिमाइंडर","reminder").replace("लेजर","ledger").replace("खाता","ledger").replace("ग्राहक","customer").replace("कोटेशन","quotation").replace("क्वोटेशन","quotation").replace("प्राइस","price").replace("मूल्य सूची","price list").replaceAll("\\bquote\\b","quotation").replaceAll("\\bestimate\\b","quotation");
         if(command.contains("voice help")||command.contains("वॉइस हेल्प")||command.contains("आवाज मदद")){showVoiceCommandHelp();return;}
         if(command.contains("recent voice")||command.contains("voice history")||command.contains("पिछली खोज")){showVoiceHistory();return;}
         if(command.contains("voice favorite")||command.contains("favourite command")||command.contains("favorite command")){showVoiceFavorites();return;}
@@ -2052,7 +2076,7 @@ public class MainActivity extends Activity {
         PdfDocument pdf=new PdfDocument();try{Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);int pageNo=1,y=0;PdfDocument.Page page=pdf.startPage(new PdfDocument.PageInfo.Builder(595,842,pageNo).create());Canvas canvas=page.getCanvas();
             paint.setColor(Color.rgb(21,73,126));paint.setTextSize(25);paint.setTypeface(Typeface.DEFAULT_BOLD);canvas.drawText("LATHA EPS",36,48,paint);paint.setTextSize(17);canvas.drawText("PRICE LIST",36,75,paint);paint.setTypeface(Typeface.DEFAULT);paint.setTextSize(10);paint.setColor(Color.DKGRAY);canvas.drawText("Updated: "+new java.text.SimpleDateFormat("dd MMM yyyy",Locale.getDefault()).format(new java.util.Date()),430,68,paint);canvas.drawLine(36,88,559,88,paint);y=116;String brand="",category="";
             for(JSONObject o:sortedPriceItems()){if(y>765){pdf.finishPage(page);pageNo++;page=pdf.startPage(new PdfDocument.PageInfo.Builder(595,842,pageNo).create());canvas=page.getCanvas();paint.setColor(Color.rgb(21,73,126));paint.setTextSize(18);paint.setTypeface(Typeface.DEFAULT_BOLD);canvas.drawText("LATHA EPS PRICE LIST • Page "+pageNo,36,45,paint);canvas.drawLine(36,58,559,58,paint);y=86;brand="";category="";}String currentBrand=priceBrand(o),c=priceCategory(o);if(!currentBrand.equalsIgnoreCase(brand)){brand=currentBrand;category="";paint.setColor(Color.rgb(0,110,65));paint.setTextSize(16);paint.setTypeface(Typeface.DEFAULT_BOLD);canvas.drawText("BRAND • "+brand.toUpperCase(Locale.ROOT),36,y,paint);y+=25;}if(!c.equalsIgnoreCase(category)){category=c;paint.setColor(Color.rgb(21,73,126));paint.setTextSize(13);paint.setTypeface(Typeface.DEFAULT_BOLD);canvas.drawText(c.toUpperCase(Locale.ROOT),42,y,paint);y+=22;}String n=o.optString("name","Item");if(n.length()>42)n=n.substring(0,39)+"...";paint.setColor(Color.BLACK);paint.setTextSize(11);paint.setTypeface(Typeface.DEFAULT);canvas.drawText(n,50,y,paint);String price="Rs."+o.optString("rate","0")+" / "+o.optString("unit","Nos");String dis=o.optString("discount","0"),gst=o.optString("gst","0");if(!dis.isEmpty()&&!"0".equals(dis))price+="  Disc "+dis+"%";if(!gst.isEmpty()&&!"0".equals(gst))price+="  GST "+gst+"%";paint.setTypeface(Typeface.DEFAULT_BOLD);canvas.drawText(price,330,y,paint);paint.setColor(Color.LTGRAY);canvas.drawLine(50,y+7,550,y+7,paint);y+=24;}
-            paint.setColor(Color.DKGRAY);paint.setTextSize(9);paint.setTypeface(Typeface.DEFAULT);canvas.drawText("Rates are subject to confirmation. Generated by LATHAEPS SMART.",36,820,paint);pdf.finishPage(page);File dir=new File(getFilesDir(),"business_files");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder unavailable");File out=new File(dir,"LATHA_EPS_Price_List_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".pdf");try(FileOutputStream stream=new FileOutputStream(out)){pdf.writeTo(stream);}Uri uri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",out);Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,uri);i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS Price List");i.setClipData(android.content.ClipData.newRawUri("price list",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Share Price List PDF"));
+            paint.setColor(Color.DKGRAY);paint.setTextSize(9);paint.setTypeface(Typeface.DEFAULT);canvas.drawText("Rates are subject to confirmation. Generated by Business Dost.",36,820,paint);pdf.finishPage(page);File dir=new File(getFilesDir(),"business_files");if(!dir.exists()&&!dir.mkdirs())throw new Exception("Folder unavailable");File out=new File(dir,"LATHA_EPS_Price_List_"+new java.text.SimpleDateFormat("yyyyMMdd_HHmm",Locale.getDefault()).format(new java.util.Date())+".pdf");try(FileOutputStream stream=new FileOutputStream(out)){pdf.writeTo(stream);}Uri uri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",out);Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/pdf");i.putExtra(Intent.EXTRA_STREAM,uri);i.putExtra(Intent.EXTRA_TEXT,"LATHA EPS Price List");i.setClipData(android.content.ClipData.newRawUri("price list",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Share Price List PDF"));
         }catch(Exception e){toast("Price list PDF failed: "+e.getMessage());}finally{try{pdf.close();}catch(Exception ignored){}}
     }
 

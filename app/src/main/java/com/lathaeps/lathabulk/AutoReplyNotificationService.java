@@ -46,6 +46,10 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         if(!"com.whatsapp".equals(pkg) && !"com.whatsapp.w4b".equals(pkg)) return;
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
         if(!p.getBoolean(ENABLED,false)) return;
+        if(manualCampaignRunning()){
+            saveStatus(p,"Auto Reply paused • manual campaign is running");
+            return;
+        }
         Notification n=sbn.getNotification();
         Bundle e=n.extras;
         String title=String.valueOf(e.getCharSequence(Notification.EXTRA_TITLE,""));
@@ -140,6 +144,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     /** Waits for WhatsApp's updated notification identity, then sends exactly one ledger result. */
     private void resolveAndSendLedger(StatusBarNotification original,Notification originalNotification,String pkg,String requestedText,long requestedTime,String originalPhone,String originalTitle,int attempt){
         handler.postDelayed(()->{
+            if(manualCampaignRunning())return;
             SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
             if(!p.getBoolean(ENABLED,false))return;
             Notification replyNotification=originalNotification;
@@ -187,6 +192,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
 
     /** Serialises attachment replies and activates Accessibility only after the real share screen starts. */
     private void startShareWhenReady(ArrayList<Uri> files,String caption,String pkg,String phone,String contact,PendingIntent openChat,int attempt){
+        if(manualCampaignRunning())return;
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
         if(p.getBoolean(PENDING_SHARE,false)||p.getBoolean(PREPARING_SHARE,false)){
             if(attempt>=240){saveStatus(p,"Reply skipped • previous attachment task did not finish");return;}
@@ -197,6 +203,10 @@ public class AutoReplyNotificationService extends NotificationListenerService {
         if(openChat!=null){try{openChat.send();}catch(Exception ignored){}}
         handler.postDelayed(()->{
             try{
+                if(manualCampaignRunning()){
+                    getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PREPARING_SHARE,false).apply();
+                    return;
+                }
                 prepareCatalogQueue(files,caption,pkg,phone,contact);
                 getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PREPARING_SHARE,false).apply();
                 TaskDeviceController.begin(this);
@@ -205,6 +215,11 @@ public class AutoReplyNotificationService extends NotificationListenerService {
                 getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean(PREPARING_SHARE,false).putBoolean(PENDING_SHARE,false).putString("last_business_status","Reply prepare failed • "+error.getClass().getSimpleName()).apply();
             }
         },1200L);
+    }
+
+    private boolean manualCampaignRunning(){
+        SharedPreferences queue=getSharedPreferences(MainActivity.AUTO_PREFS,MODE_PRIVATE);
+        return queue.getBoolean(MainActivity.AUTO_RUNNING,false)||queue.getBoolean(MainActivity.BROADCAST_RUNNING,false);
     }
 
     private JSONObject findLedgerCustomer(SharedPreferences p,String senderPhone,String senderTitle){
@@ -581,7 +596,7 @@ public class AutoReplyNotificationService extends NotificationListenerService {
     }
 
     public static void cancelPendingShare(android.content.Context context,String status){
-        SharedPreferences p=context.getSharedPreferences(PREFS,android.content.Context.MODE_PRIVATE);clearCatalogQueue(p);p.edit().putString("last_business_status",status).putLong("last_business_status_at",System.currentTimeMillis()).apply();TaskDeviceController.cancel(context);
+        SharedPreferences p=context.getSharedPreferences(PREFS,android.content.Context.MODE_PRIVATE);clearCatalogQueue(p);p.edit().putString("last_business_status",status).putLong("last_business_status_at",System.currentTimeMillis()).apply();SharedPreferences queue=context.getSharedPreferences(MainActivity.AUTO_PREFS,android.content.Context.MODE_PRIVATE);if(!queue.getBoolean(MainActivity.AUTO_RUNNING,false)&&!queue.getBoolean(MainActivity.BROADCAST_RUNNING,false))TaskDeviceController.cancel(context);
     }
 
     @SuppressWarnings("deprecation") private static void wakeScreen(android.content.Context context){

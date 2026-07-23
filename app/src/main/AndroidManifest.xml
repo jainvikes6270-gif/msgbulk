@@ -42,7 +42,7 @@
 
         <service
             android:name=".AutoReplyNotificationService"
-            android:label="Latha Auto Reply"
+            android:label="Business Dost Auto Reply"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -76,6 +76,23 @@
             android:theme="@style/TransparentVoiceTheme"
             android:excludeFromRecents="true"
             android:exported="false" />
+
+        <activity
+            android:name=".VoiceNoteRouterActivity"
+            android:label="Business Dost Voice Note"
+            android:screenOrientation="portrait"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".MainActivity"

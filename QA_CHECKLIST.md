@@ -433,3 +433,19 @@
 - Confirm the sender's verified last 10 digits exactly equal the mapped Ledger phone before its PDF opens.
 - Confirm a missing or different phone sends only the LATHAEPS assistance reply; no PDF is attached.
 - Confirm Catalog and normal Auto Reply still behave exactly as before.
+# v3.23.76 Customer WhatsApp Voice Note Router
+
+- On Android 13+, long-press an individual WhatsApp/WhatsApp Business voice
+  note and choose **Share → Business Dost Voice Note**.
+- Confirm the audio is decoded and the Hindi/Hinglish transcript appears in the
+  editable review box.
+- Say “Polycab 1.5 wire 10 coil quotation” and confirm **SMART ROUTE** opens
+  Quotation Manager with the detected material available for review/import.
+- Say “Polycab price list bhejo” and confirm **SMART ROUTE** opens Price List
+  Manager and uses the existing confirmation before WhatsApp sharing.
+- Try an unclear voice note; confirm no PDF/image is sent and the transcript can
+  be manually corrected or retried in Hindi/Hinglish or English.
+- Start a Recipient List campaign while a Ledger/Catalog attachment is pending;
+  confirm the v3.23.74 route-isolation behavior remains active.
+- Confirm package name remains `com.lathaeps.lathabulk`, versionName is
+  `3.23.76`, and versionCode is `133`.
