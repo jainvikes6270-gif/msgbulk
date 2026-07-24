@@ -44,11 +44,11 @@ jobs:
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
       - name: Rename signed APK
-        run: cp app/build/outputs/apk/release/app-release.apk Business_Dost_v3.23.79_RELEASE_SIGNED.apk
+        run: cp app/build/outputs/apk/release/app-release.apk Business_Dost_v3.23.81_RELEASE_SIGNED.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: Business-Dost-Signed-Release-APK-v3.23.79
-          path: Business_Dost_v3.23.79_RELEASE_SIGNED.apk
+          name: Business-Dost-Signed-Release-APK-v3.23.81
+          path: Business_Dost_v3.23.81_RELEASE_SIGNED.apk
           if-no-files-found: error

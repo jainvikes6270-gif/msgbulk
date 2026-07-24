@@ -459,3 +459,12 @@
 - Confirm existing saved items open in Price List Items and support add, search,
   edit, delete, PDF share and WhatsApp text share.
 - Confirm versionName is `3.23.79` and versionCode is `136`.
+# v3.23.80 Alerts Bell & Screen-Fit Navigation
+
+- Confirm the top header shows Alerts bell instead of a second Voice mic.
+- Confirm the bell opens Alerts & Status.
+- Confirm bottom navigation is Home, Quotation, Price List, Voice, Settings.
+- Confirm Voice Search appears only once in the common navigation.
+- Confirm navigation stays above the Android system bar on small screens.
+- Confirm Quotation and Price List buttons open their correct windows.
+- Confirm versionName is `3.23.80` and versionCode is `137`.

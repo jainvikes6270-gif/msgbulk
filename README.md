@@ -1,3 +1,31 @@
+# Business Dost v3.23.81 – Professional UI System
+
+- Refined the dashboard, Send Message, Business Files, Price List and
+  Quotation screens with one consistent navy–teal–gold visual system.
+- Added compact typography, subtle outlines and restrained elevation for a
+  cleaner professional business-app finish.
+- Kept the message editor and recipient list light for readability while the
+  Send Message header and primary actions use the premium dark theme.
+- Quotation preview, material list and saved source cards now match the app's
+  professional brand palette.
+- Settings now uses the same fixed five-item navigation, with safe spacing
+  above the Android system bar.
+- Existing contacts, ledger, quotation, Price List Items, voice and campaign
+  storage keys are unchanged.
+- Version code: 138.
+
+# Business Dost v3.23.80 – Alerts Bell & Screen-Fit Navigation
+
+- Replaced the duplicate top Voice Search shortcut with an Alerts bell.
+- Alerts bell opens notification/access status, last alert, sending history and
+  update check.
+- Bottom navigation is now the approved five-item layout:
+  Home, Quotation, Price List, Voice and Settings.
+- Increased bottom safe padding and navigation height so it stays above the
+  Android system bar and fits smaller screens.
+- Added the common navigation to Price List Manager and Price List Items.
+- Version code: 137.
+
 # Business Dost v3.23.79 – Premium Send Theme & Separate Price Items
 
 - Send Message now uses the same dark navy premium theme as the main Business
