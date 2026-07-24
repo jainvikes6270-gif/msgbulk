@@ -224,6 +224,7 @@ public class MainActivity extends Activity {
     private Runnable pendingPriceListRefresh;
     private String pendingFloatingVoiceQuery="";
     private boolean biometricFallbackShown=false;
+    private boolean senderScreenVisible=false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -316,6 +317,7 @@ public class MainActivity extends Activity {
     }
 
     private View buildUi(){
+        senderScreenVisible=false;
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(Color.rgb(12,16,47));
 
         LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(22),dp(9),dp(14),dp(5));
@@ -332,7 +334,7 @@ public class MainActivity extends Activity {
 
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.HORIZONTAL);hero.setGravity(Gravity.CENTER_VERTICAL);hero.setPadding(dp(20),dp(12),dp(14),dp(12));
         GradientDrawable heroBg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{Color.rgb(91,115,242),Color.rgb(137,72,218),Color.rgb(82,91,245)});heroBg.setCornerRadius(dp(26));hero.setBackground(heroBg);
-        LinearLayout heroText=new LinearLayout(this);heroText.setOrientation(LinearLayout.VERTICAL);TextView heroTitle=new TextView(this);heroTitle.setText("Send Message");heroTitle.setTextSize(23);heroTitle.setTypeface(Typeface.DEFAULT_BOLD);heroTitle.setTextColor(Color.WHITE);TextView heroSub=new TextView(this);heroSub.setText("Create campaign and send bulk messages");heroSub.setTextSize(13);heroSub.setTextColor(Color.WHITE);heroSub.setPadding(0,dp(3),0,0);heroText.addView(heroTitle);heroText.addView(heroSub);hero.addView(heroText,new LinearLayout.LayoutParams(0,dp(76),1f));Button start=button("Start");start.setTextSize(16);start.setTypeface(Typeface.DEFAULT_BOLD);start.setTextColor(Color.rgb(88,105,225));start.setBackground(rounded(Color.WHITE,32));hero.addView(start,new LinearLayout.LayoutParams(dp(96),dp(52)));LinearLayout.LayoutParams heroLp=new LinearLayout.LayoutParams(-1,dp(108));heroLp.setMargins(0,0,0,dp(10));content.addView(hero,heroLp);start.setOnClickListener(v->setContentView(buildSenderUi()));
+        LinearLayout heroText=new LinearLayout(this);heroText.setOrientation(LinearLayout.VERTICAL);TextView heroTitle=new TextView(this);heroTitle.setText("Send Message");heroTitle.setTextSize(23);heroTitle.setTypeface(Typeface.DEFAULT_BOLD);heroTitle.setTextColor(Color.WHITE);TextView heroSub=new TextView(this);heroSub.setText("Create campaign and send bulk messages");heroSub.setTextSize(13);heroSub.setTextColor(Color.WHITE);heroSub.setPadding(0,dp(3),0,0);heroText.addView(heroTitle);heroText.addView(heroSub);hero.addView(heroText,new LinearLayout.LayoutParams(0,dp(76),1f));Button start=button("Start");start.setTextSize(16);start.setTypeface(Typeface.DEFAULT_BOLD);start.setTextColor(Color.rgb(88,105,225));start.setBackground(rounded(Color.WHITE,32));hero.addView(start,new LinearLayout.LayoutParams(dp(96),dp(52)));LinearLayout.LayoutParams heroLp=new LinearLayout.LayoutParams(-1,dp(108));heroLp.setMargins(0,0,0,dp(10));content.addView(hero,heroLp);start.setOnClickListener(v->showSenderScreen());
 
         LinearLayout accessStatus=row();accessStatus.setPadding(0,0,0,dp(8));
         accessibilityButton=button("Accessibility: OFF");accessibilityButton.setTextSize(12);accessibilityButton.setTypeface(Typeface.DEFAULT_BOLD);accessibilityButton.setOnClickListener(v->{try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception e){toast("Accessibility settings open nahi hui");}});
@@ -346,9 +348,9 @@ public class MainActivity extends Activity {
 
         TextView businessTitle=dashboardSection("▣  Business Tools");content.addView(businessTitle,new LinearLayout.LayoutParams(-1,dp(54)));
         Button businessFiles=dashboardWideCard("📁", "Business Files", "Ledger • Payment • Price List • Quotation",new int[]{Color.rgb(27,43,91),Color.rgb(23,71,104)});content.addView(businessFiles,new LinearLayout.LayoutParams(-1,dp(112)));businessFiles.setOnClickListener(v->showBusinessFilesDialog());
-        Button statusScheduler=dashboardWideCard("◷", "Message Scheduler", "Set timer for your bulk campaign",new int[]{Color.rgb(0,101,75),Color.rgb(0,156,91)});LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,dp(96));statusLp.setMargins(0,dp(14),0,0);content.addView(statusScheduler,statusLp);statusScheduler.setOnClickListener(v->{setContentView(buildSenderUi());uiHandler.postDelayed(this::showScheduleDialog,150);});
+        Button statusScheduler=dashboardWideCard("◷", "Message Scheduler", "Set timer for your bulk campaign",new int[]{Color.rgb(0,101,75),Color.rgb(0,156,91)});LinearLayout.LayoutParams statusLp=new LinearLayout.LayoutParams(-1,dp(96));statusLp.setMargins(0,dp(14),0,0);content.addView(statusScheduler,statusLp);statusScheduler.setOnClickListener(v->{showSenderScreen();uiHandler.postDelayed(this::showScheduleDialog,150);});
 
-        LinearLayout bottom=row();bottom.setGravity(Gravity.CENTER);bottom.setPadding(dp(5),dp(5),dp(5),dp(7));bottom.setBackgroundColor(Color.rgb(13,44,82));Button home=bottomNav("⌂\nHome",true);Button bottomQuotation=bottomNav("✎\nQuotation",false);Button bottomPriceList=bottomNav("▦\nPrice List",false);Button bottomVoice=bottomNav("🎤\nVoice",false);Button bottomSettings=bottomNav("⚙\nSettings",false);bottom.addView(home,weighted(1f,62));bottom.addView(bottomQuotation,weighted(1f,62));bottom.addView(bottomPriceList,weighted(1f,62));bottom.addView(bottomVoice,weighted(1f,62));bottom.addView(bottomSettings,weighted(1f,62));root.addView(bottom,new LinearLayout.LayoutParams(-1,dp(74)));bottomQuotation.setOnClickListener(v->startActivity(new Intent(this,QuotationActivity.class)));bottomPriceList.setOnClickListener(v->showPriceListScreen());bottomVoice.setOnClickListener(v->startPriceVoiceSearch(true));bottomSettings.setOnClickListener(v->showSettingsScreen());
+        root.addView(commonBottomNavigation("Home",null),new LinearLayout.LayoutParams(-1,dp(74)));
         uiHandler.post(this::refreshAccessButtons);return root;
     }
 
@@ -357,22 +359,47 @@ public class MainActivity extends Activity {
     private Button dashboardWideCard(String icon,String title,String subtitle,int[] colors){Button b=button(icon+"   "+title+"\n      "+subtitle+"                         ›");b.setTextSize(16);b.setTypeface(Typeface.DEFAULT_BOLD);b.setTextColor(Color.WHITE);b.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);b.setPadding(dp(22),0,dp(15),0);GradientDrawable bg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,colors);bg.setCornerRadius(dp(22));bg.setStroke(dp(2),Color.rgb(75,78,190));b.setBackground(bg);return b;}
     private Button bottomNav(String text,boolean selected){Button b=button(text);b.setTextSize(12);b.setTypeface(Typeface.DEFAULT_BOLD);b.setTextColor(selected?Color.WHITE:Color.rgb(190,199,220));b.setGravity(Gravity.CENTER);b.setBackground(selected?rounded(Color.rgb(55,70,155),18):rounded(Color.TRANSPARENT,18));return b;}
 
+    private LinearLayout commonBottomNavigation(String selected,Dialog host){
+        LinearLayout bottom=row();bottom.setGravity(Gravity.CENTER);bottom.setPadding(dp(5),dp(5),dp(5),dp(7));bottom.setBackgroundColor(Color.rgb(13,44,82));
+        Button home=bottomNav("⌂\nHome","Home".equals(selected));
+        Button send=bottomNav("✉\nSend","Send".equals(selected));
+        Button files=bottomNav("▣\nFiles","Files".equals(selected));
+        Button voice=bottomNav("🎤\nVoice","Voice".equals(selected));
+        Button settings=bottomNav("⚙\nSettings","Settings".equals(selected));
+        bottom.addView(home,weighted(1f,62));bottom.addView(send,weighted(1f,62));bottom.addView(files,weighted(1f,62));bottom.addView(voice,weighted(1f,62));bottom.addView(settings,weighted(1f,62));
+        home.setOnClickListener(v->{if(host!=null)host.dismiss();showHomeScreen();});
+        send.setOnClickListener(v->{if(host!=null)host.dismiss();showSenderScreen();});
+        files.setOnClickListener(v->{if("Files".equals(selected))return;if(host!=null)host.dismiss();showBusinessFilesDialog();});
+        voice.setOnClickListener(v->{if(host!=null)host.dismiss();startPriceVoiceSearch(true);});
+        settings.setOnClickListener(v->{if(host!=null)host.dismiss();showSettingsScreen();});
+        return bottom;
+    }
+
+    private void showHomeScreen(){senderScreenVisible=false;setContentView(buildUi());}
+    private void showSenderScreen(){senderScreenVisible=true;setContentView(buildSenderUi());}
+
+    @Override public void onBackPressed(){
+        if(senderScreenVisible){showHomeScreen();return;}
+        super.onBackPressed();
+    }
+
     private View buildSenderUi() {
+        senderScreenVisible=true;
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(10), dp(6), dp(10), dp(8));
-        root.setBackgroundColor(isDark()?Color.rgb(28,28,28):Color.rgb(248,246,240));
+        root.setBackgroundColor(Color.rgb(12,16,47));
 
         TextView title = new TextView(this);
-        title.setText("‹  Business Dost • Send Message");
-        title.setTextSize(21);
+        title.setText("‹  Send Message");
+        title.setTextSize(22);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.WHITE);
         title.setGravity(Gravity.CENTER);
         GradientDrawable headerBg=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{Color.rgb(25,80,180),Color.rgb(125,55,190),Color.rgb(218,156,25)});
         headerBg.setCornerRadius(dp(14)); title.setBackground(headerBg);
-        root.addView(title, new LinearLayout.LayoutParams(-1, dp(34)));
-        title.setOnClickListener(v->setContentView(buildUi()));
+        root.addView(title, new LinearLayout.LayoutParams(-1, dp(52)));
+        title.setOnClickListener(v->showHomeScreen());
 
         LinearLayout tools = row();
         contactsButton = button("Contacts");
@@ -413,21 +440,14 @@ public class MainActivity extends Activity {
         delay.setOnClickListener(v -> showDelayDialog());
         scheduleButton.setOnClickListener(v -> showScheduleDialog());
 
-        LinearLayout accountRow=row();
-        Button login=button("SETTINGS");
-        Button backup=button("Local Backup");
-        Button restore=button("Restore Backup");
-        accountRow.addView(login,weighted(1f,38)); accountRow.addView(backup,weighted(1f,38)); accountRow.addView(restore,weighted(1f,38));
-        root.addView(accountRow);
-        login.setOnClickListener(v->showSettingsScreen());
-        backup.setOnClickListener(v->createBackupFile());
-        restore.setOnClickListener(v->chooseRestoreFile());
-
         searchBox = new EditText(this);
         searchBox.setHint("Search name or mobile number");
         searchBox.setSingleLine(true);
         searchBox.setTextSize(14);
         searchBox.setPadding(dp(10), 0, dp(10), 0);
+        searchBox.setTextColor(Color.rgb(24,32,51));
+        searchBox.setHintTextColor(Color.rgb(115,130,155));
+        searchBox.setBackground(rounded(Color.WHITE,18));
         root.addView(searchBox, new LinearLayout.LayoutParams(-1, dp(43)));
         searchBox.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int st,int c,int a){}
@@ -447,53 +467,13 @@ public class MainActivity extends Activity {
         myGroups.setOnClickListener(v -> showRecipientListsScreen());
         editGroupButton.setOnClickListener(v -> editActiveGroupContacts());
 
-        automaticLockButton=button("AUTO UNLOCK + LOCK: ON");
-        automaticLockButton.setTextSize(13);
-        automaticLockButton.setTypeface(Typeface.DEFAULT_BOLD);
-        automaticLockButton.setOnClickListener(v->{
-            boolean enabled=!TaskDeviceController.autoUnlockEnabled(this);
-            TaskDeviceController.setAutomaticCycle(this,enabled);
-            refreshAccessButtons();
-            toast(enabled?"Task start par screen open, complete par lock ✓":"Automatic unlock + lock OFF");
-        });
-        LinearLayout.LayoutParams autoLockLp=new LinearLayout.LayoutParams(-1,dp(40));
-        autoLockLp.setMargins(dp(2),dp(1),dp(2),dp(2));root.addView(automaticLockButton,autoLockLp);
         uiHandler.post(this::refreshAccessButtons);
-
-        LinearLayout businessRow=row();
-        Button businessFiles=button("BUSINESS FILES");
-        Button catalogSection=button("CATALOG");
-        Button autoReplyButton=button("AUTO REPLY");
-        businessFiles.setTypeface(Typeface.DEFAULT_BOLD);
-        catalogSection.setTypeface(Typeface.DEFAULT_BOLD);
-        autoReplyButton.setTypeface(Typeface.DEFAULT_BOLD);
-        businessRow.addView(businessFiles,weighted(1f,42));
-        businessRow.addView(catalogSection,weighted(.85f,42));
-        businessRow.addView(autoReplyButton,weighted(1f,42));
-        root.addView(businessRow);
-        businessFiles.setOnClickListener(v->showBusinessFilesDialog());
-        catalogSection.setOnClickListener(v->showCatalogScreen());
-        autoReplyButton.setOnClickListener(v->showAutoReplyScreen());
-
-        Button mainPriceVoice=button("🎤  VOICE SEARCH");
-        mainPriceVoice.setTextSize(16);mainPriceVoice.setTypeface(Typeface.DEFAULT_BOLD);mainPriceVoice.setTextColor(Color.WHITE);mainPriceVoice.setBackground(rounded(Color.rgb(21,73,126),15));
-        LinearLayout.LayoutParams priceVoiceLp=new LinearLayout.LayoutParams(-1,dp(48));priceVoiceLp.setMargins(dp(2),dp(3),dp(2),dp(3));root.addView(mainPriceVoice,priceVoiceLp);
-        mainPriceVoice.setOnClickListener(v->startPriceVoiceSearch(true));
-
-        LinearLayout voiceTools=row();
-        Button voiceRecent=button("🕘 RECENT");Button voiceFavorites=button("★ FAVORITES");Button voiceHelp=button("? HELP");
-        voiceRecent.setTextSize(11);voiceFavorites.setTextSize(11);voiceHelp.setTextSize(11);
-        voiceRecent.setTextColor(Color.rgb(21,73,126));voiceFavorites.setTextColor(Color.rgb(170,95,0));voiceHelp.setTextColor(Color.rgb(0,110,65));
-        voiceTools.addView(voiceRecent,weighted(1f,36));voiceTools.addView(voiceFavorites,weighted(1f,36));voiceTools.addView(voiceHelp,weighted(.75f,36));root.addView(voiceTools);
-        voiceRecent.setOnClickListener(v->showVoiceHistory());
-        voiceFavorites.setOnClickListener(v->showVoiceFavorites());
-        voiceHelp.setOnClickListener(v->showVoiceCommandHelp());
 
         LinearLayout messageShell=row();
         messageShell.setGravity(Gravity.CENTER_VERTICAL);
         messageShell.setPadding(dp(3),dp(2),dp(5),dp(2));
         GradientDrawable messageBg=new GradientDrawable();
-        messageBg.setColor(isDark()?Color.rgb(48,48,48):Color.WHITE);
+        messageBg.setColor(Color.WHITE);
         messageBg.setStroke(dp(1),Color.rgb(95,125,185));
         messageBg.setCornerRadius(dp(24));
         messageShell.setBackground(messageBg);
@@ -508,6 +488,8 @@ public class MainActivity extends Activity {
         messageBox.setTextSize(14);
         messageBox.setGravity(Gravity.CENTER_VERTICAL);
         messageBox.setBackgroundColor(Color.TRANSPARENT);
+        messageBox.setTextColor(Color.rgb(24,32,51));
+        messageBox.setHintTextColor(Color.rgb(115,130,155));
         messageBox.setPadding(dp(4),0,dp(5),0);
         messageBox.setText(getSharedPreferences(PREFS,MODE_PRIVATE).getString(MESSAGE_DRAFT_KEY,""));
         messageShell.addView(messageBox,new LinearLayout.LayoutParams(0,dp(66),1f));
@@ -570,12 +552,14 @@ public class MainActivity extends Activity {
         statusText.setText("Selected: 0 | Contacts: 0");
         statusText.setTypeface(Typeface.DEFAULT_BOLD);
         statusText.setTextSize(12);
+        statusText.setTextColor(Color.WHITE);
         statusText.setPadding(dp(3), dp(3), dp(3), dp(3));
         root.addView(statusText, new LinearLayout.LayoutParams(-1, dp(28)));
 
         listView = new ListView(this);
         listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
         listView.setDividerHeight(1);
+        listView.setBackground(rounded(Color.WHITE,18));
         listView.setVisibility(View.GONE);
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_multiple_choice, visibleContacts);
         listView.setAdapter(adapter);
@@ -587,6 +571,7 @@ public class MainActivity extends Activity {
             refreshChecks();
         });
         root.addView(listView, new LinearLayout.LayoutParams(-1, 0, 1f));
+        root.addView(commonBottomNavigation("Send",null),new LinearLayout.LayoutParams(-1,dp(70)));
 
         return root;
     }
@@ -1294,7 +1279,7 @@ public class MainActivity extends Activity {
     private void renderCatalogSearchResults(LinearLayout parent,String query,String category){
         parent.removeAllViews();String q=query==null?"":query.trim().toLowerCase(Locale.ROOT);JSONArray a=readCatalogs();int found=0;for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item==null)continue;String c=item.optString("category","Other");String hay=(item.optString("name","")+" "+c+" "+item.optString("keywords","")+" "+item.optString("original_name","")).toLowerCase(Locale.ROOT);if(!"All Types".equals(category)&&!category.equals(c))continue;if(!q.isEmpty()&&!hay.contains(q))continue;found++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(16),dp(12),dp(16),dp(12));card.setBackground(rounded(Color.rgb(43,43,47),14));TextView name=new TextView(this);name.setText(item.optString("name","Catalog"));name.setTextSize(19);name.setTextColor(Color.WHITE);name.setTypeface(Typeface.DEFAULT_BOLD);TextView detail=new TextView(this);detail.setText(c+" • "+(item.optString("type","").contains("pdf")?"PDF":"Picture")+"\nWords: "+item.optString("keywords",""));detail.setTextColor(Color.LTGRAY);detail.setTextSize(13);detail.setPadding(0,dp(5),0,0);card.addView(name);card.addView(detail);card.setOnClickListener(v->openCatalog(item));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(92));lp.setMargins(0,0,0,dp(10));parent.addView(card,lp);}if(found==0){TextView empty=new TextView(this);empty.setText("No Catalog found");empty.setTextColor(Color.LTGRAY);empty.setGravity(Gravity.CENTER);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(150)));}
     }
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.76";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.79";}}
 
     private void shareApp(){
         try{
@@ -1759,20 +1744,23 @@ public class MainActivity extends Activity {
         LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(12),dp(8),dp(10),dp(8));header.setBackgroundColor(Color.rgb(0,91,78));
         Button back=button("‹");back.setTextSize(30);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
         TextView title=new TextView(this);title.setText("Business Files");title.setTextColor(Color.WHITE);title.setTextSize(23);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER_VERTICAL);
-        TextView badge=new TextView(this);badge.setText("4 TOOLS");badge.setTextSize(11);badge.setTextColor(Color.rgb(0,91,78));badge.setGravity(Gravity.CENTER);badge.setTypeface(Typeface.DEFAULT_BOLD);badge.setBackground(rounded(Color.rgb(210,244,238),30));
+        TextView badge=new TextView(this);badge.setText("5 TOOLS");badge.setTextSize(11);badge.setTextColor(Color.rgb(0,91,78));badge.setGravity(Gravity.CENTER);badge.setTypeface(Typeface.DEFAULT_BOLD);badge.setBackground(rounded(Color.rgb(210,244,238),30));
         header.addView(back,new LinearLayout.LayoutParams(dp(48),dp(54)));header.addView(title,new LinearLayout.LayoutParams(0,dp(54),1f));header.addView(badge,new LinearLayout.LayoutParams(dp(72),dp(32)));page.addView(header);
         back.setOnClickListener(v->dialog.dismiss());
         ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(14),dp(16),dp(24));scroll.addView(box);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         Button ledgerFolder=dashboardWideCard("▤","Ledger","Master PDF, contacts & "+ledgerCustomerCount()+" parties",new int[]{Color.rgb(20,91,150),Color.rgb(41,62,171)});
         Button paymentReminder=dashboardWideCard("₹","Payment Reminder","Daily • Weekly • Monthly",new int[]{Color.rgb(0,132,91),Color.rgb(12,177,104)});
-        Button priceList=dashboardWideCard("▦","Price List Manager","Brand-wise images, PDF & items",new int[]{Color.rgb(30,91,145),Color.rgb(0,137,151)});
+        Button priceList=dashboardWideCard("▦","Price List Manager","Brand-wise images & PDF files",new int[]{Color.rgb(30,91,145),Color.rgb(0,137,151)});
+        Button priceItems=dashboardWideCard("₹","Price List Items","Saved rates • Edit • Delete • Share",new int[]{Color.rgb(0,110,65),Color.rgb(18,151,92)});
         Button quotation=dashboardWideCard("✎","Quotation Maker","Voice, camera, calculation & preview",new int[]{Color.rgb(104,46,166),Color.rgb(150,61,191)});
-        Button[] featureButtons={ledgerFolder,paymentReminder,priceList,quotation};for(Button feature:featureButtons){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(96));lp.setMargins(0,0,0,dp(12));box.addView(feature,lp);}
+        Button[] featureButtons={ledgerFolder,paymentReminder,priceList,priceItems,quotation};for(Button feature:featureButtons){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(96));lp.setMargins(0,0,0,dp(12));box.addView(feature,lp);}
         paymentReminder.setOnClickListener(v->showPaymentReminderScreen());
         quotation.setOnClickListener(v->startActivity(new Intent(this,QuotationActivity.class)));
         priceList.setOnClickListener(v->showPriceListScreen());
+        priceItems.setOnClickListener(v->showPriceItemsScreen());
         ledgerFolder.setOnClickListener(v->showMasterLedgerFolderDialog());
-        TextView help=new TextView(this);help.setText("Har tool apni alag window me khulega. Price List Items, Price List Manager ke brand folders me available hain.");help.setTextSize(13);help.setTextColor(Color.DKGRAY);help.setPadding(dp(5),dp(4),dp(5),dp(8));box.addView(help);
+        TextView help=new TextView(this);help.setText("Price List Manager me sirf images/PDF files rahenge. Saved rate items alag Price List Items window me milenge.");help.setTextSize(13);help.setTextColor(Color.DKGRAY);help.setPadding(dp(5),dp(4),dp(5),dp(8));box.addView(help);
+        page.addView(commonBottomNavigation("Files",dialog),new LinearLayout.LayoutParams(-1,dp(74)));
         dialog.setContentView(page);dialog.show();
     }
 
@@ -1797,16 +1785,16 @@ public class MainActivity extends Activity {
         Button back=button("‹");back.setTextSize(31);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
         TextView title=new TextView(this);title.setText("Price List Manager");title.setTextSize(23);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);
         head.addView(back,new LinearLayout.LayoutParams(dp(50),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);
-        LinearLayout addRow=row();Button addBrand=button("+ BRAND");Button addSource=button("+ IMAGE / PDF");Button addItem=button("+ PRICE ITEM");addBrand.setTypeface(Typeface.DEFAULT_BOLD);addSource.setTypeface(Typeface.DEFAULT_BOLD);addItem.setTypeface(Typeface.DEFAULT_BOLD);addBrand.setTextColor(Color.rgb(160,82,20));addSource.setTextColor(Color.rgb(21,73,126));addItem.setTextColor(Color.rgb(0,110,65));addRow.addView(addBrand,weighted(.8f,46));addRow.addView(addSource,weighted(1.15f,46));addRow.addView(addItem,weighted(1f,46));page.addView(addRow);
-        Button sharePrice=button("SHARE COMPLETE PRICE LIST");sharePrice.setTypeface(Typeface.DEFAULT_BOLD);sharePrice.setTextColor(Color.rgb(160,82,20));page.addView(sharePrice,new LinearLayout.LayoutParams(-1,dp(42)));
+        LinearLayout addRow=row();Button addBrand=button("+ BRAND");Button addSource=button("+ IMAGE / PDF");addBrand.setTypeface(Typeface.DEFAULT_BOLD);addSource.setTypeface(Typeface.DEFAULT_BOLD);addBrand.setTextColor(Color.rgb(160,82,20));addSource.setTextColor(Color.rgb(21,73,126));addRow.addView(addBrand,weighted(.8f,46));addRow.addView(addSource,weighted(1.2f,46));page.addView(addRow);
+        TextView mediaOnly=new TextView(this);mediaOnly.setText("IMAGE / PDF FILES ONLY • Saved rate items are in Price List Items");mediaOnly.setTextSize(12);mediaOnly.setTypeface(Typeface.DEFAULT_BOLD);mediaOnly.setTextColor(Color.rgb(0,110,65));mediaOnly.setGravity(Gravity.CENTER);mediaOnly.setPadding(dp(4),dp(5),dp(4),dp(5));page.addView(mediaOnly,new LinearLayout.LayoutParams(-1,dp(42)));
         final String[] selectedBrand={"ALL BRANDS"};Button brandFilter=button("BRAND: ALL BRANDS ▼");brandFilter.setTypeface(Typeface.DEFAULT_BOLD);brandFilter.setTextColor(Color.rgb(21,73,126));brandFilter.setBackground(rounded(Color.rgb(225,235,248),14));page.addView(brandFilter,new LinearLayout.LayoutParams(-1,dp(44)));
-        LinearLayout searchRow=row();EditText search=new EditText(this);priceListSearchBox=search;search.setHint("AI Smart Search • type or speak");search.setSingleLine(true);search.setTextSize(15);search.setPadding(dp(14),0,dp(8),0);Button voice=button("🎤");voice.setTextSize(22);voice.setContentDescription("Voice search price list");searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(52),1f));searchRow.addView(voice,new LinearLayout.LayoutParams(dp(58),dp(50)));page.addView(searchRow,new LinearLayout.LayoutParams(-1,dp(54)));
+        LinearLayout searchRow=row();EditText search=new EditText(this);priceListSearchBox=search;search.setHint("Search saved image / PDF");search.setSingleLine(true);search.setTextSize(15);search.setPadding(dp(14),0,dp(8),0);Button voice=button("🎤");voice.setTextSize(22);voice.setContentDescription("Voice search price list files");searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(52),1f));searchRow.addView(voice,new LinearLayout.LayoutParams(dp(58),dp(50)));page.addView(searchRow,new LinearLayout.LayoutParams(-1,dp(54)));
         TextView summary=new TextView(this);summary.setTextSize(13);summary.setTextColor(Color.DKGRAY);summary.setPadding(dp(5),dp(5),dp(5),dp(5));page.addView(summary);
         ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(0,dp(5),0,dp(30));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
-        final Runnable[] refresh={null};refresh[0]=()->{JSONArray all=readPriceList(),sources=readPriceSources();summary.setText(all.length()+" items • "+collectPriceBrands().size()+" brand folders • "+countPriceSourceSections(sources)+" media sections • "+sources.length()+" files");renderPriceListCards(cards,search.getText().toString(),selectedBrand[0],d,brand->{selectedBrand[0]=brand;brandFilter.setText("BRAND: "+brand.toUpperCase(Locale.ROOT)+" ▼");refresh[0].run();});};pendingPriceListRefresh=refresh[0];
+        final Runnable[] refresh={null};refresh[0]=()->{JSONArray sources=readPriceSources();summary.setText(collectPriceSourceBrands().size()+" brand folders • "+countPriceSourceSections(sources)+" media sections • "+sources.length()+" files");renderPriceManagerCards(cards,search.getText().toString(),selectedBrand[0],brand->{selectedBrand[0]=brand;brandFilter.setText("BRAND: "+brand.toUpperCase(Locale.ROOT)+" ▼");refresh[0].run();});};pendingPriceListRefresh=refresh[0];
         search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh[0].run();}public void afterTextChanged(Editable e){}});
-        brandFilter.setOnClickListener(v->{List<String> brands=collectPriceBrands();String[] choices=new String[brands.size()+1];choices[0]="ALL BRANDS";for(int i=0;i<brands.size();i++)choices[i+1]=brands.get(i);new AlertDialog.Builder(this).setTitle("Select Brand Folder").setSingleChoiceItems(choices,indexOfIgnoreCase(choices,selectedBrand[0]),(x,w)->{selectedBrand[0]=choices[w];brandFilter.setText("BRAND: "+selectedBrand[0].toUpperCase(Locale.ROOT)+" ▼");x.dismiss();refresh[0].run();}).setNegativeButton("CANCEL",null).show();});
-        voice.setOnClickListener(v->startPriceVoiceSearch(false));back.setOnClickListener(v->{if(!selectedBrand[0].equalsIgnoreCase("ALL BRANDS")&&search.getText().toString().trim().isEmpty()){selectedBrand[0]="ALL BRANDS";brandFilter.setText("BRAND: ALL BRANDS ▼");refresh[0].run();}else d.dismiss();});addBrand.setOnClickListener(v->showAddPriceBrandDialog(refresh[0]));addSource.setOnClickListener(v->showAddPriceSourceDialog(selectedBrand[0].equalsIgnoreCase("ALL BRANDS")?"":selectedBrand[0],"",""));addItem.setOnClickListener(v->showPriceItemEditor(null,selectedBrand[0].equalsIgnoreCase("ALL BRANDS")?"":selectedBrand[0],refresh[0]));sharePrice.setOnClickListener(v->showPriceShareOptions());d.setOnDismissListener(v->{if(priceListSearchBox==search)priceListSearchBox=null;if(pendingPriceListRefresh==refresh[0])pendingPriceListRefresh=null;});if(initialSearch!=null&&!initialSearch.trim().isEmpty())search.setText(initialSearch);refresh[0].run();d.setContentView(page);d.show();
+        brandFilter.setOnClickListener(v->{List<String> brands=collectPriceSourceBrands();String[] choices=new String[brands.size()+1];choices[0]="ALL BRANDS";for(int i=0;i<brands.size();i++)choices[i+1]=brands.get(i);new AlertDialog.Builder(this).setTitle("Select Brand Folder").setSingleChoiceItems(choices,indexOfIgnoreCase(choices,selectedBrand[0]),(x,w)->{selectedBrand[0]=choices[w];brandFilter.setText("BRAND: "+selectedBrand[0].toUpperCase(Locale.ROOT)+" ▼");x.dismiss();refresh[0].run();}).setNegativeButton("CANCEL",null).show();});
+        voice.setOnClickListener(v->startPriceVoiceSearch(false));back.setOnClickListener(v->{if(!selectedBrand[0].equalsIgnoreCase("ALL BRANDS")&&search.getText().toString().trim().isEmpty()){selectedBrand[0]="ALL BRANDS";brandFilter.setText("BRAND: ALL BRANDS ▼");refresh[0].run();}else d.dismiss();});addBrand.setOnClickListener(v->showAddPriceBrandDialog(refresh[0]));addSource.setOnClickListener(v->showAddPriceSourceDialog(selectedBrand[0].equalsIgnoreCase("ALL BRANDS")?"":selectedBrand[0],"",""));d.setOnDismissListener(v->{if(priceListSearchBox==search)priceListSearchBox=null;if(pendingPriceListRefresh==refresh[0])pendingPriceListRefresh=null;});if(initialSearch!=null&&!initialSearch.trim().isEmpty())search.setText(initialSearch);refresh[0].run();d.setContentView(page);d.show();
     }
 
     private void startPriceVoiceSearch(boolean fromHome){
@@ -1925,7 +1913,7 @@ public class MainActivity extends Activity {
     }
 
     private int voiceDataScore(String value){
-        String normalized=normalizePriceSearch(value);if(normalized.isEmpty())return 0;String[] words=normalized.split(" ");int best=0;JSONArray sources=readPriceSources();for(int i=0;i<sources.length();i++){JSONObject source=sources.optJSONObject(i);if(source!=null)best=Math.max(best,voiceMatchedWordCount(priceSourceSearchText(source),words));}for(JSONObject item:sortedPriceItems()){String hay=normalizePriceSearch(priceBrand(item)+" "+priceCategory(item)+" "+item.optString("name","")+" "+item.optString("unit",""));best=Math.max(best,voiceMatchedWordCount(hay,words));}return best;
+        String normalized=normalizePriceSearch(value);if(normalized.isEmpty())return 0;String[] words=normalized.split(" ");int best=0;JSONArray sources=readPriceSources();for(int i=0;i<sources.length();i++){JSONObject source=sources.optJSONObject(i);if(source!=null)best=Math.max(best,voiceMatchedWordCount(priceSourceSearchText(source),words));}return best;
     }
 
     private int voiceMatchedWordCount(String hay,String[] words){String[] candidates=normalizePriceSearch(hay).split(" ");int count=0;for(String query:words){for(String candidate:candidates)if(voiceWordMatches(query,candidate)){count++;break;}}return count;}
@@ -1937,14 +1925,15 @@ public class MainActivity extends Activity {
 
     private void showAddPriceBrandDialog(Runnable refresh){
         EditText brand=new EditText(this);brand.setHint("Brand name • Polycab, Finolex, Mylinc");brand.setSingleLine(true);brand.setPadding(dp(18),0,dp(18),0);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Create Brand Folder").setMessage("Is folder ke andar baad mein images, PDFs aur price items add kar sakte hain.").setView(brand).setPositiveButton("CREATE",null).setNegativeButton("CANCEL",null).create();
-        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(x->{String name=brand.getText().toString().trim();if(name.isEmpty()){brand.setError("Brand name required");return;}for(String old:collectPriceBrands())if(old.equalsIgnoreCase(name)){brand.setError("Brand folder already exists");return;}JSONArray folders=readPriceBrandFolders();folders.put(name);writePriceBrandFolders(folders);toast(name+" brand folder created ✓");dialog.dismiss();refresh.run();}));dialog.show();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Create Brand Folder").setMessage("Is folder ke andar images aur PDFs save honge. Rate items alag Price List Items window me rahenge.").setView(brand).setPositiveButton("CREATE",null).setNegativeButton("CANCEL",null).create();
+        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(x->{String name=brand.getText().toString().trim();if(name.isEmpty()){brand.setError("Brand name required");return;}for(String old:collectPriceSourceBrands())if(old.equalsIgnoreCase(name)){brand.setError("Brand folder already exists");return;}JSONArray folders=readPriceBrandFolders();folders.put(name);writePriceBrandFolders(folders);toast(name+" brand folder created ✓");dialog.dismiss();refresh.run();}));dialog.show();
     }
 
     private String priceBrand(JSONObject item){String b=item==null?"":item.optString("brand","").trim();if(b.isEmpty()&&item!=null)b=item.optString("category","Other").trim();return b.isEmpty()?"Other":b;}
     private String priceCategory(JSONObject item){String c=item==null?"":item.optString("category","Other").trim();return c.isEmpty()?"General":c;}
     private boolean priceBrandMatches(String selected,JSONObject item){return selected==null||selected.equalsIgnoreCase("ALL BRANDS")||selected.equalsIgnoreCase(priceBrand(item));}
     private List<String> collectPriceBrands(){java.util.TreeSet<String> brands=new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);JSONArray sources=readPriceSources(),items=readPriceList(),folders=readPriceBrandFolders();for(int i=0;i<folders.length();i++){String name=folders.optString(i,"").trim();if(!name.isEmpty())brands.add(name);}for(int i=0;i<sources.length();i++){JSONObject o=sources.optJSONObject(i);if(o!=null)brands.add(priceBrand(o));}for(int i=0;i<items.length();i++){JSONObject o=items.optJSONObject(i);if(o!=null)brands.add(priceBrand(o));}return new ArrayList<>(brands);}
+    private List<String> collectPriceSourceBrands(){java.util.TreeSet<String> brands=new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);JSONArray sources=readPriceSources(),folders=readPriceBrandFolders();for(int i=0;i<folders.length();i++){String name=folders.optString(i,"").trim();if(!name.isEmpty())brands.add(name);}for(int i=0;i<sources.length();i++){JSONObject o=sources.optJSONObject(i);if(o!=null)brands.add(priceBrand(o));}return new ArrayList<>(brands);}
     private int indexOfIgnoreCase(String[] values,String target){for(int i=0;i<values.length;i++)if(values[i].equalsIgnoreCase(target))return i;return 0;}
 
     private int countPriceSourceSections(JSONArray sources){
@@ -2032,23 +2021,47 @@ public class MainActivity extends Activity {
     }
 
     private int renderPriceBrandFolders(LinearLayout parent,java.util.function.Consumer<String> openBrand){
-        int shown=0;JSONArray sources=readPriceSources(),items=readPriceList();for(String brand:collectPriceBrands()){
-            int files=0,priceItems=0,sections=0;Set<String> sectionNames=new LinkedHashSet<>();for(int i=0;i<sources.length();i++){JSONObject source=sources.optJSONObject(i);if(source!=null&&brand.equalsIgnoreCase(priceBrand(source))){files++;sectionNames.add(priceCategory(source).toLowerCase(Locale.ROOT));}}for(int i=0;i<items.length();i++){JSONObject item=items.optJSONObject(i);if(item!=null&&brand.equalsIgnoreCase(priceBrand(item)))priceItems++;}sections=sectionNames.size();
-            LinearLayout folder=new LinearLayout(this);folder.setOrientation(LinearLayout.HORIZONTAL);folder.setGravity(Gravity.CENTER_VERTICAL);folder.setPadding(dp(15),dp(10),dp(10),dp(10));folder.setBackground(rounded(Color.WHITE,16));TextView icon=new TextView(this);icon.setText("📁");icon.setTextSize(29);icon.setGravity(Gravity.CENTER);TextView details=new TextView(this);details.setText(brand.toUpperCase(Locale.ROOT)+"\n"+sections+" sections • "+files+" files • "+priceItems+" price items");details.setTextSize(16);details.setTypeface(Typeface.DEFAULT_BOLD);details.setTextColor(Color.rgb(21,73,126));TextView arrow=new TextView(this);arrow.setText("›");arrow.setTextSize(31);arrow.setTextColor(Color.rgb(160,82,20));arrow.setGravity(Gravity.CENTER);folder.addView(icon,new LinearLayout.LayoutParams(dp(52),dp(60)));folder.addView(details,new LinearLayout.LayoutParams(0,dp(62),1f));folder.addView(arrow,new LinearLayout.LayoutParams(dp(42),dp(60)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(folder,lp);folder.setOnClickListener(v->openBrand.accept(brand));shown++;
+        int shown=0;JSONArray sources=readPriceSources();for(String brand:collectPriceSourceBrands()){
+            int files=0;Set<String> sectionNames=new LinkedHashSet<>();for(int i=0;i<sources.length();i++){JSONObject source=sources.optJSONObject(i);if(source!=null&&brand.equalsIgnoreCase(priceBrand(source))){files++;sectionNames.add(priceCategory(source).toLowerCase(Locale.ROOT));}}
+            LinearLayout folder=new LinearLayout(this);folder.setOrientation(LinearLayout.HORIZONTAL);folder.setGravity(Gravity.CENTER_VERTICAL);folder.setPadding(dp(15),dp(10),dp(10),dp(10));folder.setBackground(rounded(Color.WHITE,16));TextView icon=new TextView(this);icon.setText("📁");icon.setTextSize(29);icon.setGravity(Gravity.CENTER);TextView details=new TextView(this);details.setText(brand.toUpperCase(Locale.ROOT)+"\n"+sectionNames.size()+" media sections • "+files+" image/PDF files");details.setTextSize(16);details.setTypeface(Typeface.DEFAULT_BOLD);details.setTextColor(Color.rgb(21,73,126));TextView arrow=new TextView(this);arrow.setText("›");arrow.setTextSize(31);arrow.setTextColor(Color.rgb(160,82,20));arrow.setGravity(Gravity.CENTER);folder.addView(icon,new LinearLayout.LayoutParams(dp(52),dp(60)));folder.addView(details,new LinearLayout.LayoutParams(0,dp(62),1f));folder.addView(arrow,new LinearLayout.LayoutParams(dp(42),dp(60)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(82));lp.setMargins(0,0,0,dp(10));parent.addView(folder,lp);folder.setOnClickListener(v->openBrand.accept(brand));shown++;
         }return shown;
     }
 
-    private void renderPriceListCards(LinearLayout parent,String query,String selectedBrand,Dialog screen,java.util.function.Consumer<String> openBrand){
-        parent.removeAllViews();String q=normalizePriceSearch(query);if(q.isEmpty()&&(selectedBrand==null||selectedBrand.equalsIgnoreCase("ALL BRANDS"))){int folders=renderPriceBrandFolders(parent,openBrand);if(folders==0){TextView empty=new TextView(this);empty.setText("No brand folder saved\nTap + BRAND to create one");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.GRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(180)));}return;}String[] words=q.isEmpty()?new String[0]:q.split(" ");int sourceShown=renderPriceSourceCards(parent,q,words,selectedBrand);int shown=0;String lastBrand="",lastCategory="";
+    private void renderPriceManagerCards(LinearLayout parent,String query,String selectedBrand,java.util.function.Consumer<String> openBrand){
+        parent.removeAllViews();String q=normalizePriceSearch(query);if(q.isEmpty()&&(selectedBrand==null||selectedBrand.equalsIgnoreCase("ALL BRANDS"))){int folders=renderPriceBrandFolders(parent,openBrand);if(folders==0){TextView empty=new TextView(this);empty.setText("No brand folder saved\nTap + BRAND, then add images / PDFs");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.GRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(180)));}return;}String[] words=q.isEmpty()?new String[0]:q.split(" ");int sourceShown=renderPriceSourceCards(parent,q,words,selectedBrand);
+        if(sourceShown==0){TextView empty=new TextView(this);empty.setText(readPriceSources().length()==0?"No image / PDF saved":"No matching image / PDF file");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.GRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(180)));}
+    }
+
+    private List<String> collectPriceItemBrands(){java.util.TreeSet<String> brands=new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);for(JSONObject item:sortedPriceItems())brands.add(priceBrand(item));return new ArrayList<>(brands);}
+
+    private void showPriceItemsScreen(){
+        Dialog dialog=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar);
+        LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(12),dp(10),dp(12),dp(12));page.setBackgroundColor(Color.rgb(240,247,244));
+        LinearLayout head=row();head.setGravity(Gravity.CENTER_VERTICAL);head.setBackground(rounded(Color.rgb(0,110,65),17));
+        Button back=button("‹");back.setTextSize(31);back.setTextColor(Color.WHITE);back.setBackgroundColor(Color.TRANSPARENT);
+        TextView title=new TextView(this);title.setText("Price List Items");title.setTextSize(23);title.setTextColor(Color.WHITE);title.setTypeface(Typeface.DEFAULT_BOLD);
+        head.addView(back,new LinearLayout.LayoutParams(dp(50),dp(58)));head.addView(title,new LinearLayout.LayoutParams(0,dp(58),1f));page.addView(head);
+        LinearLayout actions=row();Button add=button("+ ADD PRICE ITEM");Button share=button("SHARE PRICE LIST");add.setTypeface(Typeface.DEFAULT_BOLD);share.setTypeface(Typeface.DEFAULT_BOLD);add.setTextColor(Color.rgb(0,110,65));share.setTextColor(Color.rgb(21,73,126));actions.addView(add,weighted(1f,48));actions.addView(share,weighted(1f,48));page.addView(actions);
+        EditText search=new EditText(this);search.setHint("Search brand, item, size or category");search.setSingleLine(true);search.setTextSize(15);search.setPadding(dp(14),0,dp(10),0);search.setBackground(rounded(Color.WHITE,16));page.addView(search,new LinearLayout.LayoutParams(-1,dp(50)));
+        TextView summary=new TextView(this);summary.setTextSize(13);summary.setTypeface(Typeface.DEFAULT_BOLD);summary.setTextColor(Color.rgb(0,90,55));summary.setPadding(dp(5),dp(7),dp(5),dp(7));page.addView(summary);
+        ScrollView scroll=new ScrollView(this);LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.VERTICAL);cards.setPadding(0,dp(4),0,dp(28));scroll.addView(cards);page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
+        final Runnable[] refresh={null};refresh[0]=()->{summary.setText(readPriceList().length()+" saved items • "+collectPriceItemBrands().size()+" brands");renderPriceItemCards(cards,search.getText().toString(),refresh[0]);};
+        search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void onTextChanged(CharSequence s,int st,int b,int c){refresh[0].run();}public void afterTextChanged(Editable e){}});
+        back.setOnClickListener(v->dialog.dismiss());add.setOnClickListener(v->showPriceItemEditor(null,refresh[0]));share.setOnClickListener(v->showPriceShareOptions());
+        refresh[0].run();dialog.setContentView(page);dialog.show();
+    }
+
+    private void renderPriceItemCards(LinearLayout parent,String query,Runnable refresh){
+        parent.removeAllViews();String q=normalizePriceSearch(query);String[] words=q.isEmpty()?new String[0]:q.split(" ");int shown=0;String lastBrand="",lastCategory="";
         for(JSONObject item:sortedPriceItems()){
-            if(!priceBrandMatches(selectedBrand,item))continue;String brand=priceBrand(item),category=priceCategory(item);String hay=normalizePriceSearch(brand+" "+category+" "+item.optString("name")+" "+item.optString("rate")+" "+item.optString("unit"));if(!smartVoiceMatch(hay,words))continue;
-            if(!brand.equalsIgnoreCase(lastBrand)){TextView bh=new TextView(this);bh.setText("◆ "+brand.toUpperCase(Locale.ROOT)+" • PRICE ITEMS");bh.setTextSize(18);bh.setTypeface(Typeface.DEFAULT_BOLD);bh.setTextColor(Color.WHITE);bh.setBackground(rounded(Color.rgb(0,110,65),12));bh.setPadding(dp(12),dp(9),dp(12),dp(9));LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(-1,-2);blp.setMargins(0,dp(10),0,dp(4));parent.addView(bh,blp);lastBrand=brand;lastCategory="";}if(!category.equalsIgnoreCase(lastCategory)){TextView h=new TextView(this);h.setText(category.toUpperCase(Locale.ROOT));h.setTextSize(15);h.setTypeface(Typeface.DEFAULT_BOLD);h.setTextColor(Color.rgb(21,73,126));h.setPadding(dp(5),dp(8),dp(5),dp(5));parent.addView(h);lastCategory=category;}
+            String brand=priceBrand(item),category=priceCategory(item);String hay=normalizePriceSearch(brand+" "+category+" "+item.optString("name")+" "+item.optString("rate")+" "+item.optString("unit"));if(!smartVoiceMatch(hay,words))continue;
+            if(!brand.equalsIgnoreCase(lastBrand)){TextView bh=new TextView(this);bh.setText("◆ "+brand.toUpperCase(Locale.ROOT));bh.setTextSize(18);bh.setTypeface(Typeface.DEFAULT_BOLD);bh.setTextColor(Color.WHITE);bh.setBackground(rounded(Color.rgb(0,110,65),12));bh.setPadding(dp(12),dp(9),dp(12),dp(9));LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(-1,-2);blp.setMargins(0,dp(8),0,dp(4));parent.addView(bh,blp);lastBrand=brand;lastCategory="";}
+            if(!category.equalsIgnoreCase(lastCategory)){TextView h=new TextView(this);h.setText(category.toUpperCase(Locale.ROOT));h.setTextSize(15);h.setTypeface(Typeface.DEFAULT_BOLD);h.setTextColor(Color.rgb(21,73,126));h.setPadding(dp(5),dp(8),dp(5),dp(5));parent.addView(h);lastCategory=category;}
             shown++;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.HORIZONTAL);card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(14),dp(8),dp(6),dp(8));card.setBackground(rounded(Color.WHITE,14));
             TextView details=new TextView(this);String discount=item.optString("discount","0"),gst=item.optString("gst","0");String extra=(!discount.isEmpty()&&!"0".equals(discount)?" • Discount "+discount+"%":"")+(!gst.isEmpty()&&!"0".equals(gst)?" • GST "+gst+"%":"");details.setText(item.optString("name","Item")+"\n₹"+item.optString("rate","0")+" / "+item.optString("unit","Nos")+extra);details.setTextSize(16);details.setTextColor(Color.rgb(28,28,28));details.setTypeface(Typeface.DEFAULT_BOLD);details.setMaxLines(3);
-            Button more=button("⋮");more.setTextSize(26);more.setTextColor(Color.rgb(21,73,126));more.setBackgroundColor(Color.TRANSPARENT);card.addView(details,new LinearLayout.LayoutParams(0,dp(72),1f));card.addView(more,new LinearLayout.LayoutParams(dp(50),dp(58)));
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(88));lp.setMargins(0,0,0,dp(8));parent.addView(card,lp);more.setOnClickListener(v->showPriceItemMenu(more,item,()->renderPriceListCards(parent,query,selectedBrand,screen,openBrand)));
+            Button more=button("⋮");more.setTextSize(26);more.setTextColor(Color.rgb(21,73,126));more.setBackgroundColor(Color.TRANSPARENT);card.addView(details,new LinearLayout.LayoutParams(0,dp(72),1f));card.addView(more,new LinearLayout.LayoutParams(dp(50),dp(58)));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(88));lp.setMargins(0,0,0,dp(8));parent.addView(card,lp);more.setOnClickListener(v->showPriceItemMenu(more,item,refresh));
         }
-        if(shown==0&&sourceShown==0){TextView empty=new TextView(this);empty.setText(readPriceList().length()==0&&readPriceSources().length()==0?"No price data saved\nAdd item or PDF / image source":"No matching price item or source file");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.GRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(180)));}
+        if(shown==0){TextView empty=new TextView(this);empty.setText(readPriceList().length()==0?"No Price List Items saved\nTap + ADD PRICE ITEM":"No matching Price List Item");empty.setGravity(Gravity.CENTER);empty.setTextColor(Color.GRAY);empty.setTextSize(17);parent.addView(empty,new LinearLayout.LayoutParams(-1,dp(180)));}
     }
 
     private void showPriceItemEditor(JSONObject existing,Runnable refresh){

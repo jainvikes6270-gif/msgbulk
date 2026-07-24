@@ -1,3 +1,26 @@
+# Business Dost v3.23.79 – Premium Send Theme & Separate Price Items
+
+- Send Message now uses the same dark navy premium theme as the main Business
+  Dost dashboard while keeping the message editor and contact list light for
+  readability.
+- Price List Manager now stores and displays only brand-wise images and PDFs.
+- Added a separate Price List Items window for saved rate items, including add,
+  search, edit, delete and share actions.
+- Existing saved Price List Items continue using the same storage key and are
+  not deleted during this update.
+- Version code: 136.
+
+# Business Dost v3.23.78 – Common Navigation & Send Message Refresh
+
+## v3.23.78
+
+- Send Message now opens in the refreshed Business Dost theme instead of the
+  old standalone-looking interface.
+- Added the same bottom navigation to Home, Send Message and Business Files:
+  **Home, Send, Files, Voice and Settings**.
+- Android Back from Send Message now returns to Home instead of closing the app.
+- Version increased to `3.23.78` (`versionCode 135`).
+
 # Business Dost v3.23.77 – Floating Mic Portrait Return Fix
 
 ## v3.23.77

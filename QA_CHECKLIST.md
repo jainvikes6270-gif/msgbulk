@@ -448,4 +448,14 @@
 - Start a Recipient List campaign while a Ledger/Catalog attachment is pending;
   confirm the v3.23.74 route-isolation behavior remains active.
 - Confirm package name remains `com.lathaeps.lathabulk`, versionName is
-  `3.23.76`, and versionCode is `133`.
+  `3.23.78`, and versionCode is `135`.
+# v3.23.79 Premium Send Theme & Separate Price Items
+
+- Confirm Send Message uses the dark navy Business Dost background.
+- Confirm the message editor, search box and opened contact list remain light.
+- Confirm Price List Manager shows only brand-wise image/PDF folders and files.
+- Confirm no saved rate item appears inside Price List Manager search or folders.
+- Confirm Business Files has a separate Price List Items card.
+- Confirm existing saved items open in Price List Items and support add, search,
+  edit, delete, PDF share and WhatsApp text share.
+- Confirm versionName is `3.23.79` and versionCode is `136`.
