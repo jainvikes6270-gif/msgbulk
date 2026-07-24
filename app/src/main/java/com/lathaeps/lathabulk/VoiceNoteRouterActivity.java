@@ -1,8 +1,10 @@
 package com.lathaeps.lathabulk;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -30,6 +32,7 @@ import java.util.Locale;
 
 /** Receives a WhatsApp voice note via Share, transcribes it and routes it safely. */
 public class VoiceNoteRouterActivity extends Activity implements RecognitionListener {
+    private static final int REQUEST_RECORD_AUDIO = 912;
     private TextView status;
     private EditText transcript;
     private ProgressBar progress;
@@ -140,6 +143,14 @@ public class VoiceNoteRouterActivity extends Activity implements RecognitionList
         }
         if (Build.VERSION.SDK_INT < 33) {
             showError("Audio transcription के लिए Android 13 या नया चाहिए • transcript manually लिखें");
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            status.setText("Voice को text में बदलने के लिए Microphone permission Allow करें…");
+            progress.setVisibility(View.GONE);
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},
+                    REQUEST_RECORD_AUDIO);
             return;
         }
         stopRecognition();
@@ -323,9 +334,24 @@ public class VoiceNoteRouterActivity extends Activity implements RecognitionList
             case SpeechRecognizer.ERROR_NETWORK:
             case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: reason = "speech service network issue"; break;
             case SpeechRecognizer.ERROR_AUDIO: reason = "audio format read नहीं हुआ"; break;
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                reason = "Microphone permission नहीं मिली"; break;
             default: reason = "speech service error " + error;
         }
         showError(reason + " • language बदलकर retry या transcript manually लिखें");
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode,
+            String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQUEST_RECORD_AUDIO) return;
+        if (grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            transcribe();
+        } else {
+            showError("Microphone permission Allow किए बिना voice-to-text नहीं चलेगा"
+                    + " • Settings → Apps → Business Dost → Permissions में Allow करें");
+        }
     }
 
     private void stopRecognition() {

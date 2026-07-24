@@ -1297,7 +1297,7 @@ public class MainActivity extends Activity {
         history.setOnClickListener(v->{dialog.dismiss();showHistory();});update.setOnClickListener(v->{dialog.dismiss();checkForAppUpdate(true);});dialog.show();
     }
 
-    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.81";}}
+    private String appVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "3.23.82";}}
 
     private void shareApp(){
         try{

@@ -44,11 +44,11 @@ jobs:
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
       - name: Rename signed AAB
-        run: cp app/build/outputs/bundle/release/app-release.aab Business_Dost_v3.23.81_Play_Signed.aab
+        run: cp app/build/outputs/bundle/release/app-release.aab Business_Dost_v3.23.82_Play_Signed.aab
 
       - name: Upload signed AAB
         uses: actions/upload-artifact@v4
         with:
-          name: Business-Dost-Play-AAB-v3.23.81
-          path: Business_Dost_v3.23.81_Play_Signed.aab
+          name: Business-Dost-Play-AAB-v3.23.82
+          path: Business_Dost_v3.23.82_Play_Signed.aab
           if-no-files-found: error

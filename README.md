@@ -1,3 +1,14 @@
+# Business Dost v3.23.82 – SMART Route Voice Permission Fix
+
+- Fixed Android Speech Recognizer **Error 9** in the WhatsApp voice-note route.
+- Business Dost now requests Microphone permission before converting a shared
+  WhatsApp OGG/Opus voice note to text.
+- After permission is granted, transcription resumes automatically and SMART
+  ROUTE can open Quotation Manager or Price List Manager.
+- A denied permission now shows the exact Android Settings path instead of the
+  unclear numeric speech-service error.
+- Version code: 139.
+
 # Business Dost v3.23.81 – Professional UI System
 
 - Refined the dashboard, Send Message, Business Files, Price List and
